@@ -1,0 +1,108 @@
+{
+  "name": "@edium/halifax",
+  "version": "1.0.0",
+  "description": "Adapter-driven dynamic REST CRUD and SQL query-builder framework for TypeScript APIs.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/splayfee/halifax.git"
+  },
+  "bugs": {
+    "url": "https://github.com/splayfee/halifax/issues",
+    "email": "david@edium.com"
+  },
+  "docs": {
+    "url": "https://github.com/splayfee/halifax/blob/master/README.md"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "USING.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsx watch ./src/index.ts",
+    "dev:hyper": "tsx watch examples/hyper-express-mssql.ts",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "type-check": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "peerDependencies": {
+    "@prisma/client": ">=5.0.0",
+    "express": ">=5.0.0",
+    "fastify": ">=4.0.0",
+    "hyper-express": ">=6.0.0",
+    "sequelize": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/client": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "fastify": {
+      "optional": true
+    },
+    "hyper-express": {
+      "optional": true
+    },
+    "sequelize": {
+      "optional": true
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "@types/supertest": "^7.2.0",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "express": "^5.2.1",
+    "fastify": "^5.8.5",
+    "globals": "^17.5.0",
+    "hyper-express": "^6.17.3",
+    "mssql": "^12.5.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.1",
+    "vitest": "^4.1.5"
+  },
+  "keywords": [
+    "rest",
+    "crud",
+    "query-builder",
+    "typescript",
+    "hyper-express",
+    "fastify",
+    "express",
+    "prisma",
+    "sequelize",
+    "mssql",
+    "api"
+  ],
+  "packageManager": "pnpm@11.0.0+sha512.5bd187500e49cc6c3d891d973b432c02b844a5eb7209172c90a517a3ef4f579ed5c23d409b699e6a9dc418ff7b2b1890e63f6d74f1d3fc49848f37779c89c84c"
+}
