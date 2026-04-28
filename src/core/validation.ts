@@ -9,6 +9,9 @@ import { ResourceDefinition } from './types.js'
 const reservedQueryStringProperties = ['fields', 'limit', 'offset', 'order', 'include']
 
 export function isValidInt32(value: string | number | null, min = 1): boolean {
+  if (value === null || value === undefined) {
+    return false
+  }
   const normalized = typeof value === 'string' ? Number(value.trim()) : value
   return Number.isSafeInteger(normalized) && normalized >= min && normalized <= 2147483647
 }
