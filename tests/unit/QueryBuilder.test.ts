@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QueryBuilder } from '../../src/database/QueryBuilder.js'
+import { QueryBuilder } from '../../src/classes/QueryBuilder.js'
 import { SqlComparison } from '../../src/enums/SqlComparison.js'
 import { SqlOrder } from '../../src/enums/SqlOrder.js'
 
