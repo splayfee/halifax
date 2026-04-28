@@ -2,31 +2,30 @@
   "name": "@edium/halifax",
   "version": "1.0.0",
   "description": "Adapter-driven dynamic REST CRUD and SQL query-builder framework for TypeScript APIs.",
+  "author": "David LaTour <david@edium.com>",
+  "homepage": "https://github.com/splayfee/halifax#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/splayfee/halifax.git"
   },
   "bugs": {
-    "url": "https://github.com/splayfee/halifax/issues",
-    "email": "david@edium.com"
-  },
-  "docs": {
-    "url": "https://github.com/splayfee/halifax/blob/master/README.md"
+    "url": "https://github.com/splayfee/halifax/issues"
   },
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "src",
     "README.md",
     "USING.md",
     "LICENSE"
@@ -46,7 +45,7 @@
     "type-check": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "peerDependencies": {
     "@prisma/client": ">=5.0.0",
@@ -75,6 +74,7 @@
   "dependencies": {},
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@prisma/client": "^7.8.0",
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
     "@types/supertest": "^7.2.0",
@@ -85,6 +85,7 @@
     "globals": "^17.5.0",
     "hyper-express": "^6.17.3",
     "mssql": "^12.5.0",
+    "sequelize": "^6.37.8",
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
@@ -104,5 +105,8 @@
     "mssql",
     "api"
   ],
-  "packageManager": "pnpm@11.0.0+sha512.5bd187500e49cc6c3d891d973b432c02b844a5eb7209172c90a517a3ef4f579ed5c23d409b699e6a9dc418ff7b2b1890e63f6d74f1d3fc49848f37779c89c84c"
+  "packageManager": "pnpm@11.0.0+sha512.5bd187500e49cc6c3d891d973b432c02b844a5eb7209172c90a517a3ef4f579ed5c23d409b699e6a9dc418ff7b2b1890e63f6d74f1d3fc49848f37779c89c84c",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
 }
