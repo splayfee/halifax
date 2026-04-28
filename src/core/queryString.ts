@@ -1,7 +1,7 @@
-import { SqlOrder } from '../enums/SqlOrder.js'
-import { PayloadError } from '../errors/PayloadError.js'
-import { ListOptions, ResourceDefinition } from './types.js'
-import { isValidInt32, validateFields, validateIncludes, validateQueryString } from './validation.js'
+import { SqlOrder } from '@/enums/SqlOrder.js'
+import { PayloadError } from '@/errors/PayloadError.js'
+import type { ListOptions, ResourceDefinition } from '@/core/types.js'
+import { isValidInt32, validateFields, validateIncludes, validateQueryString } from '@/core/validation.js'
 
 function parseInteger(value: unknown, property: string, min = 1): number | undefined {
   if (value === undefined) return undefined

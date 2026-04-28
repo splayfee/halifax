@@ -1,10 +1,10 @@
 import express from 'express'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { InMemoryDataAdapter } from '../../src/adapters/data/InMemoryDataAdapter.js'
-import { createExpressCrudRouter } from '../../src/adapters/http/express.js'
-import { ApiKeyAuthStrategy } from '../../src/auth/AuthStrategy.js'
-import { ResourceDefinition } from '../../src/core/types.js'
+import { InMemoryDataAdapter } from '@/adapters/data/InMemoryDataAdapter.js'
+import { createExpressCrudRouter } from '@/adapters/http/express.js'
+import { ApiKeyAuthStrategy } from '@/auth/AuthStrategy.js'
+import { ResourceDefinition } from '@/core/types.js'
 
 function createApp() {
   const app = express()

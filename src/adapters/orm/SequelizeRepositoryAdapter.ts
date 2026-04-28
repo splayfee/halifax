@@ -1,7 +1,7 @@
-import { QueryBuilder } from '../../classes/QueryBuilder.js'
-import { HttpError } from '../../errors/HttpError.js'
-import { IQueryOptions } from '../../interfaces/IQueryOptions.js'
-import { DeleteManyResult, ListOptions, ListResult, NativeQueryResult, Repository, UpdateManyResult } from '../../core/repository.js'
+import { QueryBuilder } from '@/classes/QueryBuilder.js'
+import { HttpError } from '@/errors/HttpError.js'
+import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type { DeleteManyResult, ListOptions, ListResult, NativeQueryResult, Repository, UpdateManyResult } from '@/core/repository.js'
 
 export interface SequelizeModelLike<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> {
   findByPk?(id: string | number, args?: Record<string, unknown>): Promise<TRecord | null>
@@ -33,9 +33,9 @@ function toOrder(orderBy?: ListOptions['orderBy']): Array<[string, string]> | un
 
 export class SequelizeRepositoryAdapter<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> implements Repository<TRecord, TCreate, TUpdate> {
   private readonly model: SequelizeModelLike<TRecord, TCreate, TUpdate>
-  private readonly sequelize?: SequelizeNativeClient
+  private readonly sequelize?: SequelizeNativeClient | undefined
   private readonly idField: string
-  private readonly tableName?: string
+  private readonly tableName?: string | undefined
   private readonly queryTypes?: SequelizeRepositoryAdapterOptions['queryTypes']
 
   public constructor(options: SequelizeRepositoryAdapterOptions<TRecord, TCreate, TUpdate>) {

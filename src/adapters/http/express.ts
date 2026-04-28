@@ -1,8 +1,8 @@
 import type { Express, Request, Response } from 'express'
 import { Router } from 'express'
-import { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '../../core/http.js'
-import { registerCrudApi, CrudApiOptions } from '../../core/crudRouter.js'
-import { ResourceDefinition } from '../../core/types.js'
+import type { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '@/core/http.js'
+import { registerCrudApi, type CrudApiOptions } from '@/core/crudRouter.js'
+import type { ResourceDefinition } from '@/core/types.js'
 
 function normalizeHeaders(headers: Request['headers']): Record<string, string | string[] | undefined> {
   return headers as Record<string, string | string[] | undefined>

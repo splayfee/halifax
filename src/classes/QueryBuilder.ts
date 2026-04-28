@@ -1,9 +1,9 @@
-import { SqlComparison } from '../enums/SqlComparison.js'
-import { PayloadError } from '../errors/PayloadError.js'
-import { IParamQuery } from '../interfaces/IParamQuery.js'
-import { IQueryFilter, QueryScalar } from '../interfaces/IQueryFilter.js'
-import { IQueryOptions } from '../interfaces/IQueryOptions.js'
-import { ISort } from '../interfaces/ISort.js'
+import { SqlComparison } from '@/enums/SqlComparison.js'
+import { PayloadError } from '@/errors/PayloadError.js'
+import type { IParamQuery } from '@/interfaces/IParamQuery.js'
+import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
+import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type { ISort } from '@/interfaces/ISort.js'
 
 function isDefined(value: unknown): boolean {
   return value !== undefined && value !== null

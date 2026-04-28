@@ -1,1 +1,1 @@
-export * from '../orm/PrismaRepositoryAdapter.js'
+export * from '@/adapters/orm/PrismaRepositoryAdapter.js'

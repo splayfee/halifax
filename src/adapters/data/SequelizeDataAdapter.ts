@@ -1,1 +1,1 @@
-export * from '../orm/SequelizeRepositoryAdapter.js'
+export * from '@/adapters/orm/SequelizeRepositoryAdapter.js'

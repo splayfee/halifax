@@ -35,7 +35,7 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && tsc-alias",
     "dev": "tsx watch ./src/index.ts",
     "dev:hyper": "tsx watch examples/hyper-express-mssql.ts",
     "lint": "eslint .",
@@ -87,6 +87,7 @@
     "mssql": "^12.5.0",
     "sequelize": "^6.37.8",
     "supertest": "^7.2.2",
+    "tsc-alias": "^1.8.16",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.1",

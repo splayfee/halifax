@@ -1,4 +1,4 @@
-import { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '../../core/http.js'
+import type { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '@/core/http.js'
 
 type HyperExpressLike = Record<string, any> & {
   listen(port: number, host?: string): Promise<unknown> | unknown

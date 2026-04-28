@@ -1,14 +1,14 @@
-import { QueryBuilder } from '../../classes/QueryBuilder.js'
-import { HttpError } from '../../errors/HttpError.js'
-import { IQueryOptions } from '../../interfaces/IQueryOptions.js'
-import {
+import { QueryBuilder } from '@/classes/QueryBuilder.js'
+import { HttpError } from '@/errors/HttpError.js'
+import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type {
   Repository,
   DeleteManyResult,
   ListOptions,
   ListResult,
   NativeQueryResult,
   UpdateManyResult
-} from '../../core/repository.js'
+} from '@/core/repository.js'
 
 export interface PrismaDelegate<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> {
   findUnique?(args: Record<string, unknown>): Promise<TRecord | null>
@@ -78,9 +78,9 @@ export class PrismaRepositoryAdapter<TRecord = unknown, TCreate = Partial<TRecor
   implements Repository<TRecord, TCreate, TUpdate>
 {
   private readonly delegate: PrismaDelegate<TRecord, TCreate, TUpdate>
-  private readonly client?: PrismaNativeClient
+  private readonly client?: PrismaNativeClient | undefined
   private readonly idField: string
-  private readonly tableName?: string
+  private readonly tableName?: string | undefined
 
   public constructor(options: PrismaRepositoryAdapterOptions<TRecord, TCreate, TUpdate>) {
     this.delegate = options.delegate

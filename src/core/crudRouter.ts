@@ -1,11 +1,11 @@
-import { AllowAllAuthStrategy, AuthStrategy } from '../auth/AuthStrategy.js'
-import { QueryBuilder } from '../classes/QueryBuilder.js'
-import { HttpError } from '../errors/HttpError.js'
-import { IQueryOptions } from '../interfaces/IQueryOptions.js'
-import { CrudAction, defaultCrudPermissions, ResourceDefinition } from './types.js'
-import { HttpRequest, HttpResponse, HttpServer } from './http.js'
-import { parseListOptions } from './queryString.js'
-import { validateAdvancedQuery, validateId } from './validation.js'
+import { AllowAllAuthStrategy, type AuthStrategy } from '@/auth/AuthStrategy.js'
+import { QueryBuilder } from '@/classes/QueryBuilder.js'
+import { HttpError } from '@/errors/HttpError.js'
+import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
+import type { HttpRequest, HttpResponse, HttpServer } from '@/core/http.js'
+import { parseListOptions } from '@/core/queryString.js'
+import { validateAdvancedQuery, validateId } from '@/core/validation.js'
 
 export interface CrudApiOptions {
   authStrategy?: AuthStrategy
@@ -115,9 +115,10 @@ export function registerCrudApi(server: HttpServer, resources: ResourceDefinitio
     if (permissions.allowReadOne) {
       server.registerRoute('GET', `${basePath}/:id`, wrap(async (req, res) => {
         await authorizeRequest(req, resource, 'readOne', authStrategy)
-        validateId(req.params.id)
+        const id = req.params['id']
+        validateId(id)
         const listOptions = parseListOptions(req.query, resource)
-        const result = await repository.getOne(req.params.id, { fields: listOptions.fields, include: listOptions.include })
+        const result = await repository.getOne(id, { fields: listOptions.fields, include: listOptions.include })
         if (!result) {
           await res.status(404).json({ error: { message: 'Not found' } })
           return
@@ -129,8 +130,9 @@ export function registerCrudApi(server: HttpServer, resources: ResourceDefinitio
     if (permissions.allowUpdateOne) {
       server.registerRoute('PATCH', `${basePath}/:id`, wrap(async (req, res) => {
         await authorizeRequest(req, resource, 'updateOne', authStrategy)
-        validateId(req.params.id)
-        const result = await repository.updateOne(req.params.id, req.body as never)
+        const id = req.params['id']
+        validateId(id)
+        const result = await repository.updateOne(id, req.body as never)
         if (!result) {
           await res.status(404).json({ error: { message: 'Not found' } })
           return
@@ -155,8 +157,9 @@ export function registerCrudApi(server: HttpServer, resources: ResourceDefinitio
       server.registerRoute('PUT', `${basePath}/:id`, wrap(async (req, res) => {
         await authorizeRequest(req, resource, 'upsertOne', authStrategy)
         if (!repository.upsertOne) throw new HttpError('This resource does not support upsert.', 501)
-        validateId(req.params.id)
-        const result = await repository.upsertOne(req.params.id, req.body as never)
+        const id = req.params['id']
+        validateId(id)
+        const result = await repository.upsertOne(id, req.body as never)
         await res.status(200).json(result)
       }))
     }
@@ -164,8 +167,9 @@ export function registerCrudApi(server: HttpServer, resources: ResourceDefinitio
     if (permissions.allowDeleteOne) {
       server.registerRoute('DELETE', `${basePath}/:id`, wrap(async (req, res) => {
         await authorizeRequest(req, resource, 'deleteOne', authStrategy)
-        validateId(req.params.id)
-        const deleted = await repository.deleteOne(req.params.id)
+        const id = req.params['id']
+        validateId(id)
+        const deleted = await repository.deleteOne(id)
         if (!deleted) {
           await res.status(404).json({ error: { message: 'Not found' } })
           return

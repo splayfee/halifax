@@ -1,4 +1,4 @@
-import { SqlOrder } from '../enums/SqlOrder.js'
+import { SqlOrder } from '@/enums/SqlOrder.js'
 
 export interface ISort {
   field: string
