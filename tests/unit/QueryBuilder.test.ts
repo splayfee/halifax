@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { QueryBuilder } from '../../src/classes/QueryBuilder.js'
-import { SqlComparison } from '../../src/enums/SqlComparison.js'
-import { SqlOrder } from '../../src/enums/SqlOrder.js'
+import { QueryBuilder } from '@/classes/QueryBuilder.js'
+import { SqlComparison } from '@/enums/SqlComparison.js'
+import { SqlOrder } from '@/enums/SqlOrder.js'
 
 it('builds parameterized select queries', () => {
   const query = QueryBuilder.buildSelectQuery({

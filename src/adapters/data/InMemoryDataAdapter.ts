@@ -1,4 +1,4 @@
-import { DataAdapter, ListOptions, ListResult } from '../../core/types.js'
+import type { DataAdapter, ListOptions, ListResult } from '@/core/types.js'
 
 export class InMemoryDataAdapter<TRecord extends Record<string, any>>
   implements DataAdapter<TRecord, Partial<TRecord>, Partial<TRecord>>

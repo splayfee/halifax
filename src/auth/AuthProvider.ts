@@ -1,1 +1,1 @@
-export * from './AuthStrategy.js'
+export * from '@/auth/AuthStrategy.js'

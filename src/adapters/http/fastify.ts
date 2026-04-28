@@ -1,4 +1,4 @@
-import { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '../../core/http.js'
+import type { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '@/core/http.js'
 
 type FastifyLike = {
   route(options: { method: string; url: string; handler: (request: any, reply: any) => unknown }): unknown
@@ -45,6 +45,6 @@ export class FastifyHttpServer implements HttpServer {
   }
 
   public async start(port: number, host?: string): Promise<void> {
-    await this.app.listen({ port, host })
+    await this.app.listen(host !== undefined ? { port, host } : { port })
   }
 }

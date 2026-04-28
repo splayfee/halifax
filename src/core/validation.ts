@@ -1,10 +1,10 @@
-import { SqlComparison } from '../enums/SqlComparison.js'
-import { SqlOperator } from '../enums/SqlOperator.js'
-import { SqlOrder } from '../enums/SqlOrder.js'
-import { PayloadError } from '../errors/PayloadError.js'
-import { IQueryFilter } from '../interfaces/IQueryFilter.js'
-import { IQueryOptions } from '../interfaces/IQueryOptions.js'
-import { ResourceDefinition } from './types.js'
+import { SqlComparison } from '@/enums/SqlComparison.js'
+import { SqlOperator } from '@/enums/SqlOperator.js'
+import { SqlOrder } from '@/enums/SqlOrder.js'
+import { PayloadError } from '@/errors/PayloadError.js'
+import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
+import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type { ResourceDefinition } from '@/core/types.js'
 
 const reservedQueryStringProperties = ['fields', 'limit', 'offset', 'order', 'include']
 
@@ -16,8 +16,8 @@ export function isValidInt32(value: string | number | null, min = 1): boolean {
   return Number.isSafeInteger(normalized) && normalized >= min && normalized <= 2147483647
 }
 
-export function validateId(value: string | number): void {
-  if (!isValidInt32(value)) {
+export function validateId(value: string | number | undefined): asserts value is string | number {
+  if (value === undefined || !isValidInt32(value)) {
     throw new PayloadError('Id parameter must be an integer from 1 to 2147483647.')
   }
 }

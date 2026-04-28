@@ -1,12 +1,12 @@
-import { IQueryOptions } from '../interfaces/IQueryOptions.js'
+import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 
 export interface ListOptions {
-  fields?: string[]
+  fields?: string[] | undefined
   where?: Record<string, unknown>
-  limit?: number
-  offset?: number
-  orderBy?: Array<{ field: string; direction: 'asc' | 'desc' }>
-  include?: string[]
+  limit?: number | undefined
+  offset?: number | undefined
+  orderBy?: Array<{ field: string; direction: 'asc' | 'desc' }> | undefined
+  include?: string[] | undefined
 }
 
 export interface ListResult<TRecord> {

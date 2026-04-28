@@ -1,6 +1,6 @@
-import { AuthError } from '../errors/AuthError.js'
-import { CrudAction, ResourceDefinition } from '../core/types.js'
-import { HttpRequest } from '../core/http.js'
+import { AuthError } from '@/errors/AuthError.js'
+import type { CrudAction, ResourceDefinition } from '@/core/types.js'
+import type { HttpRequest } from '@/core/http.js'
 
 export interface AuthContext {
   userId?: string
@@ -57,7 +57,7 @@ export class JwtClaimsAuthStrategy implements AuthStrategy {
     if (!match) {
       throw new AuthError('Missing bearer token')
     }
-    return await this.verifyToken(match[1], req)
+    return await this.verifyToken(match[1]!, req)
   }
 
   public authorize(params: AuthorizeParams): boolean {

@@ -1,4 +1,4 @@
-import { Repository } from './repository.js'
+import type { Repository } from '@/core/repository.js'
 
 export type CrudAction =
   | 'create'

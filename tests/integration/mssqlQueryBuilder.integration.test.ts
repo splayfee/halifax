@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QueryBuilder, SqlComparison, SqlOrder } from '../../src/index.js'
+import { QueryBuilder, SqlComparison, SqlOrder } from '@/index.js'
 
 describe('SQL Server query-builder integration placeholder', () => {
   it('emits SQL Server pagination syntax used by the MSSQL integration path', () => {
