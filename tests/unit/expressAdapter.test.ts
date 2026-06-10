@@ -1,8 +1,10 @@
-import express from 'express'
+import express, { type Router } from 'express'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { createExpressCrudRouter } from '@/adapters/http/express.js'
+import { createExpressCrudRouter, ExpressHttpServer } from '@/adapters/http/express.js'
 import { ApiKeyAuthStrategy } from '@/auth/AuthStrategy.js'
+import { normalizeError } from '@/core/crudRouter.js'
+import { HttpError } from '@/errors/HttpError.js'
 import type { ResourceDefinition } from '@/core/types.js'
 import type { Repository, ListResult, CreateOptions } from '@/core/repository.js'
 
@@ -416,7 +418,10 @@ describe('createExpressCrudRouter — limit constraints', () => {
 
 describe('createExpressCrudRouter — HTTP 406', () => {
   it('returns 406 when Accept excludes application/json', async () => {
-    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret').set('Accept', 'text/html')
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Accept', 'text/html')
     expect(res.status).toBe(406)
   })
 
@@ -429,7 +434,10 @@ describe('createExpressCrudRouter — HTTP 406', () => {
   })
 
   it('allows Accept: */*', async () => {
-    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret').set('Accept', '*/*')
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Accept', '*/*')
     expect(res.status).toBe(200)
   })
 
@@ -450,7 +458,10 @@ describe('createExpressCrudRouter — HTTP 406', () => {
   })
 
   it('allows requests with no Accept header', async () => {
-    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret').unset('Accept')
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .unset('Accept')
     expect(res.status).toBe(200)
   })
 })
@@ -507,7 +518,7 @@ describe('createExpressCrudRouter — Idempotency-Key', () => {
       },
       async deleteOne() {
         return false
-      },
+      }
     }
 
     const resource: ResourceDefinition = {
@@ -515,7 +526,7 @@ describe('createExpressCrudRouter — Idempotency-Key', () => {
       routePrefix: 'users',
       fields: [{ name: 'id' }, { name: 'email' }],
       permissions: { allowCreate: true },
-      repository: repo,
+      repository: repo
     }
 
     app.use('/api/v1', createExpressCrudRouter([resource]))
@@ -525,7 +536,10 @@ describe('createExpressCrudRouter — Idempotency-Key', () => {
 
   it('passes Idempotency-Key to repository createOne', async () => {
     const { app, getKey } = createIdempotencyApp()
-    await request(app).post('/api/v1/users').send({ email: 'x@x.com' }).set('Idempotency-Key', 'key-abc-123')
+    await request(app)
+      .post('/api/v1/users')
+      .send({ email: 'x@x.com' })
+      .set('Idempotency-Key', 'key-abc-123')
     expect(getKey()).toBe('key-abc-123')
   })
 
@@ -542,5 +556,481 @@ describe('createExpressCrudRouter — Idempotency-Key', () => {
     const { app, getKey } = createIdempotencyApp()
     await request(app).post('/api/v1/users').send({ email: 'x@x.com' })
     expect(getKey()).toBeUndefined()
+  })
+})
+
+// ─── Advanced routes ──────────────────────────────────────────────────────────
+
+function createFullApp() {
+  const app = express()
+  app.use(express.json())
+
+  const records: Array<{ id: number; email: string }> = [{ id: 1, email: 'a@x.com' }]
+
+  const repo: Repository<
+    (typeof records)[0],
+    Partial<(typeof records)[0]>,
+    Partial<(typeof records)[0]>
+  > = {
+    async getOne(id) {
+      return records.find((r) => r.id === Number(id)) ?? null
+    },
+    async getMany() {
+      return { count: records.length, results: [...records] }
+    },
+    async createOne(data) {
+      const r = { id: Date.now(), email: '', ...data }
+      records.push(r)
+      return r
+    },
+    async createMany(data) {
+      const rs = data.map((d) => ({ id: Date.now(), email: '', ...d }))
+      records.push(...rs)
+      return rs
+    },
+    async updateOne(id, data) {
+      const r = records.find((x) => x.id === Number(id))
+      if (!r) return null
+      Object.assign(r, data)
+      return r
+    },
+    async updateMany(_query, data) {
+      records.forEach((r) => Object.assign(r, data))
+      return { updated: records.map((r) => r.id) }
+    },
+    async upsertOne(id, data) {
+      const existing = records.find((r) => r.id === Number(id))
+      if (existing) {
+        Object.assign(existing, data)
+        return existing
+      }
+      const r = { id: Number(id), email: '', ...data }
+      records.push(r)
+      return r
+    },
+    async deleteOne(id) {
+      const idx = records.findIndex((r) => r.id === Number(id))
+      if (idx === -1) return false
+      records.splice(idx, 1)
+      return true
+    },
+    async deleteMany() {
+      const ids = records.map((r) => r.id)
+      records.length = 0
+      return { deleted: ids }
+    },
+    async executeQueryBuilder() {
+      return { count: records.length, results: [...records] }
+    }
+  }
+
+  const resource: ResourceDefinition = {
+    name: 'User',
+    routePrefix: 'users',
+    tableName: 'users',
+    fields: [
+      { name: 'id', filterable: true, sortable: true },
+      { name: 'email', filterable: true, writable: true }
+    ],
+    permissions: {
+      allowCreate: true,
+      allowReadOne: true,
+      allowReadMany: true,
+      allowUpdateOne: true,
+      allowUpdateMany: true,
+      allowUpsertOne: true,
+      allowDeleteOne: true,
+      allowDeleteMany: true,
+      allowReadManyWithQueryBuilder: true
+    },
+    repository: repo
+  }
+
+  app.use('/api/v1', createExpressCrudRouter([resource]))
+  return app
+}
+
+describe('createExpressCrudRouter — updateMany', () => {
+  it('returns 200 with updated ids', async () => {
+    const res = await request(createFullApp())
+      .patch('/api/v1/users')
+      .set('Accept', 'application/json')
+      .send({ update: { email: 'bulk@x.com' } })
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('updated')
+  })
+})
+
+describe('createExpressCrudRouter — upsertOne', () => {
+  it('upserts a record with PUT and returns 200', async () => {
+    const res = await request(createFullApp())
+      .put('/api/v1/users/1')
+      .set('Accept', 'application/json')
+      .send({ email: 'upserted@x.com' })
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 501 when the repository has no upsertOne method', async () => {
+    const app = express()
+    app.use(express.json())
+    const repo: Repository<{ id: number }, Partial<{ id: number }>, Partial<{ id: number }>> = {
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne() {
+        return { id: 1 }
+      },
+      async createMany() {
+        return []
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+    const resource: ResourceDefinition = {
+      name: 'X',
+      routePrefix: 'xs',
+      fields: [{ name: 'id' }],
+      permissions: { allowUpsertOne: true },
+      repository: repo
+    }
+    app.use(createExpressCrudRouter([resource]))
+    const res = await request(app).put('/xs/1').set('Accept', 'application/json').send({})
+    expect(res.status).toBe(501)
+  })
+})
+
+describe('createExpressCrudRouter — deleteMany', () => {
+  it('returns 200 with deleted ids', async () => {
+    const res = await request(createFullApp())
+      .delete('/api/v1/users')
+      .set('Accept', 'application/json')
+      .send({})
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('deleted')
+  })
+})
+
+describe('createExpressCrudRouter — query-builder route', () => {
+  it('returns 200 with count and results', async () => {
+    const res = await request(createFullApp())
+      .post('/api/v1/users/query-builder')
+      .set('Accept', 'application/json')
+      .send({})
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('count')
+    expect(res.body).toHaveProperty('results')
+  })
+
+  it('returns 501 when repository has no executeQueryBuilder', async () => {
+    const app = express()
+    app.use(express.json())
+    const repo: Repository<{ id: number }, Partial<{ id: number }>, Partial<{ id: number }>> = {
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne() {
+        return { id: 1 }
+      },
+      async createMany() {
+        return []
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+    const resource: ResourceDefinition = {
+      name: 'X',
+      routePrefix: 'xs',
+      fields: [{ name: 'id' }],
+      tableName: 'xs',
+      permissions: { allowReadManyWithQueryBuilder: true },
+      repository: repo
+    }
+    app.use(createExpressCrudRouter([resource]))
+    const res = await request(app)
+      .post('/xs/query-builder')
+      .set('Accept', 'application/json')
+      .send({})
+    expect(res.status).toBe(501)
+  })
+})
+
+describe('createExpressCrudRouter — preview route', () => {
+  it('returns count and select SQL for a valid query', async () => {
+    const app = express()
+    app.use(express.json())
+    app.use(createExpressCrudRouter([]))
+    const res = await request(app)
+      .post('/query-builder/preview')
+      .set('Accept', 'application/json')
+      .send({ tableName: 'users' })
+    expect(res.status).toBe(200)
+    expect(res.body.count.statement).toContain('COUNT(*)')
+    expect(res.body.select.statement).toContain('FROM users')
+  })
+})
+
+describe('normalizeError', () => {
+  it('normalizes an HttpError', () => {
+    const result = normalizeError(new HttpError('Not Found', 404))
+    expect(result).toEqual({
+      status: 404,
+      name: 'HttpError',
+      message: 'Not Found',
+      details: undefined
+    })
+  })
+
+  it('normalizes a plain Error to 500', () => {
+    const result = normalizeError(new Error('boom'))
+    expect(result).toEqual({ status: 500, name: 'Error', message: 'boom' })
+  })
+
+  it('normalizes an unknown throw value to 500', () => {
+    const result = normalizeError('something bad')
+    expect(result).toEqual({ status: 500, name: 'Error', message: 'Unknown error' })
+  })
+})
+
+describe('createExpressCrudRouter — query-string edge cases', () => {
+  it('handles ?order=-email (descending prefix)', async () => {
+    const app = createSecuredApp()
+    const res = await request(app).get('/api/v1/users?order=-email').set('x-api-key', 'secret')
+    expect(res.status).toBe(200)
+  })
+
+  it('handles comma-separated multi-value filter (?id=1,2)', async () => {
+    const res = await request(createApp()).get('/api/v1/users?id=1,2').set('x-api-key', 'secret')
+    expect(res.status).toBe(200)
+  })
+
+  it('rejects 406 when updateMany called with Accept: text/xml', async () => {
+    const res = await request(createFullApp())
+      .patch('/api/v1/users')
+      .set('Accept', 'text/xml')
+      .send({ update: { email: 'x@x.com' } })
+    expect(res.status).toBe(406)
+  })
+})
+
+describe('createExpressCrudRouter — resource without repository', () => {
+  it('throws synchronously when repository is missing', () => {
+    const app = express()
+    app.use(express.json())
+    expect(() =>
+      createExpressCrudRouter([
+        { name: 'X', routePrefix: 'xs', fields: [], repository: null as never }
+      ])
+    ).toThrow()
+  })
+})
+
+describe('createExpressCrudRouter — updateMany/deleteMany 501', () => {
+  function createPartialApp() {
+    const app = express()
+    app.use(express.json())
+
+    const repo: Repository<{ id: number }, Partial<{ id: number }>, Partial<{ id: number }>> = {
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne() {
+        return { id: 1 }
+      },
+      async createMany() {
+        return []
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+
+    const resource: ResourceDefinition = {
+      name: 'X',
+      routePrefix: 'xs',
+      fields: [{ name: 'id' }],
+      tableName: 'xs',
+      permissions: { allowUpdateMany: true, allowDeleteMany: true },
+      repository: repo
+    }
+
+    app.use(createExpressCrudRouter([resource]))
+    return app
+  }
+
+  it('returns 501 when repo has no updateMany', async () => {
+    const res = await request(createPartialApp())
+      .patch('/xs')
+      .set('Accept', 'application/json')
+      .send({ update: { id: 2 } })
+    expect(res.status).toBe(501)
+  })
+
+  it('returns 501 when repo has no deleteMany', async () => {
+    const res = await request(createPartialApp())
+      .delete('/xs')
+      .set('Accept', 'application/json')
+      .send({})
+    expect(res.status).toBe(501)
+  })
+})
+
+describe('createExpressCrudRouter — requiredPermissions enforcement', () => {
+  it('returns 403 via JwtClaimsAuthStrategy.authorize when permission is missing', async () => {
+    const app = express()
+    app.use(express.json())
+
+    const repo: Repository<User, Partial<User>, Partial<User>> = {
+      async getOne() {
+        return { id: 1, email: 'a@x.com' }
+      },
+      async getMany() {
+        return { count: 1, results: [{ id: 1, email: 'a@x.com' }] }
+      },
+      async createOne(d) {
+        return d as User
+      },
+      async createMany(d) {
+        return d as User[]
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+
+    const resource: ResourceDefinition = {
+      name: 'User',
+      routePrefix: 'users',
+      fields: [{ name: 'id' }, { name: 'email' }],
+      permissions: { allowReadMany: true },
+      requiredPermissions: { readMany: ['users.read'] },
+      repository: repo
+    }
+
+    const { JwtClaimsAuthStrategy } = await import('@/auth/AuthStrategy.js')
+    const authStrategy = new JwtClaimsAuthStrategy(() => ({
+      isAuthenticated: true,
+      permissions: [],
+      roles: []
+    }))
+
+    app.use(createExpressCrudRouter([resource], { authStrategy }))
+
+    const res = await request(app)
+      .get('/users')
+      .set('Accept', 'application/json')
+      .set('Authorization', 'Bearer dummy')
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 403 via fallback path (strategy has no authorize) when permission is missing', async () => {
+    const app = express()
+    app.use(express.json())
+
+    const repo: Repository<User, Partial<User>, Partial<User>> = {
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne(d) {
+        return d as User
+      },
+      async createMany(d) {
+        return d as User[]
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+
+    const resource: ResourceDefinition = {
+      name: 'User',
+      routePrefix: 'users',
+      fields: [{ name: 'id' }, { name: 'email' }],
+      permissions: { allowReadMany: true },
+      requiredPermissions: { readMany: ['users.read'] },
+      repository: repo
+    }
+
+    // AllowAllAuthStrategy has no authorize() method — exercises the fallback path
+    app.use(createExpressCrudRouter([resource], { authStrategy: new ApiKeyAuthStrategy('k') }))
+
+    const res = await request(app)
+      .get('/users')
+      .set('Accept', 'application/json')
+      .set('x-api-key', 'k')
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('ExpressHttpServer', () => {
+  it('start() resolves immediately on a Router (no listen)', async () => {
+    const router = express.Router()
+    const server = new ExpressHttpServer(router)
+    await expect(server.start(3000)).resolves.toBeUndefined()
+  })
+
+  it('start() calls listen on an app-like object with listen', async () => {
+    const fakeApp = {
+      listen: (_port: number, _host: string | undefined, cb: () => void) => {
+        cb()
+      }
+    }
+    const server = new ExpressHttpServer(fakeApp as never)
+    await expect(server.start(0)).resolves.toBeUndefined()
+  })
+
+  it('send() writes a response body', async () => {
+    const app = express()
+    app.use(express.json())
+    const router = express.Router() as Router
+    const server = new ExpressHttpServer(router)
+    server.registerRoute('GET', '/ping', async (_req, res) => {
+      res.send?.('pong')
+    })
+    app.use(router)
+    const res = await request(app).get('/ping').set('Accept', 'application/json')
+    expect(res.text).toBe('pong')
+  })
+
+  it('setHeader() attaches a custom header to the response', async () => {
+    const app = express()
+    app.use(express.json())
+    const router = express.Router() as Router
+    const server = new ExpressHttpServer(router)
+    server.registerRoute('GET', '/hdr', async (_req, res) => {
+      res.setHeader?.('X-Custom', 'test-value')
+      await res.status(200).json({})
+    })
+    app.use(router)
+    const res = await request(app).get('/hdr').set('Accept', 'application/json')
+    expect(res.headers['x-custom']).toBe('test-value')
   })
 })

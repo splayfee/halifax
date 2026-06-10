@@ -154,3 +154,78 @@ describe('QueryBuilder.buildDeleteQuery', () => {
     expect(statement).toBe('DELETE FROM sessions')
   })
 })
+
+describe('QueryBuilder — edge cases', () => {
+  it('throws PayloadError when tableName is missing', () => {
+    expect(() => QueryBuilder.buildSelectQuery({})).toThrow('table name')
+  })
+
+  it('handles LIKE comparison', () => {
+    const { statement } = QueryBuilder.buildSelectQuery({
+      tableName: 't',
+      where: [{ field: 'name', comparison: SqlComparison.Like, value1: '%foo%' }]
+    })
+    expect(statement).toContain('name LIKE $1')
+  })
+
+  it('handles NOT LIKE comparison', () => {
+    const { statement } = QueryBuilder.buildSelectQuery({
+      tableName: 't',
+      where: [{ field: 'name', comparison: SqlComparison.NotLike, value1: '%foo%' }]
+    })
+    expect(statement).toContain('name NOT LIKE $1')
+  })
+
+  it('handles NOT IN comparison', () => {
+    const { statement, parameters } = QueryBuilder.buildSelectQuery({
+      tableName: 't',
+      where: [{ field: 'id', comparison: SqlComparison.NotIn, value1: [10, 20] }]
+    })
+    expect(statement).toContain('id NOT IN ($1,$2)')
+    expect(parameters).toEqual([10, 20])
+  })
+
+  it('handles NOT BETWEEN comparison', () => {
+    const { statement, parameters } = QueryBuilder.buildSelectQuery({
+      tableName: 't',
+      where: [{ field: 'score', comparison: SqlComparison.NotBetween, value1: 1, value2: 5 }]
+    })
+    expect(statement).toContain('score NOT BETWEEN $1 AND $2')
+    expect(parameters).toEqual([1, 5])
+  })
+
+  it('includes value2 in parameters for BETWEEN', () => {
+    const { parameters } = QueryBuilder.buildSelectQuery({
+      tableName: 't',
+      where: [{ field: 'score', comparison: SqlComparison.Between, value1: 10, value2: 20 }]
+    })
+    expect(parameters).toEqual([10, 20])
+  })
+
+  it('handles nested children filters', () => {
+    const { statement } = QueryBuilder.buildSelectQuery({
+      tableName: 't',
+      where: [
+        {
+          field: 'id',
+          comparison: SqlComparison.Equal,
+          value1: 1,
+          operator: 'AND',
+          children: [{ field: 'id', comparison: SqlComparison.GreaterThan, value1: 0 }]
+        }
+      ]
+    })
+    expect(statement).toContain('(id > $2)')
+  })
+
+  it('builds DISTINCT count query', () => {
+    const { statement } = QueryBuilder.buildCountQuery({ tableName: 'posts', isDistinct: true })
+    expect(statement).toBe('SELECT DISTINCT COUNT(*) AS count FROM posts')
+  })
+
+  it('uses offset 0 when limit is set but offset is omitted', () => {
+    const { statement } = QueryBuilder.buildSelectQuery({ tableName: 'posts', limit: 5 })
+    expect(statement).toContain('OFFSET 0 ROWS')
+    expect(statement).toContain('FETCH NEXT 5 ROWS ONLY')
+  })
+})

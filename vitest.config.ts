@@ -15,7 +15,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.d.ts', 'src/enums/**/*.ts', 'src/interfaces/**/*.ts', 'src/types/**/*.ts', 'src/index.ts']  
+      exclude: [
+        'src/**/*.d.ts',
+        'src/enums/**/*.ts',
+        'src/interfaces/**/*.ts',
+        'src/types/**/*.ts',
+        'src/index.ts'
+      ]
     }
   }
 })
