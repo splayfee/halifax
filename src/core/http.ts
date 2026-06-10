@@ -1,6 +1,7 @@
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | '*'
 
 export interface HttpRequest<TRaw = unknown> {
+  method: string
   params: Record<string, string>
   query: Record<string, unknown>
   body: unknown

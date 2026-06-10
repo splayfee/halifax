@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  validateId,
   validateWhere,
   validateAdvancedQuery,
   validateIncludes,
@@ -11,7 +12,8 @@ import {
 import { SqlComparison } from '@/enums/SqlComparison.js'
 import { SqlOrder } from '@/enums/SqlOrder.js'
 import { ServerError } from '@/errors/ServerError.js'
-import { PayloadError } from '@/errors/PayloadError.js'
+import { BadRequestError } from '@/errors/BadRequestError.js'
+import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import type { ResourceDefinition } from '@/core/types.js'
 
 const resource: ResourceDefinition = {
@@ -29,6 +31,28 @@ const resource: ResourceDefinition = {
   repository: null as never
 }
 
+describe('validateId', () => {
+  it('accepts a valid integer', () => {
+    expect(() => validateId(42)).not.toThrow()
+  })
+
+  it('accepts a valid UUID string', () => {
+    expect(() => validateId('550e8400-e29b-41d4-a716-446655440000')).not.toThrow()
+  })
+
+  it('throws BadRequestError for a non-integer string', () => {
+    expect(() => validateId('abc')).toThrow(BadRequestError)
+  })
+
+  it('throws BadRequestError for zero', () => {
+    expect(() => validateId(0)).toThrow(BadRequestError)
+  })
+
+  it('throws BadRequestError for undefined', () => {
+    expect(() => validateId(undefined)).toThrow(BadRequestError)
+  })
+})
+
 describe('getFieldNames', () => {
   it('returns all field names', () => {
     expect(getFieldNames(resource)).toEqual(['id', 'title', 'secret'])
@@ -40,8 +64,8 @@ describe('validateFields', () => {
     expect(() => validateFields(resource, ['id', 'title'])).not.toThrow()
   })
 
-  it('throws PayloadError for unknown fields', () => {
-    expect(() => validateFields(resource, ['nonexistent'])).toThrow(PayloadError)
+  it('throws UnprocessableEntityError for unknown fields', () => {
+    expect(() => validateFields(resource, ['nonexistent'])).toThrow(UnprocessableEntityError)
   })
 })
 
@@ -51,7 +75,7 @@ describe('validateSelectableFields', () => {
   })
 
   it('throws for non-selectable fields', () => {
-    expect(() => validateSelectableFields(resource, ['secret'])).toThrow(PayloadError)
+    expect(() => validateSelectableFields(resource, ['secret'])).toThrow(UnprocessableEntityError)
   })
 })
 
@@ -60,8 +84,8 @@ describe('validateSortableFields', () => {
     expect(() => validateSortableFields(resource, ['id', 'title'])).not.toThrow()
   })
 
-  it('throws PayloadError for non-sortable fields', () => {
-    expect(() => validateSortableFields(resource, ['secret'])).toThrow(PayloadError)
+  it('throws UnprocessableEntityError for non-sortable fields', () => {
+    expect(() => validateSortableFields(resource, ['secret'])).toThrow(UnprocessableEntityError)
   })
 })
 
@@ -71,11 +95,11 @@ describe('validateIncludes', () => {
   })
 
   it('throws for relations with includable=false', () => {
-    expect(() => validateIncludes(resource, ['hidden'])).toThrow(PayloadError)
+    expect(() => validateIncludes(resource, ['hidden'])).toThrow(UnprocessableEntityError)
   })
 
   it('throws for unknown relation names', () => {
-    expect(() => validateIncludes(resource, ['unknown'])).toThrow(PayloadError)
+    expect(() => validateIncludes(resource, ['unknown'])).toThrow(UnprocessableEntityError)
   })
 
   it('passes when includes is empty array', () => {
@@ -103,7 +127,7 @@ describe('validateWhere', () => {
   it('throws for an unknown field', () => {
     expect(() =>
       validateWhere(resource, [{ field: 'bogus', comparison: SqlComparison.Equal }])
-    ).toThrow(PayloadError)
+    ).toThrow(UnprocessableEntityError)
   })
 
   it('throws for an invalid comparison', () => {
@@ -149,7 +173,7 @@ describe('validateWhere', () => {
           children: [{ field: 'bogus', comparison: SqlComparison.Equal }]
         }
       ])
-    ).toThrow(PayloadError)
+    ).toThrow(UnprocessableEntityError)
   })
 
   it('passes for empty array', () => {
@@ -178,6 +202,49 @@ describe('validateWhere', () => {
   })
 })
 
+describe('validateWhere — depth controls', () => {
+  function nestedFilter(depth: number): import('@/interfaces/IQueryFilter.js').IQueryFilter[] {
+    if (depth === 0) return [{ field: 'id', comparison: SqlComparison.Equal, value1: 1 }]
+    return [
+      {
+        field: 'id',
+        comparison: SqlComparison.Equal,
+        value1: 1,
+        operator: 'AND',
+        children: nestedFilter(depth - 1)
+      }
+    ]
+  }
+
+  it('passes at the default max depth (3 levels of children)', () => {
+    expect(() => validateWhere(resource, nestedFilter(3))).not.toThrow()
+  })
+
+  it('throws when nesting exceeds the default max depth of 3', () => {
+    expect(() => validateWhere(resource, nestedFilter(4))).toThrow('maximum allowed depth')
+  })
+
+  it('respects a custom maxFilterDepth=1 on the resource', () => {
+    const shallow = { ...resource, maxFilterDepth: 1 }
+    expect(() => validateWhere(shallow, nestedFilter(1))).not.toThrow()
+    expect(() => validateWhere(shallow, nestedFilter(2))).toThrow('maximum allowed depth')
+  })
+
+  it('respects maxFilterDepth=0 (no children allowed)', () => {
+    const flat = { ...resource, maxFilterDepth: 0 }
+    expect(() =>
+      validateWhere(flat, [
+        {
+          field: 'id',
+          comparison: SqlComparison.Equal,
+          value1: 1,
+          children: [{ field: 'id', comparison: SqlComparison.Equal, value1: 2 }]
+        }
+      ])
+    ).toThrow('maximum allowed depth')
+  })
+})
+
 describe('validateAdvancedQuery', () => {
   it('passes for an empty query', () => {
     expect(() => validateAdvancedQuery(resource, { tableName: 'posts' })).not.toThrow()
@@ -186,7 +253,7 @@ describe('validateAdvancedQuery', () => {
   it('validates fields selection', () => {
     expect(() =>
       validateAdvancedQuery(resource, { tableName: 'posts', fields: ['nonexistent'] })
-    ).toThrow(PayloadError)
+    ).toThrow(UnprocessableEntityError)
   })
 
   it('validates orderBy fields', () => {
@@ -195,7 +262,7 @@ describe('validateAdvancedQuery', () => {
         tableName: 'posts',
         orderBy: [{ field: 'nonexistent', order: SqlOrder.ASC }]
       })
-    ).toThrow(PayloadError)
+    ).toThrow(UnprocessableEntityError)
   })
 
   it('throws for an invalid sort order value', () => {
@@ -213,7 +280,7 @@ describe('validateAdvancedQuery', () => {
         tableName: 'posts',
         where: [{ field: 'id', comparison: 'INVALID' }]
       })
-    ).toThrow(PayloadError)
+    ).toThrow(UnprocessableEntityError)
   })
 
   it('validates non-sortable fields in orderBy', () => {
@@ -222,7 +289,7 @@ describe('validateAdvancedQuery', () => {
         tableName: 'posts',
         orderBy: [{ field: 'secret', order: SqlOrder.ASC }]
       })
-    ).toThrow(PayloadError)
+    ).toThrow(UnprocessableEntityError)
   })
 })
 

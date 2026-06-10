@@ -1,8 +1,8 @@
 import { HttpError } from './HttpError.js'
 
 export class AuthorizationError extends HttpError {
-  public constructor(message = 'Unauthorized', status = 401, details?: unknown) {
-    super(message, status, details)
+  public constructor(message = 'Forbidden', details?: unknown) {
+    super(message, 403, details)
     this.name = 'AuthorizationError'
   }
 }

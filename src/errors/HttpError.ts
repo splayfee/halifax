@@ -1,4 +1,4 @@
-export class HttpError extends Error {
+export abstract class HttpError extends Error {
   public readonly status: number
   public readonly details?: unknown
 

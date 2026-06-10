@@ -156,7 +156,7 @@ describe('QueryBuilder.buildDeleteQuery', () => {
 })
 
 describe('QueryBuilder — edge cases', () => {
-  it('throws PayloadError when tableName is missing', () => {
+  it('throws BadRequestError when tableName is missing', () => {
     expect(() => QueryBuilder.buildSelectQuery({})).toThrow('table name')
   })
 
