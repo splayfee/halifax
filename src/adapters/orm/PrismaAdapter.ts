@@ -12,26 +12,30 @@ import type {
 } from '@/core/repository.js'
 import { ServerError } from '@/errors/ServerError.js'
 
-export interface PrismaDelegate<
-  TRecord = unknown,
-  TCreate = Partial<TRecord>,
-  TUpdate = Partial<TRecord>
-> {
-  findUnique?(args: Record<string, unknown>): Promise<TRecord | null>
-  findFirst?(args: Record<string, unknown>): Promise<TRecord | null>
-  findMany(args?: Record<string, unknown>): Promise<TRecord[]>
-  count(args?: Record<string, unknown>): Promise<number>
-  create(args: { data: TCreate }): Promise<TRecord>
-  createMany?(args: { data: TCreate[] }): Promise<{ count: number }>
-  update(args: { where: Record<string, unknown>; data: TUpdate }): Promise<TRecord>
-  updateMany?(args: { where?: Record<string, unknown>; data: TUpdate }): Promise<{ count: number }>
-  upsert?(args: {
-    where: Record<string, unknown>
-    create: TCreate & TUpdate
-    update: TUpdate
-  }): Promise<TRecord>
-  delete(args: { where: Record<string, unknown> }): Promise<TRecord>
-  deleteMany?(args: { where?: Record<string, unknown> }): Promise<{ count: number }>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface PrismaDelegate {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  findUnique?(args: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  findFirst?(args: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  findMany(args?: any): Promise<any[]>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  count(args?: any): Promise<number>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  create(args: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createMany?(args: any): Promise<{ count: number }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  update(args: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  updateMany?(args: any): Promise<{ count: number }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  upsert?(args: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delete(args: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  deleteMany?(args: any): Promise<{ count: number }>
 }
 
 export interface PrismaNativeClient {
@@ -39,12 +43,12 @@ export interface PrismaNativeClient {
   $executeRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>
 }
 
-export interface PrismaRepositoryAdapterOptions<
+export interface PrismaAdapterOptions<
   TRecord = unknown,
   TCreate = Partial<TRecord>,
   TUpdate = Partial<TRecord>
 > {
-  delegate: PrismaDelegate<TRecord, TCreate, TUpdate>
+  delegate: PrismaDelegate
   client?: PrismaNativeClient
   idField?: string
   tableName?: string
@@ -88,12 +92,12 @@ function toOrderBy(
   })
 }
 
-export class PrismaRepositoryAdapter<
+export class PrismaAdapter<
   TRecord = unknown,
   TCreate = Partial<TRecord>,
   TUpdate = Partial<TRecord>
 > implements Repository<TRecord, TCreate, TUpdate> {
-  private readonly delegate: PrismaDelegate<TRecord, TCreate, TUpdate>
+  private readonly delegate: PrismaDelegate
   private readonly client?: PrismaNativeClient | undefined
   private readonly idField: string
   private readonly tableName?: string | undefined
@@ -101,7 +105,7 @@ export class PrismaRepositoryAdapter<
 
   public readonly capabilities: RepositoryCapabilities
 
-  public constructor(options: PrismaRepositoryAdapterOptions<TRecord, TCreate, TUpdate>) {
+  public constructor(options: PrismaAdapterOptions<TRecord, TCreate, TUpdate>) {
     this.delegate = options.delegate
     this.client = options.client
     this.idField = options.idField ?? 'id'
@@ -128,11 +132,11 @@ export class PrismaRepositoryAdapter<
     else if (include) args.include = include
 
     if (this.delegate.findUnique) {
-      return await this.delegate.findUnique(args)
+      return (await this.delegate.findUnique(args)) as TRecord | null
     }
 
     if (this.delegate.findFirst) {
-      return await this.delegate.findFirst(args)
+      return (await this.delegate.findFirst(args)) as TRecord | null
     }
 
     throw new ServerError('Prisma delegate does not support findUnique or findFirst.')
@@ -155,11 +159,11 @@ export class PrismaRepositoryAdapter<
       this.delegate.findMany(args)
     ])
 
-    return { count, results }
+    return { count, results: results as TRecord[] }
   }
 
   public async createOne(data: TCreate): Promise<TRecord> {
-    return await this.delegate.create({ data })
+    return (await this.delegate.create({ data })) as TRecord
   }
 
   public async createMany(data: TCreate[]): Promise<TRecord[]> {
@@ -177,7 +181,7 @@ export class PrismaRepositoryAdapter<
 
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     try {
-      return await this.delegate.update({ where: { [this.idField]: id }, data })
+      return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
     } catch {
       return null
     }
@@ -215,11 +219,11 @@ export class PrismaRepositoryAdapter<
       throw new NotImplementedError('Prisma delegate does not support upsert.')
     }
 
-    return await this.delegate.upsert({
+    return (await this.delegate.upsert({
       where: { [this.idField]: id },
       create: data,
       update: data as TUpdate
-    })
+    })) as TRecord
   }
 
   public async deleteOne(id: string | number): Promise<boolean> {
@@ -279,3 +283,4 @@ export class PrismaRepositoryAdapter<
     }
   }
 }
+

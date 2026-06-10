@@ -118,19 +118,19 @@ const adapter = new PrismaPg(process.env.DATABASE_URL!)
 export const prisma = new PrismaClient({ adapter })
 ```
 
-### 3. Create a `PrismaRepositoryAdapter`
+### 3. Create a `PrismaAdapter`
 
 ```ts
-import { PrismaRepositoryAdapter } from '@edium/halifax'
+import { PrismaAdapter } from '@edium/halifax'
 import type { Post, Prisma } from '@prisma/client'
 import { prisma } from './db.js'
 
-export const postRepository = new PrismaRepositoryAdapter<
+export const postRepository = new PrismaAdapter<
   Post,
   Prisma.PostCreateInput,
   Prisma.PostUpdateInput
 >({
-  delegate: prisma.post as any, // cast needed — Prisma's generated types are narrower
+  delegate: prisma.post, // no cast needed
   client: prisma, // required for updateMany / deleteMany / executeQueryBuilder
   tableName: 'posts' // matches @@map in your schema
 })
@@ -151,8 +151,8 @@ export const postRepository = new PrismaRepositoryAdapter<
 By default, `createMany` uses Prisma's bulk insert for efficiency but returns an empty array because Prisma's `createMany` does not return the created rows. Set `returnCreated: true` to fall back to serial `createOne` calls and receive the full records:
 
 ```ts
-new PrismaRepositoryAdapter({
-  delegate: prisma.post as any,
+new PrismaAdapter({
+  delegate: prisma.post,
   client: prisma,
   tableName: 'posts',
   returnCreated: true // slower, but returns created records

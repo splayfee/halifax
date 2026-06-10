@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { PrismaRepositoryAdapter } from '@/adapters/orm/PrismaRepositoryAdapter.js'
+import { PrismaAdapter } from '@/adapters/orm/PrismaAdapter.js'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 
 type Row = { id: number; email: string }
@@ -43,9 +43,9 @@ function makeClient(rows: Row[] = [{ id: 1, email: 'a@test.com' }]) {
   }
 }
 
-describe('PrismaRepositoryAdapter — capabilities', () => {
+describe('PrismaAdapter — capabilities', () => {
   it('reports supportsNativeSql=true when client is provided', () => {
-    const a = new PrismaRepositoryAdapter({
+    const a = new PrismaAdapter({
       delegate: makeDelegate(),
       client: makeClient(),
       tableName: 't'
@@ -54,25 +54,25 @@ describe('PrismaRepositoryAdapter — capabilities', () => {
   })
 
   it('reports supportsNativeSql=false without a client', () => {
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate() })
+    const a = new PrismaAdapter({ delegate: makeDelegate() })
     expect(a.capabilities.supportsNativeSql).toBe(false)
   })
 
   it('reports supportsCreateManyReturn=true when returnCreated=true', () => {
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), returnCreated: true })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), returnCreated: true })
     expect(a.capabilities.supportsCreateManyReturn).toBe(true)
   })
 
   it('reports supportsIncludes=true always', () => {
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate() })
+    const a = new PrismaAdapter({ delegate: makeDelegate() })
     expect(a.capabilities.supportsIncludes).toBe(true)
   })
 })
 
-describe('PrismaRepositoryAdapter — getOne', () => {
+describe('PrismaAdapter — getOne', () => {
   it('delegates to findUnique with the id', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.getOne(1)
     expect(delegate.findUnique).toHaveBeenCalledWith({ where: { id: 1 } })
     expect(result).toMatchObject({ id: 1 })
@@ -81,7 +81,7 @@ describe('PrismaRepositoryAdapter — getOne', () => {
   it('falls back to findFirst when findUnique is absent', async () => {
     const delegate = makeDelegate()
     delete (delegate as Record<string, unknown>).findUnique
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.getOne(1)
     expect(delegate.findFirst).toHaveBeenCalled()
     expect(result).toMatchObject({ id: 1 })
@@ -91,13 +91,13 @@ describe('PrismaRepositoryAdapter — getOne', () => {
     const delegate = makeDelegate()
     delete (delegate as Record<string, unknown>).findUnique
     delete (delegate as Record<string, unknown>).findFirst
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await expect(a.getOne(1)).rejects.toThrow('does not support findUnique or findFirst')
   })
 
   it('passes select when fields are specified', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await a.getOne(1, { fields: ['id', 'email'] })
     expect(delegate.findUnique).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -107,7 +107,7 @@ describe('PrismaRepositoryAdapter — getOne', () => {
 
   it('passes include when include is specified', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await a.getOne(1, { include: ['posts'] })
     expect(delegate.findUnique).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -117,16 +117,16 @@ describe('PrismaRepositoryAdapter — getOne', () => {
 
   it('uses a custom idField', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate, idField: 'uid' })
+    const a = new PrismaAdapter({ delegate, idField: 'uid' })
     await a.getOne('abc')
     expect(delegate.findUnique).toHaveBeenCalledWith({ where: { uid: 'abc' } })
   })
 })
 
-describe('PrismaRepositoryAdapter — getMany', () => {
+describe('PrismaAdapter — getMany', () => {
   it('returns count and results', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.getMany()
     expect(result.count).toBe(1)
     expect(result.results).toHaveLength(1)
@@ -134,7 +134,7 @@ describe('PrismaRepositoryAdapter — getMany', () => {
 
   it('passes orderBy, skip, take to findMany', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await a.getMany({ limit: 10, offset: 5, orderBy: [{ field: 'email', direction: 'asc' }] })
     expect(delegate.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ take: 10, skip: 5, orderBy: [{ email: 'asc' }] })
@@ -143,7 +143,7 @@ describe('PrismaRepositoryAdapter — getMany', () => {
 
   it('passes select when fields are given', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await a.getMany({ fields: ['id'] })
     expect(delegate.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ select: { id: true } })
@@ -152,7 +152,7 @@ describe('PrismaRepositoryAdapter — getMany', () => {
 
   it('passes include when include is given', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await a.getMany({ include: ['comments'] })
     expect(delegate.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ include: { comments: true } })
@@ -160,20 +160,20 @@ describe('PrismaRepositoryAdapter — getMany', () => {
   })
 })
 
-describe('PrismaRepositoryAdapter — createOne', () => {
+describe('PrismaAdapter — createOne', () => {
   it('calls delegate.create and returns the record', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.createOne({ email: 'new@test.com' })
     expect(delegate.create).toHaveBeenCalledWith({ data: { email: 'new@test.com' } })
     expect(result).toMatchObject({ email: 'new@test.com' })
   })
 })
 
-describe('PrismaRepositoryAdapter — createMany', () => {
+describe('PrismaAdapter — createMany', () => {
   it('calls createMany on delegate and returns []', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.createMany([{ email: 'a@t.com' }, { email: 'b@t.com' }])
     expect(delegate.createMany).toHaveBeenCalled()
     expect(result).toEqual([])
@@ -182,7 +182,7 @@ describe('PrismaRepositoryAdapter — createMany', () => {
   it('falls back to serial createOne calls when delegate lacks createMany', async () => {
     const delegate = makeDelegate()
     delete (delegate as Record<string, unknown>).createMany
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.createMany([{ email: 'a@t.com' }, { email: 'b@t.com' }])
     expect(delegate.create).toHaveBeenCalledTimes(2)
     expect(result).toHaveLength(2)
@@ -190,17 +190,17 @@ describe('PrismaRepositoryAdapter — createMany', () => {
 
   it('uses serial createOne when returnCreated=true even if createMany exists', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate, returnCreated: true })
+    const a = new PrismaAdapter({ delegate, returnCreated: true })
     const result = await a.createMany([{ email: 'a@t.com' }])
     expect(delegate.create).toHaveBeenCalledTimes(1)
     expect(result).toHaveLength(1)
   })
 })
 
-describe('PrismaRepositoryAdapter — updateOne', () => {
+describe('PrismaAdapter — updateOne', () => {
   it('calls delegate.update and returns the updated record', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.updateOne(1, { email: 'updated@test.com' })
     expect(delegate.update).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -211,16 +211,16 @@ describe('PrismaRepositoryAdapter — updateOne', () => {
 
   it('returns null when update throws (record not found)', async () => {
     const delegate = makeDelegate({ update: vi.fn().mockRejectedValue(new Error('Not found')) })
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.updateOne(999, { email: 'x@t.com' })
     expect(result).toBeNull()
   })
 })
 
-describe('PrismaRepositoryAdapter — upsertOne', () => {
+describe('PrismaAdapter — upsertOne', () => {
   it('calls delegate.upsert and returns the record', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.upsertOne(1, { email: 'upserted@test.com' } as Row)
     expect(delegate.upsert).toHaveBeenCalled()
     expect(result).toMatchObject({ email: 'upserted@test.com' })
@@ -229,26 +229,26 @@ describe('PrismaRepositoryAdapter — upsertOne', () => {
   it('throws 501 when delegate has no upsert method', async () => {
     const delegate = makeDelegate()
     delete (delegate as Record<string, unknown>).upsert
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     await expect(a.upsertOne(1, { email: 'x@t.com' } as Row)).rejects.toMatchObject({ status: 501 })
   })
 })
 
-describe('PrismaRepositoryAdapter — deleteOne', () => {
+describe('PrismaAdapter — deleteOne', () => {
   it('returns true when delete succeeds', async () => {
     const delegate = makeDelegate()
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     expect(await a.deleteOne(1)).toBe(true)
   })
 
   it('returns false when delete throws', async () => {
     const delegate = makeDelegate({ delete: vi.fn().mockRejectedValue(new Error('Not found')) })
-    const a = new PrismaRepositoryAdapter({ delegate })
+    const a = new PrismaAdapter({ delegate })
     expect(await a.deleteOne(999)).toBe(false)
   })
 })
 
-describe('PrismaRepositoryAdapter — updateMany (native SQL)', () => {
+describe('PrismaAdapter — updateMany (native SQL)', () => {
   it('runs select then update and returns updated ids', async () => {
     const client = {
       $queryRawUnsafe: vi
@@ -256,7 +256,7 @@ describe('PrismaRepositoryAdapter — updateMany (native SQL)', () => {
         .mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
         .mockResolvedValueOnce(undefined)
     }
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.updateMany(
       { tableName: 'users', where: [{ field: 'id', comparison: SqlComparison.Equal, value1: 1 }] },
       { email: 'new@test.com' } as Partial<Row>
@@ -266,14 +266,14 @@ describe('PrismaRepositoryAdapter — updateMany (native SQL)', () => {
   })
 
   it('throws 501 when no client is provided', async () => {
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), tableName: 'users' })
     await expect(a.updateMany({ tableName: 'users' }, {} as Partial<Row>)).rejects.toMatchObject({
       status: 501
     })
   })
 
   it('throws 501 when no tableName is set', async () => {
-    const a = new PrismaRepositoryAdapter({
+    const a = new PrismaAdapter({
       delegate: makeDelegate(),
       client: { $queryRawUnsafe: vi.fn() }
     })
@@ -283,7 +283,7 @@ describe('PrismaRepositoryAdapter — updateMany (native SQL)', () => {
   })
 })
 
-describe('PrismaRepositoryAdapter — deleteMany (native SQL)', () => {
+describe('PrismaAdapter — deleteMany (native SQL)', () => {
   it('runs select then delete and returns deleted ids', async () => {
     const client = {
       $queryRawUnsafe: vi
@@ -291,7 +291,7 @@ describe('PrismaRepositoryAdapter — deleteMany (native SQL)', () => {
         .mockResolvedValueOnce([{ id: 5 }])
         .mockResolvedValueOnce(undefined)
     }
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.deleteMany({
       tableName: 'users',
       where: [{ field: 'id', comparison: SqlComparison.Equal, value1: 5 }]
@@ -300,12 +300,12 @@ describe('PrismaRepositoryAdapter — deleteMany (native SQL)', () => {
   })
 
   it('throws 501 when no client is provided', async () => {
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), tableName: 'users' })
     await expect(a.deleteMany({ tableName: 'users' })).rejects.toMatchObject({ status: 501 })
   })
 })
 
-describe('PrismaRepositoryAdapter — executeQueryBuilder (native SQL)', () => {
+describe('PrismaAdapter — executeQueryBuilder (native SQL)', () => {
   it('returns count and results', async () => {
     const client = {
       $queryRawUnsafe: vi
@@ -316,14 +316,14 @@ describe('PrismaRepositoryAdapter — executeQueryBuilder (native SQL)', () => {
           { id: 2, email: 'b@t.com' }
         ])
     }
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.executeQueryBuilder({ tableName: 'users' })
     expect(result.count).toBe(2)
     expect(result.results).toHaveLength(2)
   })
 
   it('throws 501 when no client is provided', async () => {
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), tableName: 'users' })
     await expect(a.executeQueryBuilder({ tableName: 'users' })).rejects.toMatchObject({
       status: 501
     })
@@ -336,7 +336,7 @@ describe('PrismaRepositoryAdapter — executeQueryBuilder (native SQL)', () => {
         .mockResolvedValueOnce([{ count: '42' }])
         .mockResolvedValueOnce([])
     }
-    const a = new PrismaRepositoryAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
+    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.executeQueryBuilder({ tableName: 'users' })
     expect(result.count).toBe(42)
   })
