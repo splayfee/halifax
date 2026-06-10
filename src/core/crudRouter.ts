@@ -5,6 +5,7 @@ import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
 import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
+import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
@@ -24,6 +25,12 @@ function filterWritableFields(
   resource: ResourceDefinition,
   data: Record<string, unknown>
 ): Record<string, unknown> {
+  const knownFields = new Set(resource.fields.map((f) => f.name))
+  const unknownFields = Object.keys(data).filter((key) => !knownFields.has(key))
+  if (unknownFields.length) {
+    throw new UnprocessableEntityError(`Unknown field(s): ${unknownFields.join(', ')}.`)
+  }
+
   const nonWritable = new Set(
     resource.fields.filter((f) => f.writable === false).map((f) => f.name)
   )
