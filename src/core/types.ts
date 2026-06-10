@@ -32,7 +32,21 @@ export interface ModelField {
 }
 
 export interface ModelSchema {
+  name?: string
+  dbName?: string | null
   fields: ModelField[]
+}
+
+export interface ModelResourceOptions {
+  /** When true, this model is skipped entirely. */
+  exclude?: boolean
+  routePrefix?: string
+  tableName?: string
+  permissions?: CrudPermissions
+  requiredPermissions?: Partial<Record<CrudAction, string[]>>
+  defaultLimit?: number
+  maxLimit?: number
+  maxFilterDepth?: number
 }
 
 export interface FieldDefinition {
@@ -80,13 +94,13 @@ export type {
 } from './repository.js'
 
 export const defaultCrudPermissions: Required<CrudPermissions> = {
-  allowCreate: false,
+  allowCreate: true,
   allowReadOne: true,
   allowReadMany: true,
   allowReadManyWithQueryBuilder: true,
-  allowUpdateOne: false,
-  allowUpdateMany: false,
-  allowUpsertOne: false,
-  allowDeleteOne: false,
-  allowDeleteMany: false
+  allowUpdateOne: true,
+  allowUpdateMany: true,
+  allowUpsertOne: true,
+  allowDeleteOne: true,
+  allowDeleteMany: true
 }
