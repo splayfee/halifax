@@ -1,6 +1,7 @@
-import { AuthError } from '@/errors/AuthError.js'
+import { AuthenticationError } from '@/errors/AuthenticationError.js'
 import type { CrudAction, ResourceDefinition } from '@/core/types.js'
 import type { HttpRequest } from '@/core/http.js'
+import { AuthorizationError } from '@/errors/AuthorizationError.js'
 
 export interface AuthContext {
   userId?: string
@@ -39,7 +40,7 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
     const header = req.headers[this.headerName.toLowerCase()] ?? req.headers[this.headerName]
     const apiKey = Array.isArray(header) ? header[0] : header
     if (!apiKey || apiKey !== this.expectedApiKey) {
-      throw new AuthError('Invalid API key', 403)
+      throw new AuthorizationError('Invalid API key', 403)
     }
     return { isAuthenticated: true }
   }
@@ -58,7 +59,7 @@ export class JwtClaimsAuthStrategy implements AuthStrategy {
     const value = Array.isArray(header) ? header[0] : header
     const match = typeof value === 'string' ? value.match(/^Bearer\s+(.+)$/i) : null
     if (!match) {
-      throw new AuthError('Missing bearer token')
+      throw new AuthenticationError('Missing bearer token')
     }
     return await this.verifyToken(match[1]!, req)
   }
@@ -132,18 +133,18 @@ export class PassportJwtStrategy implements AuthStrategy {
         { session: false },
         (err: unknown, user: unknown) => {
           if (err) {
-            reject(err instanceof Error ? err : new AuthError(String(err), 401))
+            reject(err instanceof Error ? err : new AuthenticationError(String(err)))
             return
           }
           if (!user) {
-            reject(new AuthError('Unauthorized', 401))
+            reject(new AuthenticationError('Unauthorized'))
             return
           }
           resolve(this.mapUser(user))
         }
       )
       handler(req.raw, {}, (err?: unknown) => {
-        if (err) reject(err instanceof Error ? err : new AuthError(String(err), 401))
+        if (err) reject(err instanceof Error ? err : new AuthenticationError(String(err)))
       })
     })
   }

@@ -36,6 +36,10 @@ export interface NativeQueryResult<TRecord> {
   results: TRecord[]
 }
 
+export interface CreateOptions {
+  idempotencyKey?: string
+}
+
 export interface Repository<
   TRecord = unknown,
   TCreate = Partial<TRecord>,
@@ -47,8 +51,8 @@ export interface Repository<
     options?: Pick<ListOptions, 'fields' | 'include'>
   ): Promise<TRecord | null>
   getMany(options?: ListOptions): Promise<ListResult<TRecord>>
-  createOne(data: TCreate): Promise<TRecord>
-  createMany(data: TCreate[]): Promise<TRecord[]>
+  createOne(data: TCreate, options?: CreateOptions): Promise<TRecord>
+  createMany(data: TCreate[], options?: CreateOptions): Promise<TRecord[]>
   updateOne(id: string | number, data: TUpdate): Promise<TRecord | null>
   updateMany?(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>>
   upsertOne?(id: string | number, data: TCreate & TUpdate): Promise<TRecord>

@@ -10,6 +10,7 @@ import type {
   NativeQueryResult,
   UpdateManyResult
 } from '@/core/repository.js'
+import { ServerError } from '@/index.js'
 
 export interface PrismaDelegate<
   TRecord = unknown,
@@ -134,7 +135,7 @@ export class PrismaRepositoryAdapter<
       return await this.delegate.findFirst(args)
     }
 
-    throw new HttpError('Prisma delegate does not support findUnique or findFirst.', 500)
+    throw new ServerError('Prisma delegate does not support findUnique or findFirst.')
   }
 
   public async getMany(options: ListOptions = {}): Promise<ListResult<TRecord>> {
@@ -184,7 +185,7 @@ export class PrismaRepositoryAdapter<
 
   public async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new HttpError('Native SQL updateMany requires a Prisma client and tableName.', 501)
+      throw new ServerError('Native SQL updateMany requires a Prisma client and tableName.', 501)
     }
 
     const updateQuery = QueryBuilder.buildUpdateQuery(
@@ -211,7 +212,7 @@ export class PrismaRepositoryAdapter<
 
   public async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
     if (!this.delegate.upsert) {
-      throw new HttpError('Prisma delegate does not support upsert.', 501)
+      throw new ServerError('Prisma delegate does not support upsert.', 501)
     }
 
     return await this.delegate.upsert({
@@ -232,7 +233,7 @@ export class PrismaRepositoryAdapter<
 
   public async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new HttpError('Native SQL deleteMany requires a Prisma client and tableName.', 501)
+      throw new ServerError('Native SQL deleteMany requires a Prisma client and tableName.', 501)
     }
 
     const resolvedQuery = { ...query, tableName: query.tableName || this.tableName, fields: ['id'] }
