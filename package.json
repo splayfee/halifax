@@ -38,8 +38,9 @@
     "access": "public"
   },
   "sideEffects": false,
+  "prepublishOnly": "npm run build",
   "scripts": {
-    "build": "tsc --build && tsc-alias",
+    "build": "rm -rf dist && tsc --build && tsc-alias",
     "dev": "tsx watch ./src/index.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
