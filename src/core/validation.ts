@@ -2,7 +2,8 @@ import { validate as uuidValidate } from 'uuid'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 import { SqlOperator } from '@/enums/SqlOperator.js'
 import { SqlOrder } from '@/enums/SqlOrder.js'
-import { PayloadError } from '@/errors/PayloadError.js'
+import { BadRequestError } from '@/errors/BadRequestError.js'
+import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import type { ResourceDefinition } from '@/core/types.js'
@@ -23,12 +24,12 @@ export function isValidUuid(value: string): boolean {
 
 export function validateId(value: string | number | undefined): asserts value is string | number {
   if (value === undefined) {
-    throw new PayloadError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
+    throw new BadRequestError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
   }
   const isInt = isValidInt32(value)
   const isUuid = typeof value === 'string' && isValidUuid(value)
   if (!isInt && !isUuid) {
-    throw new PayloadError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
+    throw new BadRequestError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
   }
 }
 
@@ -45,7 +46,7 @@ export function validateFields(resource: ResourceDefinition, fields: string[] = 
   })
 
   if (invalidFields.length) {
-    throw new PayloadError(`Invalid field(s): ${invalidFields.join(', ')}.`)
+    throw new UnprocessableEntityError(`Invalid field(s): ${invalidFields.join(', ')}.`)
   }
 }
 
@@ -55,7 +56,7 @@ export function validateSelectableFields(resource: ResourceDefinition, fields: s
     return field?.selectable === false
   })
   if (nonSelectable.length) {
-    throw new PayloadError(`Field(s) not selectable: ${nonSelectable.join(', ')}.`)
+    throw new UnprocessableEntityError(`Field(s) not selectable: ${nonSelectable.join(', ')}.`)
   }
 }
 
@@ -65,7 +66,7 @@ export function validateSortableFields(resource: ResourceDefinition, fields: str
     return field?.sortable === false
   })
   if (nonSortable.length) {
-    throw new PayloadError(`Field(s) not sortable: ${nonSortable.join(', ')}.`)
+    throw new UnprocessableEntityError(`Field(s) not sortable: ${nonSortable.join(', ')}.`)
   }
 }
 
@@ -85,7 +86,7 @@ export function validateIncludes(resource: ResourceDefinition, includes: string[
   })
 
   if (invalidIncludes.length) {
-    throw new PayloadError(`Invalid include(s): ${invalidIncludes.join(', ')}.`)
+    throw new UnprocessableEntityError(`Invalid include(s): ${invalidIncludes.join(', ')}.`)
   }
 }
 
@@ -113,40 +114,53 @@ export function validateQueryString(
   }
 
   if (nonFilterable.length) {
-    throw new PayloadError(`Field(s) not filterable: ${nonFilterable.join(', ')}.`)
+    throw new UnprocessableEntityError(`Field(s) not filterable: ${nonFilterable.join(', ')}.`)
   }
   if (unknown.length) {
-    throw new PayloadError(`Invalid query-string properties: ${unknown.join(', ')}.`)
+    throw new UnprocessableEntityError(`Invalid query-string properties: ${unknown.join(', ')}.`)
   }
 }
 
-export function validateWhere(resource: ResourceDefinition, where: IQueryFilter[] = []): void {
+export function validateWhere(
+  resource: ResourceDefinition,
+  where: IQueryFilter[] = [],
+  depth = 0
+): void {
+  const maxDepth = resource.maxFilterDepth ?? 3
+  if (depth > maxDepth) {
+    throw new UnprocessableEntityError(
+      `Filter nesting exceeds the maximum allowed depth of ${maxDepth}.`
+    )
+  }
+
   const validComparisons = new Set(Object.values(SqlComparison))
   const validOperators = new Set(Object.values(SqlOperator))
 
   where.forEach((filter, index) => {
     if (!filter.field) {
-      throw new PayloadError('WHERE clause must have a field.')
+      throw new UnprocessableEntityError('WHERE clause must have a field.')
     }
 
     validateFields(resource, [filter.field])
 
     const comparison = filter.comparison?.toUpperCase() as SqlComparison
     if (!comparison || !validComparisons.has(comparison)) {
-      throw new PayloadError(`Invalid comparison: '${filter.comparison}'.`)
+      throw new UnprocessableEntityError(`Invalid comparison: '${filter.comparison}'.`)
     }
 
     const operator = filter.operator?.toUpperCase() as SqlOperator | undefined
     if (operator && !validOperators.has(operator)) {
-      throw new PayloadError(`Invalid operator: '${filter.operator}'.`)
+      throw new UnprocessableEntityError(`Invalid operator: '${filter.operator}'.`)
     }
 
     if (index + 1 < where.length && !operator) {
-      throw new PayloadError('Operator is required for all but the last item in the WHERE clause.')
+      throw new UnprocessableEntityError(
+        'Operator is required for all but the last item in the WHERE clause.'
+      )
     }
 
     if (filter.children?.length) {
-      validateWhere(resource, filter.children)
+      validateWhere(resource, filter.children, depth + 1)
     }
   })
 }
@@ -164,7 +178,7 @@ export function validateAdvancedQuery(resource: ResourceDefinition, query: IQuer
     validateSortableFields(resource, sortFields)
     query.orderBy.forEach((sort) => {
       if (!validOrders.has(sort.order.toUpperCase() as SqlOrder)) {
-        throw new PayloadError(`Invalid sort order: '${sort.order}'.`)
+        throw new UnprocessableEntityError(`Invalid sort order: '${sort.order}'.`)
       }
     })
   }

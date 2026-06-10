@@ -156,19 +156,40 @@ Returns 201. Whether the created records are returned depends on the repository'
 
 ## HTTP Headers
 
-### Content Negotiation (Accept)
+### Content Negotiation (Accept → 406)
 
 All routes check the `Accept` header. Requests that explicitly exclude `application/json` receive **406 Not Acceptable**. Requests with no `Accept` header, `*/*`, or `application/*` proceed normally.
 
 ```
-# These work:
-Accept: application/json
-Accept: */*
-Accept: application/json, text/html;q=0.5
-# (no header) — works
+Accept: application/json     ✓
+Accept: */*                  ✓
+Accept: application/json, text/html;q=0.5  ✓
+(no header)                  ✓
+Accept: text/html            → 406
+```
 
-# This fails with 406:
-Accept: text/html
+### Content Type (Content-Type → 415)
+
+Requests with a body (`POST`, `PATCH`, `PUT`, `DELETE`) must use `Content-Type: application/json`. Any other value returns **415 Unsupported Media Type**.
+
+```
+Content-Type: application/json          ✓
+Content-Type: application/json; utf-8   ✓
+(no header, no body)                    ✓
+Content-Type: text/plain                → 415
+Content-Type: application/x-www-form-urlencoded  → 415
+```
+
+### Method Not Allowed (405)
+
+If a resource has at least one method enabled, all other methods on that path return **405 Method Not Allowed** with an `Allow` response header listing the permitted methods.
+
+```
+# Resource has allowReadMany + allowCreate only:
+GET    /api/v1/posts   → 200
+POST   /api/v1/posts   → 201
+PUT    /api/v1/posts   → 405  Allow: GET, POST
+DELETE /api/v1/posts   → 405  Allow: GET, POST
 ```
 
 ### X-Correlation-ID
@@ -194,24 +215,44 @@ Idempotency-Key: my-client-generated-uuid
 
 The router itself does not enforce uniqueness; deduplication is the repository's responsibility.
 
-## Error Response Shape
+## Filter Depth Controls
 
-All errors follow the same envelope:
+The `?where` / query-builder `children` filter lets callers nest conditions. To prevent abuse, nesting is capped at depth **3** by default. Set `maxFilterDepth` on the resource to override:
 
-```json
+```ts
 {
-  "error": {
-    "name": "PayloadError",
-    "message": "Field(s) not filterable: role."
-  }
+  maxFilterDepth: 1 // only one level of children allowed
 }
 ```
 
-| Status | Name           | Typical cause                              |
-| ------ | -------------- | ------------------------------------------ |
-| 400    | `PayloadError` | Invalid id, unknown field, flag violation  |
-| 401    |                | Missing or invalid auth token              |
-| 403    | `HttpError`    | Authenticated but not authorized           |
-| 404    | `HttpError`    | Record not found                           |
-| 500    | `Error`        | Unhandled repository error                 |
-| 501    | `HttpError`    | Operation not supported by this repository |
+Requests that exceed the limit receive **400 VALIDATION_ERROR**.
+
+## Error Response Shape
+
+All errors follow the same envelope — an `errors` array where each item has a machine-readable `code` and a human-readable `message`:
+
+```json
+{
+  "errors": [
+    {
+      "code": "VALIDATION_ERROR",
+      "message": "Field(s) not filterable: role."
+    }
+  ]
+}
+```
+
+| Status | Code                     | Error class                 | Typical cause                                                                                        |
+| ------ | ------------------------ | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 400    | `BAD_REQUEST`            | `BadRequestError`           | Malformed `:id` — not an integer (1–2147483647) or UUID                                              |
+| 401    | `UNAUTHORIZED`           | `AuthenticationError`       | Missing or invalid auth token                                                                        |
+| 403    | `FORBIDDEN`              | `AuthorizationError`        | Authenticated but lacks required permission                                                          |
+| 404    | `NOT_FOUND`              | `NotFoundError`             | Record not found                                                                                     |
+| 405    | `METHOD_NOT_ALLOWED`     | `MethodNotAllowedError`     | HTTP method not enabled for this resource                                                            |
+| 406    | `NOT_ACCEPTABLE`         | `NotAcceptableError`        | `Accept` header excludes `application/json`                                                          |
+| 415    | `UNSUPPORTED_MEDIA_TYPE` | `UnsupportedMediaTypeError` | Request body is not `application/json`                                                               |
+| 422    | `UNPROCESSABLE_ENTITY`   | `UnprocessableEntityError`  | Semantic validation failure — unknown field, invalid filter, sort/select restriction, depth exceeded |
+| 500    | `INTERNAL_ERROR`         | `ServerError`               | Repository misconfigured or unhandled internal error                                                 |
+| 501    | `NOT_IMPLEMENTED`        | `NotImplementedError`       | Repository does not support this operation                                                           |
+
+When extra context is available (e.g. Prisma error details), a `details` field is included in the error item.

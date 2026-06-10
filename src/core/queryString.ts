@@ -1,5 +1,5 @@
 import { SqlOrder } from '@/enums/SqlOrder.js'
-import { PayloadError } from '@/errors/PayloadError.js'
+import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import type { ListOptions, ResourceDefinition } from '@/core/types.js'
 import {
   isValidInt32,
@@ -14,7 +14,9 @@ function parseInteger(value: unknown, property: string, min = 1): number | undef
   if (value === undefined) return undefined
   const parsed = Number(Array.isArray(value) ? value[0] : value)
   if (isValidInt32(parsed, min)) return parsed
-  throw new PayloadError(`${property} must be a valid integer greater than or equal to ${min}.`)
+  throw new UnprocessableEntityError(
+    `${property} must be a valid integer greater than or equal to ${min}.`
+  )
 }
 
 function parseCsv(value: unknown): string[] | undefined {
@@ -47,7 +49,9 @@ export function parseListOptions(
   }
   if (include) validateIncludes(resource, include)
   if (fields && include) {
-    throw new PayloadError('Cannot use both ?fields= and ?include= in the same request.')
+    throw new UnprocessableEntityError(
+      'Cannot use both ?fields= and ?include= in the same request.'
+    )
   }
 
   const orderFields = order?.map((item) => (item.startsWith('-') ? item.substring(1) : item))

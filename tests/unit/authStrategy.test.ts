@@ -8,8 +8,8 @@ import {
 } from '@/auth/AuthStrategy.js'
 import type { HttpRequest } from '@/core/http.js'
 
-function req(headers: Record<string, string> = {}): HttpRequest {
-  return { params: {}, query: {}, body: null, headers, raw: null }
+function req(headers: Record<string, string> = {}, method = 'GET'): HttpRequest {
+  return { method, params: {}, query: {}, body: null, headers, raw: null }
 }
 
 // Minimal ResourceDefinition stub for authorize() calls

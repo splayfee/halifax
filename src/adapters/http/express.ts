@@ -18,6 +18,7 @@ function normalizeHeaders(
 
 function adaptRequest(req: Request): HttpRequest<Request> {
   return {
+    method: req.method,
     params: req.params as Record<string, string>,
     query: req.query as Record<string, unknown>,
     body: req.body,
@@ -49,10 +50,14 @@ export class ExpressHttpServer implements HttpServer {
   public constructor(private readonly app: Express | Router) {}
 
   public registerRoute(method: HttpMethod, path: string, handler: HttpRouteHandler): void {
-    const lower = method.toLowerCase() as Lowercase<HttpMethod>
-    ;(this.app as any)[lower](path, (req: Request, res: Response) => {
+    const cb = (req: Request, res: Response) => {
       void Promise.resolve(handler(adaptRequest(req), adaptResponse(res)))
-    })
+    }
+    if (method === '*') {
+      ;(this.app as any).all(path, cb)
+      return
+    }
+    ;(this.app as any)[method.toLowerCase()](path, cb)
   }
 
   public async start(port: number, host?: string): Promise<void> {

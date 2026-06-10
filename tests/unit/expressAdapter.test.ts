@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { createExpressCrudRouter, ExpressHttpServer } from '@/adapters/http/express.js'
 import { ApiKeyAuthStrategy } from '@/auth/AuthStrategy.js'
 import { normalizeError } from '@/core/crudRouter.js'
-import { HttpError } from '@/errors/HttpError.js'
+import { NotFoundError } from '@/errors/NotFoundError.js'
+import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
+import { NotImplementedError } from '@/errors/NotImplementedError.js'
+import { BadRequestError } from '@/errors/BadRequestError.js'
+import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
+import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import type { ResourceDefinition } from '@/core/types.js'
 import type { Repository, ListResult, CreateOptions } from '@/core/repository.js'
 
@@ -236,7 +241,7 @@ describe('createExpressCrudRouter — read one', () => {
   it('returns 400 for a non-integer id', async () => {
     const res = await request(createApp()).get('/api/v1/users/abc').set('x-api-key', 'secret')
     expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
   })
 
   it('returns 400 for id zero', async () => {
@@ -297,33 +302,35 @@ describe('createExpressCrudRouter — delete', () => {
 })
 
 describe('createExpressCrudRouter — query string validation', () => {
-  it('returns 400 for an unknown query parameter', async () => {
+  it('returns 422 for an unknown query parameter', async () => {
     const res = await request(createApp()).get('/api/v1/users?bogus=x').set('x-api-key', 'secret')
-    expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
   })
 
-  it('returns 400 for an unknown fields selection', async () => {
+  it('returns 422 for an unknown fields selection', async () => {
     const res = await request(createApp())
       .get('/api/v1/users?fields=nonexistent')
       .set('x-api-key', 'secret')
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(422)
   })
 })
 
 describe('createExpressCrudRouter — error response format', () => {
-  it('error body has { error: { name, message } } shape', async () => {
+  it('error body has { errors: [{ code, message }] } shape', async () => {
     const res = await request(createApp()).get('/api/v1/users/abc').set('x-api-key', 'secret')
-    expect(res.body).toHaveProperty('error')
-    expect(res.body.error).toHaveProperty('name')
-    expect(res.body.error).toHaveProperty('message')
-    expect(typeof res.body.error.name).toBe('string')
-    expect(typeof res.body.error.message).toBe('string')
+    expect(res.body).toHaveProperty('errors')
+    expect(Array.isArray(res.body.errors)).toBe(true)
+    expect(res.body.errors[0]).toHaveProperty('code')
+    expect(res.body.errors[0]).toHaveProperty('message')
+    expect(typeof res.body.errors[0].code).toBe('string')
+    expect(typeof res.body.errors[0].message).toBe('string')
   })
 
-  it('404 body has { error: { message: "Not found" } }', async () => {
+  it('404 body has { errors: [{ code: "NOT_FOUND", message: "Not found" }] }', async () => {
     const res = await request(createApp()).get('/api/v1/users/999').set('x-api-key', 'secret')
-    expect(res.body.error.message).toBe('Not found')
+    expect(res.body.errors[0].code).toBe('NOT_FOUND')
+    expect(res.body.errors[0].message).toBe('Not Found')
   })
 })
 
@@ -339,7 +346,7 @@ describe('createExpressCrudRouter — UUID id support', () => {
       .get('/api/v1/users/not-a-uuid')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
   })
 
   it('still accepts integer ids', async () => {
@@ -349,28 +356,28 @@ describe('createExpressCrudRouter — UUID id support', () => {
 })
 
 describe('createExpressCrudRouter — field security', () => {
-  it('returns 400 when filtering on a non-filterable field', async () => {
+  it('returns 422 when filtering on a non-filterable field', async () => {
     const res = await request(createSecuredApp())
       .get('/api/v1/users?role=admin')
       .set('x-api-key', 'secret')
-    expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
   })
 
-  it('returns 400 when selecting a non-selectable field via ?fields=', async () => {
+  it('returns 422 when selecting a non-selectable field via ?fields=', async () => {
     const res = await request(createSecuredApp())
       .get('/api/v1/users?fields=role')
       .set('x-api-key', 'secret')
-    expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
   })
 
-  it('returns 400 when sorting on a non-sortable field via ?order=', async () => {
+  it('returns 422 when sorting on a non-sortable field via ?order=', async () => {
     const res = await request(createSecuredApp())
       .get('/api/v1/users?order=role')
       .set('x-api-key', 'secret')
-    expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
   })
 
   it('strips non-writable fields from create body', async () => {
@@ -463,6 +470,59 @@ describe('createExpressCrudRouter — HTTP 406', () => {
       .set('x-api-key', 'secret')
       .unset('Accept')
     expect(res.status).toBe(200)
+  })
+})
+
+describe('createExpressCrudRouter — HTTP 415', () => {
+  it('returns 415 when POST body has Content-Type: text/plain', async () => {
+    const res = await request(createApp())
+      .post('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Content-Type', 'text/plain')
+      .send('not json')
+    expect(res.status).toBe(415)
+    expect(res.body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE')
+  })
+
+  it('returns 415 when PATCH body has Content-Type: application/x-www-form-urlencoded', async () => {
+    const res = await request(createApp())
+      .patch('/api/v1/users/1')
+      .set('x-api-key', 'secret')
+      .set('Content-Type', 'application/x-www-form-urlencoded')
+      .send('email=x%40y.com')
+    expect(res.status).toBe(415)
+  })
+
+  it('accepts application/json Content-Type', async () => {
+    const res = await request(createApp())
+      .post('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Content-Type', 'application/json')
+      .send({ email: 'new@test.com' })
+    expect(res.status).toBe(201)
+  })
+
+  it('accepts missing Content-Type (no body)', async () => {
+    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret')
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('createExpressCrudRouter — HTTP 405', () => {
+  it('returns 405 with Allow header for unsupported method on base path', async () => {
+    const res = await request(createApp()).put('/api/v1/users').set('x-api-key', 'secret')
+    expect(res.status).toBe(405)
+    expect(res.headers['allow']).toContain('GET')
+    expect(res.headers['allow']).toContain('POST')
+    expect(res.body.errors[0].code).toBe('METHOD_NOT_ALLOWED')
+  })
+
+  it('returns 405 with Allow header for unsupported method on id path', async () => {
+    const res = await request(createApp()).post('/api/v1/users/1').set('x-api-key', 'secret')
+    expect(res.status).toBe(405)
+    expect(res.headers['allow']).toContain('GET')
+    expect(res.headers['allow']).toContain('PATCH')
+    expect(res.body.errors[0].code).toBe('METHOD_NOT_ALLOWED')
   })
 })
 
@@ -784,24 +844,62 @@ describe('createExpressCrudRouter — preview route', () => {
 })
 
 describe('normalizeError', () => {
-  it('normalizes an HttpError', () => {
-    const result = normalizeError(new HttpError('Not Found', 404))
+  it('normalizes NotFoundError to NOT_FOUND 404', () => {
+    const result = normalizeError(new NotFoundError())
     expect(result).toEqual({
       status: 404,
-      name: 'HttpError',
+      code: 'NOT_FOUND',
       message: 'Not Found',
       details: undefined
     })
   })
 
-  it('normalizes a plain Error to 500', () => {
-    const result = normalizeError(new Error('boom'))
-    expect(result).toEqual({ status: 500, name: 'Error', message: 'boom' })
+  it('normalizes BadRequestError to BAD_REQUEST 400', () => {
+    const result = normalizeError(new BadRequestError('Bad input'))
+    expect(result).toEqual({
+      status: 400,
+      code: 'BAD_REQUEST',
+      message: 'Bad input',
+      details: undefined
+    })
   })
 
-  it('normalizes an unknown throw value to 500', () => {
+  it('normalizes UnprocessableEntityError to UNPROCESSABLE_ENTITY 422', () => {
+    const result = normalizeError(new UnprocessableEntityError('Invalid field'))
+    expect(result).toEqual({
+      status: 422,
+      code: 'UNPROCESSABLE_ENTITY',
+      message: 'Invalid field',
+      details: undefined
+    })
+  })
+
+  it('normalizes AuthorizationError to FORBIDDEN 403', () => {
+    const result = normalizeError(new AuthorizationError())
+    expect(result.code).toBe('FORBIDDEN')
+    expect(result.status).toBe(403)
+  })
+
+  it('normalizes NotAcceptableError to NOT_ACCEPTABLE 406', () => {
+    const result = normalizeError(new NotAcceptableError())
+    expect(result.code).toBe('NOT_ACCEPTABLE')
+    expect(result.status).toBe(406)
+  })
+
+  it('normalizes NotImplementedError to NOT_IMPLEMENTED 501', () => {
+    const result = normalizeError(new NotImplementedError())
+    expect(result.code).toBe('NOT_IMPLEMENTED')
+    expect(result.status).toBe(501)
+  })
+
+  it('normalizes a plain Error to INTERNAL_ERROR 500', () => {
+    const result = normalizeError(new Error('boom'))
+    expect(result).toEqual({ status: 500, code: 'INTERNAL_ERROR', message: 'boom' })
+  })
+
+  it('normalizes an unknown throw value to INTERNAL_ERROR 500', () => {
     const result = normalizeError('something bad')
-    expect(result).toEqual({ status: 500, name: 'Error', message: 'Unknown error' })
+    expect(result).toEqual({ status: 500, code: 'INTERNAL_ERROR', message: 'Unknown error' })
   })
 })
 

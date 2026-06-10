@@ -456,7 +456,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   it('GET /posts/:id returns 400 for a non-integer id', async () => {
     const res = await request(app).get('/api/posts/abc').set('x-api-key', API_KEY)
     expect(res.status).toBe(400)
-    expect(res.body.error.name).toBe('PayloadError')
+    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
   })
 
   it('GET /posts with wrong API key returns 403', async () => {
@@ -490,12 +490,13 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     expect(res.body.title).toBe('Upserted via HTTP')
   })
 
-  it('error response body has { error: { name, message } } shape', async () => {
+  it('error response body has { errors: [{ code, message }] } shape', async () => {
     const res = await request(app).get('/api/posts/0').set('x-api-key', API_KEY)
     expect(res.status).toBe(400)
-    expect(res.body).toHaveProperty('error')
-    expect(res.body.error).toHaveProperty('name', 'PayloadError')
-    expect(res.body.error).toHaveProperty('message')
+    expect(res.body).toHaveProperty('errors')
+    expect(Array.isArray(res.body.errors)).toBe(true)
+    expect(res.body.errors[0]).toHaveProperty('code', 'BAD_REQUEST')
+    expect(res.body.errors[0]).toHaveProperty('message')
   })
 })
 

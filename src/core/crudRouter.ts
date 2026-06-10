@@ -1,6 +1,11 @@
 import { AllowAllAuthStrategy, type AuthStrategy } from '@/auth/AuthStrategy.js'
 import { QueryBuilder } from '@/classes/QueryBuilder.js'
 import { HttpError } from '@/errors/HttpError.js'
+import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
+import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
+import { NotFoundError } from '@/errors/NotFoundError.js'
+import { NotImplementedError } from '@/errors/NotImplementedError.js'
+import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
 import type { HttpRequest, HttpResponse, HttpServer } from '@/core/http.js'
@@ -32,29 +37,43 @@ export interface CrudApiOptions {
   previewQueryBuilderPath?: string
 }
 
+const statusCodeMap: Record<number, string> = {
+  400: 'BAD_REQUEST',
+  401: 'UNAUTHORIZED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  405: 'METHOD_NOT_ALLOWED',
+  406: 'NOT_ACCEPTABLE',
+  415: 'UNSUPPORTED_MEDIA_TYPE',
+  422: 'UNPROCESSABLE_ENTITY',
+  501: 'NOT_IMPLEMENTED'
+}
+
 export function normalizeError(error: unknown): {
   status: number
-  name: string
+  code: string
   message: string
   details?: unknown
 } {
   if (error instanceof HttpError) {
     return {
       status: error.status,
-      name: error.name,
+      code: statusCodeMap[error.status] ?? 'INTERNAL_ERROR',
       message: error.message,
       details: error.details
     }
   }
   if (error instanceof Error) {
-    return { status: 500, name: error.name, message: error.message }
+    return { status: 500, code: 'INTERNAL_ERROR', message: error.message }
   }
-  return { status: 500, name: 'Error', message: 'Unknown error' }
+  return { status: 500, code: 'INTERNAL_ERROR', message: 'Unknown error' }
 }
 
 async function sendError(error: unknown, res: HttpResponse): Promise<void> {
-  const normalized = normalizeError(error)
-  await res.status(normalized.status).json({ error: normalized })
+  const { status, code, message, details } = normalizeError(error)
+  const item: Record<string, unknown> = { code, message }
+  if (details !== undefined) item['details'] = details
+  await res.status(status).json({ errors: [item] })
 }
 
 async function authorizeRequest(
@@ -74,7 +93,7 @@ async function authorizeRequest(
       requiredPermissions,
       req
     })
-    if (!allowed) throw new AuthorizationError('Forbidden', 403)
+    if (!allowed) throw new AuthorizationError()
     return
   }
 
@@ -84,7 +103,7 @@ async function authorizeRequest(
     const allowed = requiredPermissions.every(
       (permission) => permissions.has(permission) || roles.has(permission)
     )
-    if (!allowed) throw new AuthorizationError('Forbidden', 403)
+    if (!allowed) throw new AuthorizationError()
   }
 }
 
@@ -92,6 +111,14 @@ function getHeaderValue(req: HttpRequest, name: string): string | undefined {
   const raw = req.headers[name.toLowerCase()] ?? req.headers[name]
   const value = Array.isArray(raw) ? raw[0] : raw
   return typeof value === 'string' ? value : undefined
+}
+
+function checkContentType(req: HttpRequest): void {
+  if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method.toUpperCase())) return
+  const contentType = getHeaderValue(req, 'content-type') ?? ''
+  if (contentType && !contentType.includes('application/json')) {
+    throw new UnsupportedMediaTypeError()
+  }
 }
 
 function checkAcceptHeader(req: HttpRequest): void {
@@ -102,7 +129,7 @@ function checkAcceptHeader(req: HttpRequest): void {
     !accept.includes('application/*') &&
     !accept.includes('application/json')
   ) {
-    throw new HttpError('Not Acceptable', 406)
+    throw new NotAcceptableError()
   }
 }
 
@@ -111,6 +138,7 @@ function wrap(handler: (req: HttpRequest, res: HttpResponse) => Promise<void>) {
     const correlationId = getHeaderValue(req, 'x-correlation-id')
     if (correlationId) res.setHeader?.('X-Correlation-ID', correlationId)
     try {
+      checkContentType(req)
       checkAcceptHeader(req)
       await handler(req, res)
     } catch (error) {
@@ -178,7 +206,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'readManyWithQueryBuilder', authStrategy)
           if (!repository.executeQueryBuilder)
-            throw new HttpError('This resource does not support the query builder.', 501)
+            throw new NotImplementedError('This resource does not support the query builder.')
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...body,
@@ -203,10 +231,7 @@ export function registerCrudApi(
             fields: listOptions.fields,
             include: listOptions.include
           })
-          if (!result) {
-            await res.status(404).json({ error: { message: 'Not found' } })
-            return
-          }
+          if (!result) throw new NotFoundError()
           await res.status(200).json(result)
         })
       )
@@ -221,10 +246,7 @@ export function registerCrudApi(
           const id = parseId(req.params['id'])
           const body = filterWritableFields(resource, req.body as Record<string, unknown>)
           const result = await repository.updateOne(id, body as never)
-          if (!result) {
-            await res.status(404).json({ error: { message: 'Not found' } })
-            return
-          }
+          if (!result) throw new NotFoundError()
           await res.status(200).json(result)
         })
       )
@@ -237,7 +259,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'updateMany', authStrategy)
           if (!repository.updateMany)
-            throw new HttpError('This resource does not support updateMany.', 501)
+            throw new NotImplementedError('This resource does not support updateMany.')
           const { update, ...queryBody } = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...queryBody,
@@ -257,7 +279,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'upsertOne', authStrategy)
           if (!repository.upsertOne)
-            throw new HttpError('This resource does not support upsert.', 501)
+            throw new NotImplementedError('This resource does not support upsert.')
           const id = parseId(req.params['id'])
           const result = await repository.upsertOne(id, req.body as never)
           await res.status(200).json(result)
@@ -273,10 +295,7 @@ export function registerCrudApi(
           await authorizeRequest(req, resource, 'deleteOne', authStrategy)
           const id = parseId(req.params['id'])
           const deleted = await repository.deleteOne(id)
-          if (!deleted) {
-            await res.status(404).json({ error: { message: 'Not found' } })
-            return
-          }
+          if (!deleted) throw new NotFoundError()
           await res.status(200).json({ deleted: true })
         })
       )
@@ -289,7 +308,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'deleteMany', authStrategy)
           if (!repository.deleteMany)
-            throw new HttpError('This resource does not support deleteMany.', 501)
+            throw new NotImplementedError('This resource does not support deleteMany.')
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...body,
@@ -300,6 +319,40 @@ export function registerCrudApi(
           await res.status(200).json(result)
         })
       )
+    }
+
+    // 405 fallbacks — only registered when at least one method exists for the path
+    const baseMethods: string[] = [
+      ...(permissions.allowReadMany ? ['GET'] : []),
+      ...(permissions.allowCreate ? ['POST'] : []),
+      ...(permissions.allowUpdateMany ? ['PATCH'] : []),
+      ...(permissions.allowDeleteMany ? ['DELETE'] : [])
+    ]
+    if (baseMethods.length) {
+      server.registerRoute('*', basePath, async (req, res) => {
+        res.setHeader?.('Allow', baseMethods.join(', '))
+        await sendError(new MethodNotAllowedError(), res)
+      })
+    }
+
+    const idMethods: string[] = [
+      ...(permissions.allowReadOne ? ['GET'] : []),
+      ...(permissions.allowUpdateOne ? ['PATCH'] : []),
+      ...(permissions.allowUpsertOne ? ['PUT'] : []),
+      ...(permissions.allowDeleteOne ? ['DELETE'] : [])
+    ]
+    if (idMethods.length) {
+      server.registerRoute('*', `${basePath}/:id`, async (req, res) => {
+        res.setHeader?.('Allow', idMethods.join(', '))
+        await sendError(new MethodNotAllowedError(), res)
+      })
+    }
+
+    if (permissions.allowReadManyWithQueryBuilder) {
+      server.registerRoute('*', `${basePath}/${queryBuilderPath}`, async (req, res) => {
+        res.setHeader?.('Allow', 'POST')
+        await sendError(new MethodNotAllowedError(), res)
+      })
     }
   })
 

@@ -53,6 +53,8 @@ export interface ResourceDefinition<
   defaultLimit?: number
   /** Hard cap on page size. Requests over this are silently capped. No cap when undefined. */
   maxLimit?: number
+  /** Maximum nesting depth for WHERE clause children. Defaults to 3. */
+  maxFilterDepth?: number
 }
 
 export type { Repository, RepositoryCapabilities } from './repository.js'

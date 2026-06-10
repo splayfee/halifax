@@ -1,5 +1,5 @@
 import { QueryBuilder } from '@/classes/QueryBuilder.js'
-import { HttpError } from '@/errors/HttpError.js'
+import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import type {
   Repository,
@@ -185,7 +185,7 @@ export class PrismaRepositoryAdapter<
 
   public async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new HttpError('Native SQL updateMany requires a Prisma client and tableName.', 501)
+      throw new NotImplementedError('Native SQL updateMany requires a Prisma client and tableName.')
     }
 
     const updateQuery = QueryBuilder.buildUpdateQuery(
@@ -212,7 +212,7 @@ export class PrismaRepositoryAdapter<
 
   public async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
     if (!this.delegate.upsert) {
-      throw new HttpError('Prisma delegate does not support upsert.', 501)
+      throw new NotImplementedError('Prisma delegate does not support upsert.')
     }
 
     return await this.delegate.upsert({
@@ -233,7 +233,7 @@ export class PrismaRepositoryAdapter<
 
   public async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new HttpError('Native SQL deleteMany requires a Prisma client and tableName.', 501)
+      throw new NotImplementedError('Native SQL deleteMany requires a Prisma client and tableName.')
     }
 
     const resolvedQuery = { ...query, tableName: query.tableName || this.tableName, fields: ['id'] }
@@ -255,7 +255,9 @@ export class PrismaRepositoryAdapter<
 
   public async executeQueryBuilder(query: IQueryOptions): Promise<NativeQueryResult<TRecord>> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new HttpError('Native SQL query-builder requires a Prisma client and tableName.', 501)
+      throw new NotImplementedError(
+        'Native SQL query-builder requires a Prisma client and tableName.'
+      )
     }
 
     const resolvedQuery = { ...query, tableName: query.tableName || this.tableName }

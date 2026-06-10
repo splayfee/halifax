@@ -1,5 +1,5 @@
 import { SqlComparison } from '@/enums/SqlComparison.js'
-import { PayloadError } from '@/errors/PayloadError.js'
+import { BadRequestError } from '@/errors/BadRequestError.js'
 import type { IParamQuery } from '@/interfaces/IParamQuery.js'
 import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
@@ -21,7 +21,7 @@ function addFields(fields: string[] | undefined): string {
 
 function addFrom(tableName?: string): string {
   if (!tableName) {
-    throw new PayloadError('The query builder requires a table name.')
+    throw new BadRequestError('The query builder requires a table name.')
   }
   return `FROM ${tableName}`
 }

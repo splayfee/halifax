@@ -40,7 +40,7 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
     const header = req.headers[this.headerName.toLowerCase()] ?? req.headers[this.headerName]
     const apiKey = Array.isArray(header) ? header[0] : header
     if (!apiKey || apiKey !== this.expectedApiKey) {
-      throw new AuthorizationError('Invalid API key', 403)
+      throw new AuthorizationError('Invalid API key')
     }
     return { isAuthenticated: true }
   }
