@@ -5,21 +5,29 @@ import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
 import type { HttpRequest, HttpResponse, HttpServer } from '@/core/http.js'
 import { parseListOptions } from '@/core/queryString.js'
-import { validateAdvancedQuery, validateId } from '@/core/validation.js'
+import { validateAdvancedQuery, validateId, isValidUuid } from '@/core/validation.js'
 
 function parseId(raw: string | undefined): string | number {
   validateId(raw)
+  if (typeof raw === 'string' && isValidUuid(raw)) return raw
   return typeof raw === 'string' ? parseInt(raw, 10) : raw
+}
+
+function filterWritableFields(
+  resource: ResourceDefinition,
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const nonWritable = new Set(
+    resource.fields.filter((f) => f.writable === false).map((f) => f.name)
+  )
+  if (nonWritable.size === 0) return data
+  return Object.fromEntries(Object.entries(data).filter(([key]) => !nonWritable.has(key)))
 }
 
 export interface CrudApiOptions {
   authStrategy?: AuthStrategy
   queryBuilderPath?: string
   previewQueryBuilderPath?: string
-}
-
-function getRepository(resource: ResourceDefinition) {
-  return resource.repository ?? resource.adapter
 }
 
 export function normalizeError(error: unknown): {
@@ -98,7 +106,7 @@ export function registerCrudApi(
   const previewPath = options.previewQueryBuilderPath ?? '/query-builder/preview'
 
   resources.forEach((resource) => {
-    const repository = getRepository(resource)
+    const repository = resource.repository
     if (!repository)
       throw new HttpError(`Resource '${resource.name}' does not define a repository.`, 500)
 
@@ -111,7 +119,9 @@ export function registerCrudApi(
         basePath,
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'create', authStrategy)
-          const items = Array.isArray(req.body) ? req.body : [req.body]
+          const items = (Array.isArray(req.body) ? req.body : [req.body]).map(
+            (item: Record<string, unknown>) => filterWritableFields(resource, item)
+          )
           if (items.length === 1) {
             const result = await repository.createOne(items[0] as never)
             await res.status(201).json(result)
@@ -147,7 +157,7 @@ export function registerCrudApi(
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...body,
-            tableName: body.tableName ?? resource.tableName
+            tableName: resource.tableName
           } as IQueryOptions
           validateAdvancedQuery(resource, query)
           const results = await repository.executeQueryBuilder(query)
@@ -184,7 +194,8 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'updateOne', authStrategy)
           const id = parseId(req.params['id'])
-          const result = await repository.updateOne(id, req.body as never)
+          const body = filterWritableFields(resource, req.body as Record<string, unknown>)
+          const result = await repository.updateOne(id, body as never)
           if (!result) {
             await res.status(404).json({ error: { message: 'Not found' } })
             return
@@ -205,7 +216,7 @@ export function registerCrudApi(
           const { update, ...queryBody } = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...queryBody,
-            tableName: queryBody.tableName ?? resource.tableName
+            tableName: resource.tableName
           } as IQueryOptions
           validateAdvancedQuery(resource, query)
           const result = await repository.updateMany(query, update as never)
@@ -257,7 +268,7 @@ export function registerCrudApi(
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...body,
-            tableName: body.tableName ?? resource.tableName
+            tableName: resource.tableName
           } as IQueryOptions
           validateAdvancedQuery(resource, query)
           const result = await repository.deleteMany(query)

@@ -32,11 +32,7 @@ function addOrderBy(queryOptions: IQueryOptions): string {
     return `${sort.field} ${sort.order}`
   })
 
-  const hasIdClause = orderClauses.some((orderClause: string) => {
-    return orderClause.startsWith('id ')
-  })
-
-  if (!hasIdClause && orderClauses.length === 0) {
+  if (orderClauses.length === 0) {
     orderClauses.push('id ASC')
   }
 
@@ -53,11 +49,6 @@ function addSelectionFilter(queryItems: IQueryFilter[] = [], includeParentheses 
     const operator = item.operator ? item.operator.toUpperCase() : ''
 
     switch (comparison) {
-      case SqlComparison.Contains:
-      case SqlComparison.FreeText: {
-        filterClause.push(`${comparison} ((${item.field}), ?)`)
-        break
-      }
       case SqlComparison.Between:
       case SqlComparison.NotBetween: {
         filterClause.push(`${item.field} ${comparison} ? AND ?`)
@@ -201,7 +192,9 @@ export class QueryBuilder {
   public static buildDeleteQuery(queryOptions: IQueryOptions): IParamQuery {
     return {
       statement: numberParams(
-        ['DELETE FROM', queryOptions.tableName, addWhere(queryOptions.where)].filter(Boolean).join(' ')
+        ['DELETE FROM', queryOptions.tableName, addWhere(queryOptions.where)]
+          .filter(Boolean)
+          .join(' ')
       ),
       parameters: getParameters(queryOptions.where)
     }
@@ -214,12 +207,7 @@ export class QueryBuilder {
     const updateClause = buildUpdate(update)
     return {
       statement: numberParams(
-        [
-          'UPDATE',
-          queryOptions.tableName,
-          updateClause.statement,
-          addWhere(queryOptions.where)
-        ]
+        ['UPDATE', queryOptions.tableName, updateClause.statement, addWhere(queryOptions.where)]
           .filter(Boolean)
           .join(' ')
       ),

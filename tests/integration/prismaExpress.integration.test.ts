@@ -281,7 +281,10 @@ describe.skipIf(!hasDb)('PrismaRepositoryAdapter — direct', () => {
       { title: 'Live C', published: true }
     ])
     const result = await repo.updateMany!(
-      { tableName: 'posts', where: [{ field: 'published', comparison: '=', value1: false }] } as any,
+      {
+        tableName: 'posts',
+        where: [{ field: 'published', comparison: '=', value1: false }]
+      } as any,
       { published: true } as any
     )
     expect(result.updated).toHaveLength(2)
@@ -295,9 +298,10 @@ describe.skipIf(!hasDb)('PrismaRepositoryAdapter — direct', () => {
       { title: 'Del A', published: false },
       { title: 'Del B', published: false }
     ])
-    const result = await repo.deleteMany!(
-      { tableName: 'posts', where: [{ field: 'published', comparison: '=', value1: false }] } as any
-    )
+    const result = await repo.deleteMany!({
+      tableName: 'posts',
+      where: [{ field: 'published', comparison: '=', value1: false }]
+    } as any)
     expect(result.deleted).toHaveLength(2)
     const { count } = await repo.getMany()
     expect(count).toBe(1)
@@ -461,9 +465,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
 
   it('GET /posts with ?limit and ?offset returns the correct page', async () => {
     for (let i = 1; i <= 5; i++) await prisma.post.create({ data: { title: `P${i}` } })
-    const res = await request(app)
-      .get('/api/posts?limit=2&offset=2')
-      .set('x-api-key', API_KEY)
+    const res = await request(app).get('/api/posts?limit=2&offset=2').set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
     expect(res.body.results).toHaveLength(2)
     expect(res.body.count).toBe(5)
@@ -473,9 +475,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     await prisma.post.createMany({
       data: [{ title: 'FindMe' }, { title: 'Skip' }]
     })
-    const res = await request(app)
-      .get('/api/posts?title=FindMe')
-      .set('x-api-key', API_KEY)
+    const res = await request(app).get('/api/posts?title=FindMe').set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
     expect(res.body.count).toBe(1)
     expect(res.body.results[0].title).toBe('FindMe')
@@ -586,9 +586,7 @@ describe.skipIf(!hasDb)('JwtClaimsAuthStrategy — permission enforcement', () =
   })
 
   it('returns 401 when Authorization uses a non-Bearer scheme', async () => {
-    const res = await request(app)
-      .get('/api/posts')
-      .set('Authorization', 'Basic dXNlcjpwYXNz')
+    const res = await request(app).get('/api/posts').set('Authorization', 'Basic dXNlcjpwYXNz')
     expect(res.status).toBe(401)
   })
 

@@ -5,7 +5,9 @@ import {
   isValidInt32,
   validateFields,
   validateIncludes,
-  validateQueryString
+  validateQueryString,
+  validateSelectableFields,
+  validateSortableFields
 } from '@/core/validation.js'
 
 function parseInteger(value: unknown, property: string, min = 1): number | undefined {
@@ -32,12 +34,27 @@ export function parseListOptions(
 
   const fields = parseCsv(query.fields)
   const include = parseCsv(query.include)
-  const limit = parseInteger(query.limit, 'limit')
+  let limit = parseInteger(query.limit, 'limit')
   const offset = parseInteger(query.offset, 'offset', 0)
   const order = parseCsv(query.order)
 
-  if (fields) validateFields(resource, fields)
+  if (!limit && resource.defaultLimit) limit = resource.defaultLimit
+  if (limit && resource.maxLimit && limit > resource.maxLimit) limit = resource.maxLimit
+
+  if (fields) {
+    validateFields(resource, fields)
+    validateSelectableFields(resource, fields)
+  }
   if (include) validateIncludes(resource, include)
+  if (fields && include) {
+    throw new PayloadError('Cannot use both ?fields= and ?include= in the same request.')
+  }
+
+  const orderFields = order?.map((item) => (item.startsWith('-') ? item.substring(1) : item))
+  if (orderFields?.length) {
+    validateFields(resource, orderFields)
+    validateSortableFields(resource, orderFields)
+  }
 
   const where: Record<string, unknown> = {}
   const fieldNames = new Set(resource.fields.map((field) => field.name))

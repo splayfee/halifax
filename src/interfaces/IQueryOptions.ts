@@ -6,9 +6,7 @@ export interface IQueryOptions {
   limit?: number
   offset?: number
   fields?: string[]
-  tableName: string
+  tableName?: string
   where?: IQueryFilter[]
   orderBy?: ISort[]
-  returnDefaults?: boolean
-  view?: string
 }

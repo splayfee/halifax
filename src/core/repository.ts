@@ -1,5 +1,13 @@
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 
+export interface RepositoryCapabilities {
+  supportsNativeSql: boolean
+  supportsIncludes: boolean
+  supportsTransactions: boolean
+  supportsCreateManyReturn: boolean
+  supportsNoSqlQueryAst: boolean
+}
+
 export interface ListOptions {
   fields?: string[] | undefined
   where?: Record<string, unknown>
@@ -33,6 +41,7 @@ export interface Repository<
   TCreate = Partial<TRecord>,
   TUpdate = Partial<TRecord>
 > {
+  readonly capabilities?: Partial<RepositoryCapabilities>
   getOne(
     id: string | number,
     options?: Pick<ListOptions, 'fields' | 'include'>
@@ -47,9 +56,3 @@ export interface Repository<
   deleteMany?(query: IQueryOptions): Promise<DeleteManyResult>
   executeQueryBuilder?(query: IQueryOptions): Promise<NativeQueryResult<TRecord>>
 }
-
-export type DataAdapter<
-  TRecord = unknown,
-  TCreate = Partial<TRecord>,
-  TUpdate = Partial<TRecord>
-> = Repository<TRecord, TCreate, TUpdate>

@@ -3,6 +3,7 @@ import { HttpError } from '@/errors/HttpError.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import type {
   Repository,
+  RepositoryCapabilities,
   DeleteManyResult,
   ListOptions,
   ListResult,
@@ -46,6 +47,8 @@ export interface PrismaRepositoryAdapterOptions<
   client?: PrismaNativeClient
   idField?: string
   tableName?: string
+  /** When true, createMany falls back to serial createOne calls so records are returned. */
+  returnCreated?: boolean
 }
 
 function toSelect(fields?: string[]): Record<string, boolean> | undefined {
@@ -93,12 +96,24 @@ export class PrismaRepositoryAdapter<
   private readonly client?: PrismaNativeClient | undefined
   private readonly idField: string
   private readonly tableName?: string | undefined
+  private readonly returnCreated: boolean
+
+  public readonly capabilities: RepositoryCapabilities
 
   public constructor(options: PrismaRepositoryAdapterOptions<TRecord, TCreate, TUpdate>) {
     this.delegate = options.delegate
     this.client = options.client
     this.idField = options.idField ?? 'id'
     this.tableName = options.tableName
+    this.returnCreated = options.returnCreated ?? false
+
+    this.capabilities = {
+      supportsNativeSql: !!options.client,
+      supportsIncludes: true,
+      supportsTransactions: false,
+      supportsCreateManyReturn: this.returnCreated,
+      supportsNoSqlQueryAst: false
+    }
   }
 
   public async getOne(
@@ -147,7 +162,7 @@ export class PrismaRepositoryAdapter<
   }
 
   public async createMany(data: TCreate[]): Promise<TRecord[]> {
-    if (!this.delegate.createMany) {
+    if (!this.delegate.createMany || this.returnCreated) {
       return await Promise.all(
         data.map(async (item) => {
           return await this.createOne(item)
