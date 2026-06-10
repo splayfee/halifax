@@ -36,7 +36,11 @@ export interface RelationDefinition {
   includable?: boolean
 }
 
-export interface ResourceDefinition<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> {
+export interface ResourceDefinition<
+  TRecord = unknown,
+  TCreate = Partial<TRecord>,
+  TUpdate = Partial<TRecord>
+> {
   name: string
   routePrefix: string
   tableName?: string
@@ -50,7 +54,13 @@ export interface ResourceDefinition<TRecord = unknown, TCreate = Partial<TRecord
 }
 
 export type { DataAdapter, Repository } from './repository.js'
-export type { ListOptions, ListResult, DeleteManyResult, UpdateManyResult, NativeQueryResult } from './repository.js'
+export type {
+  ListOptions,
+  ListResult,
+  DeleteManyResult,
+  UpdateManyResult,
+  NativeQueryResult
+} from './repository.js'
 
 export const defaultCrudPermissions: Required<CrudPermissions> = {
   allowCreate: false,

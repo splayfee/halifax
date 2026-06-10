@@ -47,7 +47,10 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
 
 export class JwtClaimsAuthStrategy implements AuthStrategy {
   public constructor(
-    private readonly verifyToken: (token: string, req: HttpRequest) => Promise<AuthContext> | AuthContext
+    private readonly verifyToken: (
+      token: string,
+      req: HttpRequest
+    ) => Promise<AuthContext> | AuthContext
   ) {}
 
   public async authenticate(req: HttpRequest): Promise<AuthContext> {
@@ -74,11 +77,82 @@ export class JwtClaimsAuthStrategy implements AuthStrategy {
 
 export class PassportAuthStrategy implements AuthStrategy {
   public constructor(
-    private readonly authenticateWithPassport: (req: HttpRequest) => Promise<AuthContext> | AuthContext
+    private readonly authenticateWithPassport: (
+      req: HttpRequest
+    ) => Promise<AuthContext> | AuthContext
   ) {}
 
   public async authenticate(req: HttpRequest): Promise<AuthContext> {
     return await this.authenticateWithPassport(req)
+  }
+}
+
+export interface PassportLike {
+  authenticate(
+    strategy: string,
+    options: { session: boolean },
+    callback: (err: unknown, user: unknown) => void
+  ): (req: unknown, res: unknown, next: (err?: unknown) => void) => void
+}
+
+export interface PassportJwtStrategyOptions {
+  passport: PassportLike
+  strategy?: string
+  mapUser?: (user: unknown) => AuthContext
+}
+
+function defaultMapUser(user: unknown): AuthContext {
+  const p = (user ?? {}) as Record<string, unknown>
+  const userId = typeof p.sub === 'string' ? p.sub : typeof p.id === 'string' ? p.id : undefined
+  const ctx: AuthContext = {
+    isAuthenticated: true,
+    roles: Array.isArray(p.roles) ? (p.roles as string[]) : [],
+    permissions: Array.isArray(p.permissions) ? (p.permissions as string[]) : [],
+    claims: p
+  }
+  if (userId !== undefined) ctx.userId = userId
+  return ctx
+}
+
+export class PassportJwtStrategy implements AuthStrategy {
+  private readonly passport: PassportLike
+  private readonly strategy: string
+  private readonly mapUser: (user: unknown) => AuthContext
+
+  public constructor(options: PassportJwtStrategyOptions) {
+    this.passport = options.passport
+    this.strategy = options.strategy ?? 'jwt'
+    this.mapUser = options.mapUser ?? defaultMapUser
+  }
+
+  public async authenticate(req: HttpRequest): Promise<AuthContext> {
+    return new Promise((resolve, reject) => {
+      const handler = this.passport.authenticate(
+        this.strategy,
+        { session: false },
+        (err: unknown, user: unknown) => {
+          if (err) {
+            reject(err instanceof Error ? err : new AuthError(String(err), 401))
+            return
+          }
+          if (!user) {
+            reject(new AuthError('Unauthorized', 401))
+            return
+          }
+          resolve(this.mapUser(user))
+        }
+      )
+      handler(req.raw, {}, (err?: unknown) => {
+        if (err) reject(err instanceof Error ? err : new AuthError(String(err), 401))
+      })
+    })
+  }
+
+  public authorize(params: AuthorizeParams): boolean {
+    if (!params.requiredPermissions.length) return true
+    const permissions = new Set(params.auth.permissions ?? [])
+    const roles = new Set(params.auth.roles ?? [])
+    return params.requiredPermissions.every((p) => permissions.has(p) || roles.has(p))
   }
 }
 

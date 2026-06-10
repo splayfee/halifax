@@ -1,10 +1,18 @@
 import type { Express, Request, Response } from 'express'
 import { Router } from 'express'
-import type { HttpMethod, HttpRequest, HttpResponse, HttpRouteHandler, HttpServer } from '@/core/http.js'
+import type {
+  HttpMethod,
+  HttpRequest,
+  HttpResponse,
+  HttpRouteHandler,
+  HttpServer
+} from '@/core/http.js'
 import { registerCrudApi, type CrudApiOptions } from '@/core/crudRouter.js'
 import type { ResourceDefinition } from '@/core/types.js'
 
-function normalizeHeaders(headers: Request['headers']): Record<string, string | string[] | undefined> {
+function normalizeHeaders(
+  headers: Request['headers']
+): Record<string, string | string[] | undefined> {
   return headers as Record<string, string | string[] | undefined>
 }
 
@@ -39,7 +47,7 @@ export class ExpressHttpServer implements HttpServer {
 
   public registerRoute(method: HttpMethod, path: string, handler: HttpRouteHandler): void {
     const lower = method.toLowerCase() as Lowercase<HttpMethod>
-    (this.app as any)[lower](path, (req: Request, res: Response) => {
+    ;(this.app as any)[lower](path, (req: Request, res: Response) => {
       void Promise.resolve(handler(adaptRequest(req), adaptResponse(res)))
     })
   }
@@ -47,7 +55,7 @@ export class ExpressHttpServer implements HttpServer {
   public async start(port: number, host?: string): Promise<void> {
     await new Promise<void>((resolve) => {
       if ('listen' in this.app && typeof this.app.listen === 'function') {
-        (this.app as any).listen(port, host, () => resolve())
+        ;(this.app as any).listen(port, host, () => resolve())
         return
       }
       resolve()
@@ -55,9 +63,12 @@ export class ExpressHttpServer implements HttpServer {
   }
 }
 
-export interface ExpressCrudRouterOptions extends CrudApiOptions {}
+export type ExpressCrudRouterOptions = CrudApiOptions
 
-export function createExpressCrudRouter(resources: ResourceDefinition[], options: ExpressCrudRouterOptions = {}): Router {
+export function createExpressCrudRouter(
+  resources: ResourceDefinition[],
+  options: ExpressCrudRouterOptions = {}
+): Router {
   const router = Router()
   registerCrudApi(new ExpressHttpServer(router), resources, options)
   return router

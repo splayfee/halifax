@@ -8,7 +8,16 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   eslintConfigPrettier,
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**']
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'examples/**',
+      'eslint.config.mjs',
+      'prettier.config.mjs',
+      'prisma.config.ts',
+      'tests/integration/prisma/**'
+    ]
   },
   {
     languageOptions: {
@@ -16,7 +25,7 @@ export default tseslint.config(
         ...globals.node
       },
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
         tsconfigRootDir: import.meta.dirname
       }
     },

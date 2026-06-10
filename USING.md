@@ -1,123 +1,161 @@
 # Using Halifax
 
-This guide shows the intended package shape after extracting Halifax from the original application.
+This guide walks through setting up Halifax with Express, Prisma 7, and PostgreSQL.
 
-## 1. Pick an HTTP adapter
+> **Other adapters** — Fastify, Hyper Express, and Sequelize support are planned for future releases.
 
-Use Hyper Express for development/testing if that is your target runtime:
+## Prerequisites
 
-```ts
-import HyperExpress from 'hyper-express'
-import { HyperExpressHttpServer } from 'halifax'
-
-const app = new HyperExpress.Server()
-const server = new HyperExpressHttpServer(app)
+```bash
+pnpm add @edium/halifax express @prisma/client
+pnpm add -D prisma @types/express
 ```
 
-Express and Fastify are also supported:
+## 1. Define your Prisma schema
 
-```ts
-import express from 'express'
-import { ExpressHttpServer } from 'halifax'
+```prisma
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-const app = express()
-app.use(express.json())
-const server = new ExpressHttpServer(app)
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  Int?
+  author    Author?  @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("posts")
+}
+
+model Author {
+  id    Int    @id @default(autoincrement())
+  name  String
+  email String @unique
+  posts Post[]
+
+  @@map("authors")
+}
 ```
 
-```ts
-import Fastify from 'fastify'
-import { FastifyHttpServer } from 'halifax'
-
-const app = Fastify()
-const server = new FastifyHttpServer(app)
+```bash
+pnpm exec prisma generate
+pnpm exec prisma migrate dev --name init
 ```
 
-## 2. Pick a repository adapter
-
-### Prisma
+## 2. Create the Prisma client
 
 ```ts
+// src/db.ts
 import { PrismaClient } from '@prisma/client'
-import { PrismaRepositoryAdapter } from 'halifax'
 
-const prisma = new PrismaClient()
+export const prisma = new PrismaClient()
+```
 
-const userRepository = new PrismaRepositoryAdapter({
-  delegate: prisma.user,
-  client: prisma,
-  tableName: 'Users'
+## 3. Create a repository adapter
+
+```ts
+import { PrismaRepositoryAdapter } from '@edium/halifax'
+import type { Post, Prisma } from '@prisma/client'
+import { prisma } from './db.js'
+
+export const postRepository = new PrismaRepositoryAdapter<
+  Post,
+  Prisma.PostCreateInput,
+  Prisma.PostUpdateInput
+>({
+  delegate: prisma.post as any, // cast needed — Prisma's generated types are narrower than the adapter interface
+  client: prisma, // required for updateMany / deleteMany / executeQueryBuilder
+  tableName: 'posts' // matches @@map in your schema
 })
 ```
 
-The adapter does not import `@prisma/client`. The consuming application owns the Prisma client and injects the delegate.
+## 4. Choose an auth strategy
 
-### Sequelize
+### Passport + JWT (recommended for production)
 
 ```ts
-import { QueryTypes } from 'sequelize'
-import { SequelizeRepositoryAdapter } from 'halifax'
-import { sequelize, User } from './models.js'
+import passport from 'passport'
+import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt'
+import { PassportJwtStrategy } from '@edium/halifax'
 
-const userRepository = new SequelizeRepositoryAdapter({
-  model: User,
-  sequelize,
-  tableName: 'Users',
-  queryTypes: {
-    select: QueryTypes.SELECT,
-    update: QueryTypes.UPDATE,
-    delete: QueryTypes.DELETE
+passport.use(
+  new JwtStrategy(
+    {
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      secretOrKey: process.env.JWT_SECRET
+    },
+    (payload, done) => done(null, payload)
+  )
+)
+
+// Default mapUser reads: sub/id → userId, roles, permissions, full payload → claims
+export const authStrategy = new PassportJwtStrategy({ passport })
+
+// Custom payload shape
+export const authStrategy = new PassportJwtStrategy({
+  passport,
+  mapUser: (user) => {
+    const u = user as { userId: string; role: string }
+    return { isAuthenticated: true, userId: u.userId, roles: [u.role] }
   }
 })
 ```
 
-The adapter does not import Sequelize. The consuming application injects the model, connection, and optional query-type constants.
-
-## 3. Pick an auth strategy
-
-### API key
+### JWT claims (no Passport dependency)
 
 ```ts
-import { ApiKeyAuthStrategy } from 'halifax'
+import { JwtClaimsAuthStrategy } from '@edium/halifax'
+import { verify } from 'jsonwebtoken'
 
-const authStrategy = new ApiKeyAuthStrategy(process.env.API_KEY ?? '')
-```
-
-### JWT / OAuth / Auth0 / Firebase
-
-```ts
-import { JwtClaimsAuthStrategy } from 'halifax'
-
-const authStrategy = new JwtClaimsAuthStrategy(async (token) => {
-  const claims = await verifyTokenWithYourProvider(token)
-
+export const authStrategy = new JwtClaimsAuthStrategy(async (token) => {
+  const payload = verify(token, process.env.JWT_SECRET!) as Record<string, unknown>
   return {
     isAuthenticated: true,
-    userId: claims.sub,
-    roles: claims.roles ?? [],
-    permissions: claims.permissions ?? [],
-    claims
+    userId: payload.sub as string,
+    roles: (payload.roles ?? []) as string[],
+    permissions: (payload.permissions ?? []) as string[],
+    claims: payload
   }
 })
 ```
 
-You can use the same pattern for Auth0, Firebase, Passport JWT, local auth, or any OAuth/OIDC provider.
-
-## 4. Define a resource
+### API key (simple / internal services)
 
 ```ts
-import type { ResourceDefinition } from 'halifax'
+import { ApiKeyAuthStrategy } from '@edium/halifax'
 
-const users: ResourceDefinition = {
-  name: 'User',
-  routePrefix: 'users',
-  tableName: 'Users',
+export const authStrategy = new ApiKeyAuthStrategy(process.env.API_KEY ?? '')
+```
+
+## 5. Define a resource
+
+```ts
+import type { ResourceDefinition } from '@edium/halifax'
+import { postRepository } from './repositories/post.js'
+
+export const postResource: ResourceDefinition = {
+  name: 'Post',
+  routePrefix: 'posts',
+  tableName: 'posts',
   fields: [
-    { name: 'id', filterable: true, sortable: true, selectable: true },
-    { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
-    { name: 'displayName', filterable: true, sortable: true, selectable: true, writable: true }
+    { name: 'id', filterable: true, sortable: true },
+    { name: 'title', filterable: true, sortable: true, writable: true },
+    { name: 'content', writable: true },
+    { name: 'published', filterable: true, writable: true },
+    { name: 'authorId', filterable: true },
+    { name: 'createdAt', sortable: true }
   ],
-  relations: [{ name: 'posts', includable: true }],
+  relations: [{ name: 'author', includable: true }],
   permissions: {
     allowCreate: true,
     allowReadOne: true,
@@ -127,78 +165,74 @@ const users: ResourceDefinition = {
     allowDeleteOne: true
   },
   requiredPermissions: {
-    readMany: ['users.read'],
-    readOne: ['users.read'],
-    create: ['users.create'],
-    updateOne: ['users.update'],
-    deleteOne: ['users.delete']
+    readMany: ['posts.read'],
+    readOne: ['posts.read'],
+    create: ['posts.create'],
+    updateOne: ['posts.update'],
+    deleteOne: ['posts.delete']
   },
-  repository: userRepository
+  repository: postRepository
 }
 ```
 
-## 5. Register the API
+## 6. Wire up Express
 
 ```ts
-import { registerCrudApi } from 'halifax'
+// src/app.ts
+import express from 'express'
+import passport from 'passport'
+import { createExpressCrudRouter } from '@edium/halifax'
+import { authStrategy } from './auth.js'
+import { postResource } from './resources/post.js'
 
-registerCrudApi(server, [users], { authStrategy })
-await server.start(3000)
+export function createApp() {
+  const app = express()
+  app.use(express.json())
+  app.use(passport.initialize())
+  app.use('/api/v1', createExpressCrudRouter([postResource], { authStrategy }))
+  return app
+}
 ```
 
-Routes are generated from enabled permissions:
+## 7. Generated routes
 
-- `GET /users`
-- `GET /users/:id`
-- `POST /users`
-- `PATCH /users/:id`
-- `DELETE /users/:id`
-- `POST /users/query-builder`
+```
+GET    /api/v1/posts               list with pagination + filters
+GET    /api/v1/posts/:id           get one (supports ?fields= and ?include=)
+POST   /api/v1/posts               create one (or array for batch)
+PATCH  /api/v1/posts/:id           update one
+DELETE /api/v1/posts/:id           delete one
+POST   /api/v1/posts/query-builder advanced SQL query (if allowReadManyWithQueryBuilder)
+```
 
-## 6. Query builder endpoint
+### Query-string filtering
 
-The advanced query builder accepts a JSON payload and emits parameterized SQL through the repository adapter's native query capability.
+```
+GET /api/v1/posts?where[published]=true&limit=10&offset=0&orderBy[0][field]=createdAt&orderBy[0][direction]=desc
+```
 
-Example:
+### Query builder payload
 
 ```json
+POST /api/v1/posts/query-builder
 {
-  "tableName": "Users",
-  "fields": ["id", "email"],
+  "tableName": "posts",
+  "fields": ["id", "title", "published"],
   "where": [
-    {
-      "field": "email",
-      "comparison": "LIKE",
-      "value1": "%@example.com"
-    }
+    { "field": "published", "comparison": "=", "value1": true },
+    { "field": "title",     "comparison": "LIKE", "value1": "%typescript%" }
   ],
-  "orderBy": [
-    { "field": "id", "order": "DESC" }
-  ],
+  "orderBy": [{ "field": "createdAt", "order": "DESC" }],
   "limit": 25,
   "offset": 0
 }
 ```
 
-Current SQL generation is SQL Server-oriented. Keep this explicit until more dialect compilers are added.
-
-## 7. Microsoft SQL development/testing
-
-For your development setup:
-
-1. Run SQL Server locally or in a dev container.
-2. Use Hyper Express as the HTTP adapter.
-3. Use Prisma or Sequelize configured for SQL Server.
-4. Use `POST /:resource/query-builder` to test advanced SQL paths.
-5. Keep integration tests behind environment variables so unit tests remain fast.
-
-Suggested env names:
+## 8. Environment variables
 
 ```bash
-MSSQL_HOST=localhost
-MSSQL_PORT=1433
-MSSQL_DATABASE=halifax_test
-MSSQL_USER=sa
-MSSQL_PASSWORD='your-password'
-API_KEY='dev-secret'
+DATABASE_URL="postgresql://user:password@localhost:5432/myapp"
+JWT_SECRET="your-secret-key"
+# or
+API_KEY="your-api-key"
 ```

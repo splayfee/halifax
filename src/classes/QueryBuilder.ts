@@ -9,6 +9,12 @@ function isDefined(value: unknown): boolean {
   return value !== undefined && value !== null
 }
 
+// PostgreSQL uses $1, $2, ... placeholders; replace the internal '?' markers in order.
+function numberParams(statement: string): string {
+  let i = 0
+  return statement.replace(/\?/g, () => `$${++i}`)
+}
+
 function addFields(fields: string[] | undefined): string {
   return fields?.length ? fields.join(',') : '*'
 }
@@ -165,7 +171,7 @@ export class QueryBuilder {
     statementPieces.push(addWhere(queryOptions.where))
 
     return {
-      statement: statementPieces.filter(Boolean).join(' '),
+      statement: numberParams(statementPieces.filter(Boolean).join(' ')),
       parameters: getParameters(queryOptions.where)
     }
   }
@@ -187,16 +193,16 @@ export class QueryBuilder {
     }
 
     return {
-      statement: statementPieces.filter(Boolean).join(' '),
+      statement: numberParams(statementPieces.filter(Boolean).join(' ')),
       parameters: getParameters(queryOptions.where)
     }
   }
 
   public static buildDeleteQuery(queryOptions: IQueryOptions): IParamQuery {
     return {
-      statement: ['DELETE FROM', queryOptions.tableName, addWhere(queryOptions.where)]
-        .filter(Boolean)
-        .join(' '),
+      statement: numberParams(
+        ['DELETE FROM', queryOptions.tableName, addWhere(queryOptions.where)].filter(Boolean).join(' ')
+      ),
       parameters: getParameters(queryOptions.where)
     }
   }
@@ -207,9 +213,16 @@ export class QueryBuilder {
   ): IParamQuery {
     const updateClause = buildUpdate(update)
     return {
-      statement: ['UPDATE', queryOptions.tableName, updateClause.statement, addWhere(queryOptions.where)]
-        .filter(Boolean)
-        .join(' '),
+      statement: numberParams(
+        [
+          'UPDATE',
+          queryOptions.tableName,
+          updateClause.statement,
+          addWhere(queryOptions.where)
+        ]
+          .filter(Boolean)
+          .join(' ')
+      ),
       parameters: updateClause.parameters.concat(getParameters(queryOptions.where))
     }
   }
