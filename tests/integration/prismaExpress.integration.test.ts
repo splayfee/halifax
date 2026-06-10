@@ -1,5 +1,5 @@
 /**
- * Full-stack integration tests: PrismaRepositoryAdapter + Express + PostgreSQL
+ * Full-stack integration tests: PrismaAdapter + Express + PostgreSQL
  *
  * Run with: pnpm test:integration
  * Requires DATABASE_URL in .env.test (loaded automatically via dotenv-cli).
@@ -13,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   ApiKeyAuthStrategy,
   JwtClaimsAuthStrategy,
-  PrismaRepositoryAdapter,
+  PrismaAdapter,
   createExpressCrudRouter,
   type ResourceDefinition
 } from '@/index.js'
@@ -30,7 +30,7 @@ type AnyPrisma = any
 // Shared app factory
 // ---------------------------------------------------------------------------
 
-function buildPostApp(repo: PrismaRepositoryAdapter) {
+function buildPostApp(repo: PrismaAdapter) {
   const postResource: ResourceDefinition = {
     name: 'Post',
     routePrefix: 'posts',
@@ -66,19 +66,19 @@ function buildPostApp(repo: PrismaRepositoryAdapter) {
 }
 
 // ---------------------------------------------------------------------------
-// Suite 1: PrismaRepositoryAdapter — direct (no HTTP)
+// Suite 1: PrismaAdapter — direct (no HTTP)
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasDb)('PrismaRepositoryAdapter — direct', () => {
+describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   let prisma: AnyPrisma
-  let repo: PrismaRepositoryAdapter
+  let repo: PrismaAdapter
 
   beforeAll(async () => {
     const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
     const adapter = new PrismaPg(process.env.DATABASE_URL!)
     prisma = new PrismaClient({ adapter })
     await prisma.$connect()
-    repo = new PrismaRepositoryAdapter({
+    repo = new PrismaAdapter({
       delegate: prisma.post,
       client: prisma,
       tableName: 'posts'
@@ -308,7 +308,7 @@ describe.skipIf(!hasDb)('PrismaRepositoryAdapter — direct', () => {
   })
 
   it('executeQueryBuilder throws 501 when no client is configured', async () => {
-    const repoNoClient = new PrismaRepositoryAdapter({ delegate: prisma.post })
+    const repoNoClient = new PrismaAdapter({ delegate: prisma.post })
     await expect(
       repoNoClient.executeQueryBuilder!({ tableName: 'posts' } as any)
     ).rejects.toMatchObject({ status: 501 })
@@ -329,7 +329,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     prisma = new PrismaClient({ adapter })
     await prisma.$connect()
     app = buildPostApp(
-      new PrismaRepositoryAdapter({ delegate: prisma.post, client: prisma, tableName: 'posts' })
+      new PrismaAdapter({ delegate: prisma.post, client: prisma, tableName: 'posts' })
     )
   })
 
@@ -518,7 +518,7 @@ describe.skipIf(!hasDb)('JwtClaimsAuthStrategy — permission enforcement', () =
     prisma = new PrismaClient({ adapter })
     await prisma.$connect()
 
-    const repo = new PrismaRepositoryAdapter({ delegate: prisma.post })
+    const repo = new PrismaAdapter({ delegate: prisma.post })
 
     const postResource: ResourceDefinition = {
       name: 'Post',

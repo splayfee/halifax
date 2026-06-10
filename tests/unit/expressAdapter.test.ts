@@ -1,7 +1,7 @@
 import express, { type Router } from 'express'
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
-import { createExpressCrudRouter, ExpressHttpServer } from '@/adapters/http/express.js'
+import { createExpressCrudRouter, ExpressHttpServer } from '@/adapters/http/ExpressAdapter.js'
 import { ApiKeyAuthStrategy } from '@/auth/AuthStrategy.js'
 import { normalizeError } from '@/core/crudRouter.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'

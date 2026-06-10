@@ -12,7 +12,7 @@ import express from 'express'
 import { PrismaClient } from '@prisma/client'
 import {
   ApiKeyAuthStrategy,
-  PrismaRepositoryAdapter,
+  PrismaAdapter,
   createExpressCrudRouter,
   type ResourceDefinition
 } from '../src/index.js'
@@ -40,8 +40,8 @@ const posts: ResourceDefinition = {
     allowUpdateOne: true,
     allowDeleteOne: true
   },
-  repository: new PrismaRepositoryAdapter({
-    delegate: prisma.post as any,
+  repository: new PrismaAdapter({
+    delegate: prisma.post,
     client: prisma,
     tableName: 'posts'
   })
