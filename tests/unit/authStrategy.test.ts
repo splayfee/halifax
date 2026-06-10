@@ -4,12 +4,13 @@ import {
   ApiKeyAuthStrategy,
   JwtClaimsAuthStrategy,
   PassportAuthStrategy,
-  PassportJwtStrategy
+  PassportJwtStrategy,
+  PassportSessionStrategy
 } from '@/auth/AuthStrategy.js'
 import type { HttpRequest } from '@/core/http.js'
 
-function req(headers: Record<string, string> = {}, method = 'GET'): HttpRequest {
-  return { method, params: {}, query: {}, body: null, headers, raw: null }
+function req(headers: Record<string, string> = {}, method = 'GET', raw: unknown = null): HttpRequest {
+  return { method, params: {}, query: {}, body: null, headers, raw }
 }
 
 // Minimal ResourceDefinition stub for authorize() calls
@@ -224,6 +225,89 @@ describe('PassportJwtStrategy', () => {
           action: 'readMany',
           resource,
           requiredPermissions: ['posts.read'],
+          req: req()
+        })
+      ).toBe(false)
+    })
+  })
+})
+
+describe('PassportSessionStrategy', () => {
+  it('reads req.raw.user populated by Passport session middleware', () => {
+    const sessionUser = { id: 'u1', roles: ['editor'], permissions: ['posts.write'] }
+    const strategy = new PassportSessionStrategy()
+    const ctx = strategy.authenticate(req({}, 'GET', { user: sessionUser }))
+    expect(ctx.isAuthenticated).toBe(true)
+    expect(ctx.userId).toBe('u1')
+    expect(ctx.roles).toContain('editor')
+    expect(ctx.permissions).toContain('posts.write')
+  })
+
+  it('reads sub as userId when id is absent', () => {
+    const strategy = new PassportSessionStrategy()
+    const ctx = strategy.authenticate(req({}, 'GET', { user: { sub: 'sub-42' } }))
+    expect(ctx.userId).toBe('sub-42')
+  })
+
+  it('throws 401 when req.raw.user is absent (unauthenticated)', () => {
+    const strategy = new PassportSessionStrategy()
+    expect(() => strategy.authenticate(req({}, 'GET', {}))).toThrow(
+      expect.objectContaining({ status: 401 })
+    )
+  })
+
+  it('throws 401 when raw is null (no session middleware)', () => {
+    const strategy = new PassportSessionStrategy()
+    expect(() => strategy.authenticate(req())).toThrow(expect.objectContaining({ status: 401 }))
+  })
+
+  it('uses a custom mapUser function', () => {
+    const strategy = new PassportSessionStrategy((user: any) => ({
+      isAuthenticated: true,
+      userId: user.username,
+      roles: user.groups
+    }))
+    const ctx = strategy.authenticate(
+      req({}, 'GET', { user: { username: 'dave', groups: ['admin'] } })
+    )
+    expect(ctx.userId).toBe('dave')
+    expect(ctx.roles).toContain('admin')
+  })
+
+  describe('authorize', () => {
+    const strategy = new PassportSessionStrategy()
+
+    it('allows when there are no required permissions', () => {
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true, permissions: [], roles: [] },
+          action: 'readMany',
+          resource,
+          requiredPermissions: [],
+          req: req()
+        })
+      ).toBe(true)
+    })
+
+    it('allows when the user has a matching role', () => {
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true, permissions: [], roles: ['admin'] },
+          action: 'deleteOne',
+          resource,
+          requiredPermissions: ['admin'],
+          req: req()
+        })
+      ).toBe(true)
+    })
+
+    it('rejects when the user lacks the required permission or role', () => {
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true, permissions: [], roles: [] },
+          action: 'deleteOne',
+          resource,
+          requiredPermissions: ['admin'],
           req: req()
         })
       ).toBe(false)

@@ -375,24 +375,28 @@ export function createPrismaResources(
         delegate: client[delegateKey] as PrismaDelegate,
         client: client as PrismaNativeClient,
         tableName,
-        idField: options.idField,
-        returnCreated: options.returnCreated,
+        ...(options.idField !== undefined && { idField: options.idField }),
+        ...(options.returnCreated !== undefined && { returnCreated: options.returnCreated }),
         model
       })
 
-      return {
+      const resource: ResourceDefinition = {
         name: model.name,
         routePrefix,
         tableName,
         fields: adapter.fields!,
-        relations: adapter.relations,
         repository: adapter,
-        permissions: { ...options.permissions, ...modelOpts.permissions },
-        requiredPermissions: modelOpts.requiredPermissions,
-        defaultLimit: modelOpts.defaultLimit ?? options.defaultLimit,
-        maxLimit: modelOpts.maxLimit ?? options.maxLimit,
-        maxFilterDepth: modelOpts.maxFilterDepth
-      } satisfies ResourceDefinition
+        permissions: { ...options.permissions, ...modelOpts.permissions }
+      }
+      if (adapter.relations?.length) resource.relations = adapter.relations
+      if (modelOpts.requiredPermissions) resource.requiredPermissions = modelOpts.requiredPermissions
+      const defaultLimit = modelOpts.defaultLimit ?? options.defaultLimit
+      const maxLimit = modelOpts.maxLimit ?? options.maxLimit
+      const maxFilterDepth = modelOpts.maxFilterDepth
+      if (defaultLimit !== undefined) resource.defaultLimit = defaultLimit
+      if (maxLimit !== undefined) resource.maxLimit = maxLimit
+      if (maxFilterDepth !== undefined) resource.maxFilterDepth = maxFilterDepth
+      return resource
     })
 }
 

@@ -61,6 +61,38 @@ export const authStrategy = new JwtClaimsAuthStrategy(async (token) => {
 
 Missing or non-Bearer `Authorization` header → 401. A verify callback that throws → 401.
 
+### `PassportSessionStrategy`
+
+Drop-in for apps that use Passport with session cookies (as opposed to JWT Bearer tokens). Passport's session middleware runs at the Express app level before Halifax, so `req.user` is already populated by the time Halifax sees the request. This strategy just reads it.
+
+**Prerequisites in your Express app (before mounting Halifax):**
+
+```ts
+import session from 'express-session'
+import passport from 'passport'
+
+app.use(session({ secret: process.env.SESSION_SECRET!, resave: false, saveUninitialized: false }))
+app.use(passport.initialize())
+app.use(passport.session())
+```
+
+**Usage:**
+
+```ts
+import { PassportSessionStrategy } from '@edium/halifax'
+
+// Default: reads id/sub → userId, roles, permissions from req.user
+export const authStrategy = new PassportSessionStrategy()
+
+// Custom mapping for non-standard user shapes
+export const authStrategy = new PassportSessionStrategy((user) => {
+  const u = user as { username: string; groups: string[] }
+  return { isAuthenticated: true, userId: u.username, roles: u.groups }
+})
+```
+
+No passport instance is passed — Halifax never calls `passport.authenticate()`. If `req.user` is absent (session expired, not logged in), the request is rejected with 401.
+
 ### `PassportJwtStrategy`
 
 Drop-in for an existing Passport + `passport-jwt` setup.
