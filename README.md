@@ -26,26 +26,28 @@ pnpm add express @prisma/client
 ```ts
 import express from 'express'
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 import {
   PrismaRepositoryAdapter,
-  PassportJwtStrategy,
+  ApiKeyAuthStrategy,
   createExpressCrudRouter,
   type ResourceDefinition
 } from '@edium/halifax'
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
 
 const posts: ResourceDefinition = {
   name: 'Post',
   routePrefix: 'posts',
   tableName: 'posts',
+  defaultLimit: 50,
+  maxLimit: 200,
   fields: [
     { name: 'id', filterable: true, sortable: true },
     { name: 'title', filterable: true, sortable: true, writable: true },
     { name: 'content', writable: true },
     { name: 'published', filterable: true, writable: true }
   ],
-  relations: [{ name: 'author', includable: true }],
   permissions: {
     allowCreate: true,
     allowReadOne: true,
@@ -64,113 +66,30 @@ const app = express()
 app.use(express.json())
 app.use(
   '/api',
-  createExpressCrudRouter([posts], {
-    authStrategy: new PassportJwtStrategy({ passport })
-  })
+  createExpressCrudRouter([posts], { authStrategy: new ApiKeyAuthStrategy(process.env.API_KEY!) })
 )
-
 app.listen(3000)
 ```
 
-## Core Concepts
+## Documentation
 
-### HTTP server adapter
-
-All transports implement the same interface:
-
-```ts
-interface HttpServer {
-  registerRoute(method, path, handler): void
-  start(port, host?): Promise<void> | void
-}
-```
-
-Current adapter: `ExpressHttpServer` / `createExpressCrudRouter`
-
-### Repository adapter
-
-All ORM implementations expose the same repository contract:
-
-```ts
-interface Repository<TRecord, TCreate, TUpdate> {
-  getOne(id, options?)
-  getMany(options?)
-  createOne(data)
-  createMany(data)
-  updateOne(id, data)
-  deleteOne(id)
-  updateMany?(query, data) // requires client + tableName
-  deleteMany?(query) // requires client + tableName
-  executeQueryBuilder?(query) // requires client + tableName
-}
-```
-
-Current adapter: `PrismaRepositoryAdapter`
-
-When using `updateMany`, `deleteMany`, or `executeQueryBuilder`, pass a `client` (your `PrismaClient`) and a `tableName` to the adapter so it can fall back to parameterized raw SQL.
-
-### Auth strategies
-
-```ts
-interface AuthStrategy {
-  authenticate(req): AuthContext | Promise<AuthContext>
-  authorize?(params): boolean | Promise<boolean>
-}
-```
-
-| Strategy                | Description                                |
-| ----------------------- | ------------------------------------------ |
-| `AllowAllAuthStrategy`  | No auth — development only                 |
-| `ApiKeyAuthStrategy`    | `x-api-key` header check                   |
-| `JwtClaimsAuthStrategy` | Bearer token with a custom verify callback |
-| `PassportJwtStrategy`   | Drop-in for Passport + `passport-jwt`      |
-
-## Generated Routes
-
-Routes are created from the enabled `permissions` flags on each resource:
-
-| Permission flag                 | Method   | Path                   |
-| ------------------------------- | -------- | ---------------------- |
-| `allowReadMany`                 | `GET`    | `/posts`               |
-| `allowReadOne`                  | `GET`    | `/posts/:id`           |
-| `allowCreate`                   | `POST`   | `/posts`               |
-| `allowUpdateOne`                | `PATCH`  | `/posts/:id`           |
-| `allowUpdateMany`               | `PATCH`  | `/posts`               |
-| `allowUpsertOne`                | `PUT`    | `/posts/:id`           |
-| `allowDeleteOne`                | `DELETE` | `/posts/:id`           |
-| `allowDeleteMany`               | `DELETE` | `/posts`               |
-| `allowReadManyWithQueryBuilder` | `POST`   | `/posts/query-builder` |
-
-## Query Builder
-
-The `POST /:resource/query-builder` endpoint accepts a JSON payload and executes parameterized SQL via the adapter's native query path:
-
-```json
-{
-  "tableName": "posts",
-  "fields": ["id", "title"],
-  "where": [{ "field": "published", "comparison": "=", "value1": true }],
-  "orderBy": [{ "field": "id", "order": "DESC" }],
-  "limit": 25,
-  "offset": 0
-}
-```
-
-The query builder emits ANSI SQL with `OFFSET x ROWS FETCH NEXT n ROWS ONLY` pagination, which is supported by PostgreSQL 8.4+.
+| Guide                                              | Contents                                                                                      |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [README_AUTOCRUD.md](./README_AUTOCRUD.md)         | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes |
+| [README_REPOSITORIES.md](./README_REPOSITORIES.md) | Prisma 7 setup, `PrismaRepositoryAdapter` options, capabilities, custom repositories          |
+| [README_ADAPTERS.md](./README_ADAPTERS.md)         | Express adapter, `createExpressCrudRouter`, custom HTTP adapters                              |
+| [README_AUTH.md](./README_AUTH.md)                 | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, custom `authorize`      |
+| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md) | Query builder payload, comparisons, nested filters, `QueryBuilder` class                      |
 
 ## Running Integration Tests
 
-The integration suite tests the full stack — `PrismaRepositoryAdapter`, Express routing, auth strategies, and the query builder — against a real PostgreSQL database.
-
-### Prerequisites
-
-- Docker Desktop (or any local Postgres instance)
+The integration suite tests the full stack against a real PostgreSQL database.
 
 ### 1. Start a Postgres container
 
 ```bash
 docker run -d \
-  --name halfax-test-db \
+  --name halifax-test-db \
   --restart unless-stopped \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres \
@@ -185,19 +104,15 @@ docker run -d \
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/halifax_test"
 ```
 
-This file is already covered by `.gitignore` via the `.env*` pattern.
-
-### 3. Run the tests
+### 3. Run
 
 ```bash
 pnpm test:integration
 ```
 
-The `globalSetup` then runs `prisma generate` (writes `Post`/`Author` types into `@prisma/client`) and `prisma db push` (creates the tables) before any test executes. No separate setup step is needed.
+`globalSetup` runs `prisma generate` and `prisma db push` automatically before any test executes.
 
 ### Subsequent runs
-
-The container persists between runs — you only need to restart it if it was stopped:
 
 ```bash
 docker start halifax-test-db
@@ -208,17 +123,4 @@ pnpm test:integration
 
 ```bash
 docker stop halifax-test-db && docker rm halifax-test-db
-```
-
-## Per-Resource Permissions
-
-`requiredPermissions` maps each CRUD action to a list of roles or permission strings that the authenticated user must satisfy:
-
-```ts
-requiredPermissions: {
-  readMany:  ['posts.read'],
-  create:    ['posts.create'],
-  updateOne: ['posts.update'],
-  deleteOne: ['posts.delete'],
-}
 ```

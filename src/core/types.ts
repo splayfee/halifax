@@ -48,12 +48,14 @@ export interface ResourceDefinition<
   relations?: RelationDefinition[]
   permissions?: CrudPermissions
   repository: Repository<TRecord, TCreate, TUpdate>
-  /** @deprecated Use repository. Included only to ease migration from the app-shaped extraction. */
-  adapter?: Repository<TRecord, TCreate, TUpdate>
   requiredPermissions?: Partial<Record<CrudAction, string[]>>
+  /** Default page size when the caller omits ?limit=. No limit applied when undefined. */
+  defaultLimit?: number
+  /** Hard cap on page size. Requests over this are silently capped. No cap when undefined. */
+  maxLimit?: number
 }
 
-export type { DataAdapter, Repository } from './repository.js'
+export type { Repository, RepositoryCapabilities } from './repository.js'
 export type {
   ListOptions,
   ListResult,

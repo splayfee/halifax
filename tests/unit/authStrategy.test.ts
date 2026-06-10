@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AllowAllAuthStrategy,
   ApiKeyAuthStrategy,
-  JwtClaimsAuthStrategy,
+  JwtClaimsAuthStrategy
 } from '@/auth/AuthStrategy.js'
 import type { HttpRequest } from '@/core/http.js'
 
@@ -35,9 +35,7 @@ describe('ApiKeyAuthStrategy', () => {
   })
 
   it('rejects a missing key with an AuthError (403)', () => {
-    expect(() => strategy.authenticate(req({}))).toThrow(
-      expect.objectContaining({ status: 403 })
-    )
+    expect(() => strategy.authenticate(req({}))).toThrow(expect.objectContaining({ status: 403 }))
   })
 
   it('respects a custom header name', () => {
@@ -52,7 +50,7 @@ describe('JwtClaimsAuthStrategy', () => {
     isAuthenticated: true,
     userId: token,
     permissions: ['read'],
-    roles: [],
+    roles: []
   }))
 
   it('extracts the Bearer token and calls verifyToken', async () => {
@@ -84,7 +82,7 @@ describe('JwtClaimsAuthStrategy', () => {
           action: 'readMany',
           resource,
           requiredPermissions: [],
-          req: req(),
+          req: req()
         })
       ).toBe(true)
     })
@@ -96,7 +94,7 @@ describe('JwtClaimsAuthStrategy', () => {
           action: 'create',
           resource,
           requiredPermissions: ['posts.write'],
-          req: req(),
+          req: req()
         })
       ).toBe(true)
     })
@@ -108,7 +106,7 @@ describe('JwtClaimsAuthStrategy', () => {
           action: 'create',
           resource,
           requiredPermissions: ['admin'],
-          req: req(),
+          req: req()
         })
       ).toBe(true)
     })
@@ -120,7 +118,7 @@ describe('JwtClaimsAuthStrategy', () => {
           action: 'create',
           resource,
           requiredPermissions: ['posts.write'],
-          req: req(),
+          req: req()
         })
       ).toBe(false)
     })

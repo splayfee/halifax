@@ -27,7 +27,11 @@
     "dist",
     "src",
     "README.md",
-    "USING.md",
+    "README_ADAPTERS.md",
+    "README_AUTH.md",
+    "README_AUTOCRUD.md",
+    "README_QUERYBUILDER.md",
+    "README_REPOSITORIES.md",
     "LICENSE"
   ],
   "publishConfig": {
@@ -97,5 +101,8 @@
     "jwt",
     "api"
   ],
-  "packageManager": "pnpm@11.5.3"
+  "packageManager": "pnpm@11.5.3",
+  "dependencies": {
+    "uuid": "^14.0.0"
+  }
 }

@@ -11,7 +11,7 @@ describe('QueryBuilder.buildSelectQuery', () => {
       where: [{ field: 'email', comparison: SqlComparison.Like, value1: '%@example.com' }],
       orderBy: [{ field: 'id', order: SqlOrder.DESC }],
       limit: 10,
-      offset: 20,
+      offset: 20
     })
     expect(q.statement).toBe(
       'SELECT id,email FROM users WHERE email LIKE $1 ORDER BY id DESC OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY'
@@ -38,7 +38,7 @@ describe('QueryBuilder.buildSelectQuery', () => {
   it('handles IS NULL with no parameter', () => {
     const { statement, parameters } = QueryBuilder.buildSelectQuery({
       tableName: 'posts',
-      where: [{ field: 'deletedAt', comparison: SqlComparison.IsNull }],
+      where: [{ field: 'deletedAt', comparison: SqlComparison.IsNull }]
     })
     expect(statement).toContain('deletedAt IS NULL')
     expect(parameters).toHaveLength(0)
@@ -47,7 +47,7 @@ describe('QueryBuilder.buildSelectQuery', () => {
   it('handles IS NOT NULL with no parameter', () => {
     const { statement } = QueryBuilder.buildSelectQuery({
       tableName: 'posts',
-      where: [{ field: 'deletedAt', comparison: SqlComparison.IsNotNull }],
+      where: [{ field: 'deletedAt', comparison: SqlComparison.IsNotNull }]
     })
     expect(statement).toContain('deletedAt IS NOT NULL')
   })
@@ -57,8 +57,8 @@ describe('QueryBuilder.buildSelectQuery', () => {
       tableName: 'posts',
       where: [
         { field: 'published', comparison: SqlComparison.Equal, value1: true, operator: 'AND' },
-        { field: 'authorId', comparison: SqlComparison.Equal, value1: 5 },
-      ],
+        { field: 'authorId', comparison: SqlComparison.Equal, value1: 5 }
+      ]
     })
     expect(statement).toContain('published = $1')
     expect(statement).toContain('AND')
@@ -69,7 +69,7 @@ describe('QueryBuilder.buildSelectQuery', () => {
   it('handles BETWEEN with two parameters', () => {
     const { statement, parameters } = QueryBuilder.buildSelectQuery({
       tableName: 'events',
-      where: [{ field: 'score', comparison: SqlComparison.Between, value1: 10, value2: 20 }],
+      where: [{ field: 'score', comparison: SqlComparison.Between, value1: 10, value2: 20 }]
     })
     expect(statement).toContain('score BETWEEN $1 AND $2')
     expect(parameters).toEqual([10, 20])
@@ -78,7 +78,7 @@ describe('QueryBuilder.buildSelectQuery', () => {
   it('handles IN with array parameter', () => {
     const { statement, parameters } = QueryBuilder.buildSelectQuery({
       tableName: 'posts',
-      where: [{ field: 'id', comparison: SqlComparison.In, value1: [1, 2, 3] }],
+      where: [{ field: 'id', comparison: SqlComparison.In, value1: [1, 2, 3] }]
     })
     expect(statement).toContain('id IN ($1,$2,$3)')
     expect(parameters).toEqual([1, 2, 3])
@@ -88,7 +88,7 @@ describe('QueryBuilder.buildSelectQuery', () => {
     const { statement } = QueryBuilder.buildSelectQuery({
       tableName: 'posts',
       isDistinct: true,
-      fields: ['authorId'],
+      fields: ['authorId']
     })
     expect(statement).toMatch(/^SELECT DISTINCT authorId/)
   })
@@ -98,7 +98,7 @@ describe('QueryBuilder.buildCountQuery', () => {
   it('builds a count with a where clause', () => {
     const { statement, parameters } = QueryBuilder.buildCountQuery({
       tableName: 'users',
-      where: [{ field: 'active', comparison: SqlComparison.Equal, value1: true }],
+      where: [{ field: 'active', comparison: SqlComparison.Equal, value1: true }]
     })
     expect(statement).toBe('SELECT COUNT(*) AS count FROM users WHERE active = $1')
     expect(parameters).toEqual([true])
@@ -143,7 +143,7 @@ describe('QueryBuilder.buildDeleteQuery', () => {
   it('builds a delete with a where clause', () => {
     const { statement, parameters } = QueryBuilder.buildDeleteQuery({
       tableName: 'sessions',
-      where: [{ field: 'userId', comparison: SqlComparison.Equal, value1: 42 }],
+      where: [{ field: 'userId', comparison: SqlComparison.Equal, value1: 42 }]
     })
     expect(statement).toBe('DELETE FROM sessions WHERE userId = $1')
     expect(parameters).toEqual([42])

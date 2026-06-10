@@ -1,8 +1,6 @@
 export enum SqlComparison {
   Between = 'BETWEEN',
-  Contains = 'CONTAINS',
   Equal = '=',
-  FreeText = 'FREETEXT',
   GreaterThan = '>',
   GreaterThanOrEqual = '>=',
   In = 'IN',

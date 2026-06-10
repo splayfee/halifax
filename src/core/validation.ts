@@ -1,3 +1,4 @@
+import { validate as uuidValidate } from 'uuid'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 import { SqlOperator } from '@/enums/SqlOperator.js'
 import { SqlOrder } from '@/enums/SqlOrder.js'
@@ -16,9 +17,18 @@ export function isValidInt32(value: string | number | null, min = 1): boolean {
   return Number.isSafeInteger(normalized) && normalized >= min && normalized <= 2147483647
 }
 
+export function isValidUuid(value: string): boolean {
+  return uuidValidate(value)
+}
+
 export function validateId(value: string | number | undefined): asserts value is string | number {
-  if (value === undefined || !isValidInt32(value)) {
-    throw new PayloadError('Id parameter must be an integer from 1 to 2147483647.')
+  if (value === undefined) {
+    throw new PayloadError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
+  }
+  const isInt = isValidInt32(value)
+  const isUuid = typeof value === 'string' && isValidUuid(value)
+  if (!isInt && !isUuid) {
+    throw new PayloadError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
   }
 }
 
@@ -36,6 +46,26 @@ export function validateFields(resource: ResourceDefinition, fields: string[] = 
 
   if (invalidFields.length) {
     throw new PayloadError(`Invalid field(s): ${invalidFields.join(', ')}.`)
+  }
+}
+
+export function validateSelectableFields(resource: ResourceDefinition, fields: string[]): void {
+  const nonSelectable = fields.filter((name) => {
+    const field = resource.fields.find((f) => f.name === name)
+    return field?.selectable === false
+  })
+  if (nonSelectable.length) {
+    throw new PayloadError(`Field(s) not selectable: ${nonSelectable.join(', ')}.`)
+  }
+}
+
+export function validateSortableFields(resource: ResourceDefinition, fields: string[]): void {
+  const nonSortable = fields.filter((name) => {
+    const field = resource.fields.find((f) => f.name === name)
+    return field?.sortable === false
+  })
+  if (nonSortable.length) {
+    throw new PayloadError(`Field(s) not sortable: ${nonSortable.join(', ')}.`)
   }
 }
 
@@ -63,13 +93,30 @@ export function validateQueryString(
   resource: ResourceDefinition,
   query: Record<string, unknown>
 ): void {
-  const validProps = new Set([...getFieldNames(resource), ...reservedQueryStringProperties])
-  const invalidProps = Object.keys(query).filter((property) => {
-    return !validProps.has(property)
-  })
+  const filterableFieldNames = resource.fields
+    .filter((f) => f.filterable !== false)
+    .map((f) => f.name)
+  const allFieldNames = new Set(getFieldNames(resource))
+  const validProps = new Set([...filterableFieldNames, ...reservedQueryStringProperties])
 
-  if (invalidProps.length) {
-    throw new PayloadError(`Invalid query-string properties: ${invalidProps.join(', ')}.`)
+  const nonFilterable: string[] = []
+  const unknown: string[] = []
+
+  for (const prop of Object.keys(query)) {
+    if (!validProps.has(prop)) {
+      if (allFieldNames.has(prop)) {
+        nonFilterable.push(prop)
+      } else {
+        unknown.push(prop)
+      }
+    }
+  }
+
+  if (nonFilterable.length) {
+    throw new PayloadError(`Field(s) not filterable: ${nonFilterable.join(', ')}.`)
+  }
+  if (unknown.length) {
+    throw new PayloadError(`Invalid query-string properties: ${unknown.join(', ')}.`)
   }
 }
 
@@ -107,12 +154,15 @@ export function validateWhere(resource: ResourceDefinition, where: IQueryFilter[
 export function validateAdvancedQuery(resource: ResourceDefinition, query: IQueryOptions): void {
   if (query.fields) {
     validateFields(resource, query.fields)
+    validateSelectableFields(resource, query.fields)
   }
 
   if (query.orderBy) {
     const validOrders = new Set(Object.values(SqlOrder))
+    const sortFields = query.orderBy.map((s) => s.field)
+    validateFields(resource, sortFields)
+    validateSortableFields(resource, sortFields)
     query.orderBy.forEach((sort) => {
-      validateFields(resource, [sort.field])
       if (!validOrders.has(sort.order.toUpperCase() as SqlOrder)) {
         throw new PayloadError(`Invalid sort order: '${sort.order}'.`)
       }
