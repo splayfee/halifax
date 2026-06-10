@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   AllowAllAuthStrategy,
   ApiKeyAuthStrategy,
-  JwtClaimsAuthStrategy
+  JwtClaimsAuthStrategy,
+  PassportAuthStrategy,
+  PassportJwtStrategy
 } from '@/auth/AuthStrategy.js'
 import type { HttpRequest } from '@/core/http.js'
 
@@ -118,6 +120,110 @@ describe('JwtClaimsAuthStrategy', () => {
           action: 'create',
           resource,
           requiredPermissions: ['posts.write'],
+          req: req()
+        })
+      ).toBe(false)
+    })
+  })
+})
+
+describe('PassportAuthStrategy', () => {
+  it('delegates to the supplied authenticateWithPassport function', async () => {
+    const strategy = new PassportAuthStrategy(async () => ({ isAuthenticated: true, userId: 'u1' }))
+    const ctx = await strategy.authenticate(req())
+    expect(ctx.isAuthenticated).toBe(true)
+    expect(ctx.userId).toBe('u1')
+  })
+
+  it('propagates errors thrown by the callback', async () => {
+    const strategy = new PassportAuthStrategy(async () => {
+      throw new Error('passport error')
+    })
+    await expect(strategy.authenticate(req())).rejects.toThrow('passport error')
+  })
+})
+
+describe('PassportJwtStrategy', () => {
+  function makePassport(user: unknown, err: unknown = null) {
+    return {
+      authenticate:
+        (_strategy: string, _opts: unknown, cb: (err: unknown, user: unknown) => void) => () =>
+          cb(err, user)
+    }
+  }
+
+  it('resolves with the mapped user on success', async () => {
+    const passport = makePassport({ sub: 'user-42', permissions: ['read'], roles: ['admin'] })
+    const strategy = new PassportJwtStrategy({ passport })
+    const ctx = await strategy.authenticate(req())
+    expect(ctx.isAuthenticated).toBe(true)
+    expect(ctx.userId).toBe('user-42')
+    expect(ctx.permissions).toContain('read')
+    expect(ctx.roles).toContain('admin')
+  })
+
+  it('rejects with AuthenticationError when user is falsy', async () => {
+    const passport = makePassport(null)
+    const strategy = new PassportJwtStrategy({ passport })
+    await expect(strategy.authenticate(req())).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('rejects with the original Error when err is an Error instance', async () => {
+    const passport = makePassport(null, new Error('Token expired'))
+    const strategy = new PassportJwtStrategy({ passport })
+    await expect(strategy.authenticate(req())).rejects.toThrow('Token expired')
+  })
+
+  it('rejects with AuthenticationError when err is a plain string', async () => {
+    const passport = makePassport(null, 'bad token')
+    const strategy = new PassportJwtStrategy({ passport })
+    await expect(strategy.authenticate(req())).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('uses a custom mapUser function', async () => {
+    const passport = makePassport({ someField: 'custom' })
+    const strategy = new PassportJwtStrategy({
+      passport,
+      mapUser: () => ({ isAuthenticated: true, userId: 'mapped' })
+    })
+    const ctx = await strategy.authenticate(req())
+    expect(ctx.userId).toBe('mapped')
+  })
+
+  describe('authorize', () => {
+    const strategy = new PassportJwtStrategy({ passport: makePassport({}) })
+
+    it('allows when there are no required permissions', () => {
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true },
+          action: 'readMany',
+          resource,
+          requiredPermissions: [],
+          req: req()
+        })
+      ).toBe(true)
+    })
+
+    it('allows when the user has the required permission', () => {
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true, permissions: ['posts.read'] },
+          action: 'readMany',
+          resource,
+          requiredPermissions: ['posts.read'],
+          req: req()
+        })
+      ).toBe(true)
+    })
+
+    it('rejects when the user lacks the permission', () => {
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true, permissions: [] },
+          action: 'readMany',
+          resource,
+          requiredPermissions: ['posts.read'],
           req: req()
         })
       ).toBe(false)

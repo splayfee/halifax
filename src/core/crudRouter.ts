@@ -6,7 +6,7 @@ import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from
 import type { HttpRequest, HttpResponse, HttpServer } from '@/core/http.js'
 import { parseListOptions } from '@/core/queryString.js'
 import { validateAdvancedQuery, validateId, isValidUuid } from '@/core/validation.js'
-import { ServerError } from '@/index.js'
+import { ServerError } from '@/errors/ServerError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 
 function parseId(raw: string | undefined): string | number {
@@ -131,7 +131,7 @@ export function registerCrudApi(
   resources.forEach((resource) => {
     const repository = resource.repository
     if (!repository)
-      throw new ServerError(`Resource '${resource.name}' does not define a repository.`, 500)
+      throw new ServerError(`Resource '${resource.name}' does not define a repository.`)
 
     const permissions = { ...defaultCrudPermissions, ...resource.permissions }
     const basePath = `/${resource.routePrefix}`
@@ -178,7 +178,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'readManyWithQueryBuilder', authStrategy)
           if (!repository.executeQueryBuilder)
-            throw new ServerError('This resource does not support the query builder.', 501)
+            throw new HttpError('This resource does not support the query builder.', 501)
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...body,
@@ -237,7 +237,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'updateMany', authStrategy)
           if (!repository.updateMany)
-            throw new ServerError('This resource does not support updateMany.', 501)
+            throw new HttpError('This resource does not support updateMany.', 501)
           const { update, ...queryBody } = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...queryBody,
@@ -257,7 +257,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'upsertOne', authStrategy)
           if (!repository.upsertOne)
-            throw new ServerError('This resource does not support upsert.', 501)
+            throw new HttpError('This resource does not support upsert.', 501)
           const id = parseId(req.params['id'])
           const result = await repository.upsertOne(id, req.body as never)
           await res.status(200).json(result)
@@ -289,7 +289,7 @@ export function registerCrudApi(
         wrap(async (req, res) => {
           await authorizeRequest(req, resource, 'deleteMany', authStrategy)
           if (!repository.deleteMany)
-            throw new ServerError('This resource does not support deleteMany.', 501)
+            throw new HttpError('This resource does not support deleteMany.', 501)
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
             ...body,

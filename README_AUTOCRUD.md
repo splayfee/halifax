@@ -154,6 +154,46 @@ POST /
 
 Returns 201. Whether the created records are returned depends on the repository's `supportsCreateManyReturn` capability (see [README_REPOSITORIES.md](./README_REPOSITORIES.md)).
 
+## HTTP Headers
+
+### Content Negotiation (Accept)
+
+All routes check the `Accept` header. Requests that explicitly exclude `application/json` receive **406 Not Acceptable**. Requests with no `Accept` header, `*/*`, or `application/*` proceed normally.
+
+```
+# These work:
+Accept: application/json
+Accept: */*
+Accept: application/json, text/html;q=0.5
+# (no header) — works
+
+# This fails with 406:
+Accept: text/html
+```
+
+### X-Correlation-ID
+
+If the request includes an `X-Correlation-ID` header, the same value is echoed back in the response. Use this to correlate log entries across services.
+
+```
+# Request
+X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000
+
+# Response includes:
+X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000
+```
+
+### Idempotency-Key (POST create)
+
+Pass an `Idempotency-Key` header on POST create requests. The key is forwarded to the repository via `CreateOptions.idempotencyKey` — repositories that support idempotent creation can use it to deduplicate concurrent or retried requests.
+
+```
+POST /api/v1/posts
+Idempotency-Key: my-client-generated-uuid
+```
+
+The router itself does not enforce uniqueness; deduplication is the repository's responsibility.
+
 ## Error Response Shape
 
 All errors follow the same envelope:
