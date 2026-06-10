@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { PrismaAdapter } from '@/adapters/orm/PrismaAdapter.js'
+import type { ModelSchema } from '@/core/types.js'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 
 type Row = { id: number; email: string }
@@ -339,5 +340,55 @@ describe('PrismaAdapter — executeQueryBuilder (native SQL)', () => {
     const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.executeQueryBuilder({ tableName: 'users' })
     expect(result.count).toBe(42)
+  })
+})
+
+describe('PrismaAdapter — schema introspection', () => {
+  const model: ModelSchema = {
+    fields: [
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true },
+      { name: 'email', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false },
+      { name: 'createdAt', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: true },
+      { name: 'authorId', kind: 'scalar', isId: false, isReadOnly: true, hasDefault: false },
+      { name: 'author', kind: 'object', isId: false, isReadOnly: false, hasDefault: false },
+      { name: 'posts', kind: 'object', isId: false, isReadOnly: false, hasDefault: false }
+    ]
+  }
+
+  it('fieldsFromModel excludes relation fields', () => {
+    const fields = PrismaAdapter.fieldsFromModel(model)
+    expect(fields.map((f) => f.name)).toEqual(['id', 'email', 'createdAt', 'authorId'])
+  })
+
+  it('fieldsFromModel marks id and readOnly fields as non-writable', () => {
+    const fields = PrismaAdapter.fieldsFromModel(model)
+    const byName = Object.fromEntries(fields.map((f) => [f.name, f]))
+    expect(byName.id.writable).toBe(false)
+    expect(byName.email.writable).toBe(true)
+    expect(byName.createdAt.writable).toBe(true)
+    expect(byName.authorId.writable).toBe(false)
+  })
+
+  it('fieldsFromModel sets filterable and sortable true for all scalar fields', () => {
+    const fields = PrismaAdapter.fieldsFromModel(model)
+    expect(fields.every((f) => f.filterable === true && f.sortable === true)).toBe(true)
+  })
+
+  it('relationsFromModel returns only relation fields as includable', () => {
+    const relations = PrismaAdapter.relationsFromModel(model)
+    expect(relations.map((r) => r.name)).toEqual(['author', 'posts'])
+    expect(relations.every((r) => r.includable === true)).toBe(true)
+  })
+
+  it('populates fields and relations on the adapter when model is provided', () => {
+    const a = new PrismaAdapter({ delegate: makeDelegate(), model })
+    expect(a.fields).toHaveLength(4)
+    expect(a.relations).toHaveLength(2)
+  })
+
+  it('leaves fields and relations undefined when no model is provided', () => {
+    const a = new PrismaAdapter({ delegate: makeDelegate() })
+    expect(a.fields).toBeUndefined()
+    expect(a.relations).toBeUndefined()
   })
 })

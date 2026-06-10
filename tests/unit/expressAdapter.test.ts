@@ -397,6 +397,24 @@ describe('createExpressCrudRouter — field security', () => {
     expect(res.status).toBe(200)
     expect(res.body.role).not.toBe('superadmin')
   })
+
+  it('returns 422 when create body contains an unknown field', async () => {
+    const res = await request(createSecuredApp())
+      .post('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .send({ email: 'new@example.com', injected: 'malicious' })
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].message).toMatch(/unknown field/i)
+  })
+
+  it('returns 422 when update body contains an unknown field', async () => {
+    const res = await request(createSecuredApp())
+      .patch('/api/v1/users/1')
+      .set('x-api-key', 'secret')
+      .send({ email: 'x@example.com', unknownField: 'bad' })
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].message).toMatch(/unknown field/i)
+  })
 })
 
 describe('createExpressCrudRouter — limit constraints', () => {

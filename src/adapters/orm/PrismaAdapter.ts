@@ -10,6 +10,7 @@ import type {
   NativeQueryResult,
   UpdateManyResult
 } from '@/core/repository.js'
+import type { FieldDefinition, RelationDefinition, ModelField, ModelSchema } from '@/core/types.js'
 import { ServerError } from '@/errors/ServerError.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,6 +55,8 @@ export interface PrismaAdapterOptions<
   tableName?: string
   /** When true, createMany falls back to serial createOne calls so records are returned. */
   returnCreated?: boolean
+  /** Prisma DMMF model — when provided, fields and relations are derived automatically. */
+  model?: ModelSchema
 }
 
 function toSelect(fields?: string[]): Record<string, boolean> | undefined {
@@ -104,6 +107,10 @@ export class PrismaAdapter<
   private readonly returnCreated: boolean
 
   public readonly capabilities: RepositoryCapabilities
+  /** Field definitions derived from the DMMF model, if one was provided. */
+  public readonly fields: FieldDefinition[] | undefined
+  /** Relation definitions derived from the DMMF model, if one was provided. */
+  public readonly relations: RelationDefinition[] | undefined
 
   public constructor(options: PrismaAdapterOptions<TRecord, TCreate, TUpdate>) {
     this.delegate = options.delegate
@@ -119,6 +126,30 @@ export class PrismaAdapter<
       supportsCreateManyReturn: this.returnCreated,
       supportsNoSqlQueryAst: false
     }
+
+    if (options.model) {
+      this.fields = PrismaAdapter.fieldsFromModel(options.model)
+      this.relations = PrismaAdapter.relationsFromModel(options.model)
+    }
+  }
+
+  /** Derives FieldDefinition[] from a Prisma DMMF model. Relation fields are excluded. */
+  public static fieldsFromModel(model: ModelSchema): FieldDefinition[] {
+    return model.fields
+      .filter((f) => f.kind !== 'object')
+      .map((f) => ({
+        name: f.name,
+        filterable: true,
+        sortable: true,
+        writable: !f.isId && !f.isReadOnly
+      }))
+  }
+
+  /** Derives RelationDefinition[] from a Prisma DMMF model. Only relation fields are included. */
+  public static relationsFromModel(model: ModelSchema): RelationDefinition[] {
+    return model.fields
+      .filter((f) => f.kind === 'object')
+      .map((f) => ({ name: f.name, includable: true }))
   }
 
   public async getOne(

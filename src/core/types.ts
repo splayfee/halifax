@@ -23,6 +23,18 @@ export interface CrudPermissions {
   allowDeleteMany?: boolean
 }
 
+export interface ModelField {
+  name: string
+  kind: string
+  isId: boolean
+  isReadOnly: boolean
+  hasDefault: boolean
+}
+
+export interface ModelSchema {
+  fields: ModelField[]
+}
+
 export interface FieldDefinition {
   name: string
   filterable?: boolean
