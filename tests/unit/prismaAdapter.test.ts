@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { PrismaAdapter } from '@/adapters/orm/PrismaAdapter.js'
+import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/PrismaAdapter.js'
 import type { ModelSchema } from '@/core/types.js'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 
@@ -390,5 +390,124 @@ describe('PrismaAdapter — schema introspection', () => {
     const a = new PrismaAdapter({ delegate: makeDelegate() })
     expect(a.fields).toBeUndefined()
     expect(a.relations).toBeUndefined()
+  })
+})
+
+describe('createPrismaResources', () => {
+  const userModel = {
+    name: 'User',
+    dbName: 'users',
+    fields: [
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true },
+      { name: 'email', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false },
+      { name: 'posts', kind: 'object', isId: false, isReadOnly: false, hasDefault: false }
+    ]
+  }
+
+  const blogPostModel = {
+    name: 'BlogPost',
+    dbName: 'blog_posts',
+    fields: [
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true },
+      { name: 'title', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false }
+    ]
+  }
+
+  const auditLogModel = {
+    name: 'AuditLog',
+    dbName: 'audit_logs',
+    fields: [
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true }
+    ]
+  }
+
+  function makeClient() {
+    return {
+      user: makeDelegate(),
+      blogPost: makeDelegate(),
+      auditLog: makeDelegate(),
+      $queryRawUnsafe: vi.fn()
+    }
+  }
+
+  it('generates a resource for each model', () => {
+    const resources = createPrismaResources(makeClient(), [userModel, blogPostModel])
+    expect(resources).toHaveLength(2)
+    expect(resources.map((r) => r.name)).toEqual(['User', 'BlogPost'])
+  })
+
+  it('derives routePrefix via kebab-case pluralisation', () => {
+    const resources = createPrismaResources(makeClient(), [userModel, blogPostModel])
+    expect(resources[0].routePrefix).toBe('users')
+    expect(resources[1].routePrefix).toBe('blog-posts')
+  })
+
+  it('uses dbName as tableName when available', () => {
+    const resources = createPrismaResources(makeClient(), [userModel])
+    expect(resources[0].tableName).toBe('users')
+  })
+
+  it('falls back to model name when dbName is absent', () => {
+    const model = { name: 'User', fields: userModel.fields }
+    const resources = createPrismaResources(makeClient(), [model])
+    expect(resources[0].tableName).toBe('User')
+  })
+
+  it('excludes models marked exclude: true', () => {
+    const resources = createPrismaResources(
+      makeClient(),
+      [userModel, blogPostModel, auditLogModel],
+      { models: { AuditLog: { exclude: true } } }
+    )
+    expect(resources.map((r) => r.name)).toEqual(['User', 'BlogPost'])
+  })
+
+  it('applies per-model permission overrides', () => {
+    const resources = createPrismaResources(makeClient(), [userModel], {
+      models: { User: { permissions: { allowDeleteOne: false, allowDeleteMany: false } } }
+    })
+    expect(resources[0].permissions?.allowDeleteOne).toBe(false)
+    expect(resources[0].permissions?.allowDeleteMany).toBe(false)
+    expect(resources[0].permissions?.allowCreate).toBeUndefined()
+  })
+
+  it('applies global permission overrides to all resources', () => {
+    const resources = createPrismaResources(makeClient(), [userModel, blogPostModel], {
+      permissions: { allowDeleteOne: false }
+    })
+    expect(resources[0].permissions?.allowDeleteOne).toBe(false)
+    expect(resources[1].permissions?.allowDeleteOne).toBe(false)
+  })
+
+  it('per-model permissions override global permissions', () => {
+    const resources = createPrismaResources(makeClient(), [userModel], {
+      permissions: { allowDeleteOne: false },
+      models: { User: { permissions: { allowDeleteOne: true } } }
+    })
+    expect(resources[0].permissions?.allowDeleteOne).toBe(true)
+  })
+
+  it('applies defaultLimit and maxLimit globally', () => {
+    const resources = createPrismaResources(makeClient(), [userModel], {
+      defaultLimit: 25,
+      maxLimit: 100
+    })
+    expect(resources[0].defaultLimit).toBe(25)
+    expect(resources[0].maxLimit).toBe(100)
+  })
+
+  it('per-model defaultLimit overrides global', () => {
+    const resources = createPrismaResources(makeClient(), [userModel], {
+      defaultLimit: 25,
+      models: { User: { defaultLimit: 10 } }
+    })
+    expect(resources[0].defaultLimit).toBe(10)
+  })
+
+  it('allows per-model routePrefix override', () => {
+    const resources = createPrismaResources(makeClient(), [userModel], {
+      models: { User: { routePrefix: 'members' } }
+    })
+    expect(resources[0].routePrefix).toBe('members')
   })
 })

@@ -10,7 +10,15 @@ import type {
   NativeQueryResult,
   UpdateManyResult
 } from '@/core/repository.js'
-import type { FieldDefinition, RelationDefinition, ModelField, ModelSchema } from '@/core/types.js'
+import type {
+  FieldDefinition,
+  RelationDefinition,
+  ModelField,
+  ModelSchema,
+  ModelResourceOptions,
+  ResourceDefinition,
+  CrudPermissions
+} from '@/core/types.js'
 import { ServerError } from '@/errors/ServerError.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -313,5 +321,78 @@ export class PrismaAdapter<
       results
     }
   }
+}
+
+export interface CreatePrismaResourcesOptions {
+  /** Per-model overrides. Key is the Prisma model name (e.g. 'User', 'BlogPost'). */
+  models?: Record<string, ModelResourceOptions>
+  /** Permission overrides applied to every resource (before per-model overrides). */
+  permissions?: CrudPermissions
+  defaultLimit?: number
+  maxLimit?: number
+  /** Primary key field name for every model (default: 'id'). */
+  idField?: string
+  /** When true, createMany returns created records via serial inserts (default: false). */
+  returnCreated?: boolean
+}
+
+function toRoutePrefix(modelName: string): string {
+  const kebab = modelName.replace(/([A-Z])/g, (m, l, i) => (i > 0 ? '-' : '') + l.toLowerCase())
+  if (kebab.endsWith('y') && !/[aeiou]y$/.test(kebab)) return kebab.slice(0, -1) + 'ies'
+  if (/(?:s|x|z|ch|sh)$/.test(kebab)) return kebab + 'es'
+  return kebab + 's'
+}
+
+/**
+ * Generates a ResourceDefinition for every model in the provided schema, with all
+ * CRUD operations enabled by default. Pass per-model overrides to exclude models,
+ * restrict permissions, or customise routing.
+ *
+ * @example
+ * import { Prisma } from '@prisma/client'
+ * const resources = createPrismaResources(prisma, Prisma.dmmf.datamodel.models, {
+ *   models: { AuditLog: { exclude: true } },
+ *   defaultLimit: 50
+ * })
+ */
+export function createPrismaResources(
+  prismaClient: object,
+  schema: ReadonlyArray<{ name: string; dbName?: string | null; fields: ModelField[] }>,
+  options: CreatePrismaResourcesOptions = {}
+): ResourceDefinition[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = prismaClient as any
+
+  return schema
+    .filter((model) => !options.models?.[model.name]?.exclude)
+    .map((model) => {
+      const modelOpts = options.models?.[model.name] ?? {}
+      const tableName = modelOpts.tableName ?? model.dbName ?? model.name
+      const routePrefix = modelOpts.routePrefix ?? toRoutePrefix(model.name)
+      const delegateKey = model.name.charAt(0).toLowerCase() + model.name.slice(1)
+
+      const adapter = new PrismaAdapter({
+        delegate: client[delegateKey] as PrismaDelegate,
+        client: client as PrismaNativeClient,
+        tableName,
+        idField: options.idField,
+        returnCreated: options.returnCreated,
+        model
+      })
+
+      return {
+        name: model.name,
+        routePrefix,
+        tableName,
+        fields: adapter.fields!,
+        relations: adapter.relations,
+        repository: adapter,
+        permissions: { ...options.permissions, ...modelOpts.permissions },
+        requiredPermissions: modelOpts.requiredPermissions,
+        defaultLimit: modelOpts.defaultLimit ?? options.defaultLimit,
+        maxLimit: modelOpts.maxLimit ?? options.maxLimit,
+        maxFilterDepth: modelOpts.maxFilterDepth
+      } satisfies ResourceDefinition
+    })
 }
 
