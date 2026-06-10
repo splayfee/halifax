@@ -30,3 +30,6 @@ node_modules
 Thumbs.db
 src/config/server-ca.pem
 tsconfig.tsbuildinfo
+
+# Prisma query engine binaries (generated at install time)
+node_modules/.prisma/

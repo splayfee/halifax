@@ -59,7 +59,10 @@ export function validateIncludes(resource: ResourceDefinition, includes: string[
   }
 }
 
-export function validateQueryString(resource: ResourceDefinition, query: Record<string, unknown>): void {
+export function validateQueryString(
+  resource: ResourceDefinition,
+  query: Record<string, unknown>
+): void {
   const validProps = new Set([...getFieldNames(resource), ...reservedQueryStringProperties])
   const invalidProps = Object.keys(query).filter((property) => {
     return !validProps.has(property)

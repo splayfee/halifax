@@ -1,7 +1,12 @@
 import { SqlOrder } from '@/enums/SqlOrder.js'
 import { PayloadError } from '@/errors/PayloadError.js'
 import type { ListOptions, ResourceDefinition } from '@/core/types.js'
-import { isValidInt32, validateFields, validateIncludes, validateQueryString } from '@/core/validation.js'
+import {
+  isValidInt32,
+  validateFields,
+  validateIncludes,
+  validateQueryString
+} from '@/core/validation.js'
 
 function parseInteger(value: unknown, property: string, min = 1): number | undefined {
   if (value === undefined) return undefined
@@ -13,10 +18,16 @@ function parseInteger(value: unknown, property: string, min = 1): number | undef
 function parseCsv(value: unknown): string[] | undefined {
   const raw = Array.isArray(value) ? value.join(',') : value
   if (typeof raw !== 'string' || !raw.trim()) return undefined
-  return raw.split(',').map((item) => item.trim()).filter(Boolean)
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
-export function parseListOptions(query: Record<string, unknown>, resource: ResourceDefinition): ListOptions {
+export function parseListOptions(
+  query: Record<string, unknown>,
+  resource: ResourceDefinition
+): ListOptions {
   validateQueryString(resource, query)
 
   const fields = parseCsv(query.fields)
@@ -44,7 +55,8 @@ export function parseListOptions(query: Record<string, unknown>, resource: Resou
     offset,
     where,
     orderBy: order?.map((item) => {
-      if (item.startsWith('-')) return { field: item.substring(1), direction: SqlOrder.DESC.toLowerCase() as 'desc' }
+      if (item.startsWith('-'))
+        return { field: item.substring(1), direction: SqlOrder.DESC.toLowerCase() as 'desc' }
       return { field: item, direction: SqlOrder.ASC.toLowerCase() as 'asc' }
     })
   }

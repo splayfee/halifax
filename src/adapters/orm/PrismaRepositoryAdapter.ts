@@ -10,7 +10,11 @@ import type {
   UpdateManyResult
 } from '@/core/repository.js'
 
-export interface PrismaDelegate<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> {
+export interface PrismaDelegate<
+  TRecord = unknown,
+  TCreate = Partial<TRecord>,
+  TUpdate = Partial<TRecord>
+> {
   findUnique?(args: Record<string, unknown>): Promise<TRecord | null>
   findFirst?(args: Record<string, unknown>): Promise<TRecord | null>
   findMany(args?: Record<string, unknown>): Promise<TRecord[]>
@@ -33,7 +37,11 @@ export interface PrismaNativeClient {
   $executeRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>
 }
 
-export interface PrismaRepositoryAdapterOptions<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> {
+export interface PrismaRepositoryAdapterOptions<
+  TRecord = unknown,
+  TCreate = Partial<TRecord>,
+  TUpdate = Partial<TRecord>
+> {
   delegate: PrismaDelegate<TRecord, TCreate, TUpdate>
   client?: PrismaNativeClient
   idField?: string
@@ -64,7 +72,9 @@ function toInclude(include?: string[]): Record<string, boolean> | undefined {
   )
 }
 
-function toOrderBy(orderBy?: ListOptions['orderBy']): Array<Record<string, 'asc' | 'desc'>> | undefined {
+function toOrderBy(
+  orderBy?: ListOptions['orderBy']
+): Array<Record<string, 'asc' | 'desc'>> | undefined {
   if (!orderBy?.length) {
     return undefined
   }
@@ -74,9 +84,11 @@ function toOrderBy(orderBy?: ListOptions['orderBy']): Array<Record<string, 'asc'
   })
 }
 
-export class PrismaRepositoryAdapter<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>>
-  implements Repository<TRecord, TCreate, TUpdate>
-{
+export class PrismaRepositoryAdapter<
+  TRecord = unknown,
+  TCreate = Partial<TRecord>,
+  TUpdate = Partial<TRecord>
+> implements Repository<TRecord, TCreate, TUpdate> {
   private readonly delegate: PrismaDelegate<TRecord, TCreate, TUpdate>
   private readonly client?: PrismaNativeClient | undefined
   private readonly idField: string
@@ -93,11 +105,11 @@ export class PrismaRepositoryAdapter<TRecord = unknown, TCreate = Partial<TRecor
     id: string | number,
     options?: Pick<ListOptions, 'fields' | 'include'>
   ): Promise<TRecord | null> {
-    const args = {
-      where: { [this.idField]: id },
-      select: toSelect(options?.fields),
-      include: toInclude(options?.include)
-    }
+    const select = toSelect(options?.fields)
+    const include = toInclude(options?.include)
+    const args: Record<string, unknown> = { where: { [this.idField]: id } }
+    if (select) args.select = select
+    else if (include) args.include = include
 
     if (this.delegate.findUnique) {
       return await this.delegate.findUnique(args)
@@ -111,14 +123,16 @@ export class PrismaRepositoryAdapter<TRecord = unknown, TCreate = Partial<TRecor
   }
 
   public async getMany(options: ListOptions = {}): Promise<ListResult<TRecord>> {
-    const args = {
+    const select = toSelect(options.fields)
+    const include = toInclude(options.include)
+    const args: Record<string, unknown> = {
       where: options.where,
-      select: toSelect(options.fields),
-      include: toInclude(options.include),
       orderBy: toOrderBy(options.orderBy),
       skip: options.offset,
       take: options.limit
     }
+    if (select) args.select = select
+    else if (include) args.include = include
 
     const [count, results] = await Promise.all([
       this.delegate.count({ where: options.where }),
@@ -162,7 +176,11 @@ export class PrismaRepositoryAdapter<TRecord = unknown, TCreate = Partial<TRecor
       { ...query, tableName: query.tableName || this.tableName },
       data as Record<string, unknown>
     )
-    const selectQuery = QueryBuilder.buildSelectQuery({ ...query, tableName: query.tableName || this.tableName, fields: ['id'] })
+    const selectQuery = QueryBuilder.buildSelectQuery({
+      ...query,
+      tableName: query.tableName || this.tableName,
+      fields: ['id']
+    })
     const selected = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
       selectQuery.statement,
       ...selectQuery.parameters

@@ -28,8 +28,15 @@ export interface NativeQueryResult<TRecord> {
   results: TRecord[]
 }
 
-export interface Repository<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> {
-  getOne(id: string | number, options?: Pick<ListOptions, 'fields' | 'include'>): Promise<TRecord | null>
+export interface Repository<
+  TRecord = unknown,
+  TCreate = Partial<TRecord>,
+  TUpdate = Partial<TRecord>
+> {
+  getOne(
+    id: string | number,
+    options?: Pick<ListOptions, 'fields' | 'include'>
+  ): Promise<TRecord | null>
   getMany(options?: ListOptions): Promise<ListResult<TRecord>>
   createOne(data: TCreate): Promise<TRecord>
   createMany(data: TCreate[]): Promise<TRecord[]>
@@ -41,8 +48,8 @@ export interface Repository<TRecord = unknown, TCreate = Partial<TRecord>, TUpda
   executeQueryBuilder?(query: IQueryOptions): Promise<NativeQueryResult<TRecord>>
 }
 
-export type DataAdapter<TRecord = unknown, TCreate = Partial<TRecord>, TUpdate = Partial<TRecord>> = Repository<
-  TRecord,
-  TCreate,
-  TUpdate
->
+export type DataAdapter<
+  TRecord = unknown,
+  TCreate = Partial<TRecord>,
+  TUpdate = Partial<TRecord>
+> = Repository<TRecord, TCreate, TUpdate>
