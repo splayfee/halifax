@@ -160,6 +160,39 @@ export class PassportJwtStrategy implements AuthStrategy {
 export class Auth0JwtStrategy extends JwtClaimsAuthStrategy {}
 export class FirebaseJwtStrategy extends JwtClaimsAuthStrategy {}
 
+/**
+ * Auth strategy for Passport session cookie authentication.
+ *
+ * Passport's session middleware runs before Halifax and populates `req.user`
+ * automatically — this strategy simply reads that value and maps it to an
+ * AuthContext. No passport instance is needed here.
+ *
+ * Prerequisites (in your Express app, before mounting Halifax):
+ *   app.use(session({ ... }))
+ *   app.use(passport.initialize())
+ *   app.use(passport.session())
+ */
+export class PassportSessionStrategy implements AuthStrategy {
+  private readonly mapUser: (user: unknown) => AuthContext
+
+  public constructor(mapUser?: (user: unknown) => AuthContext) {
+    this.mapUser = mapUser ?? defaultMapUser
+  }
+
+  public authenticate(req: HttpRequest): AuthContext {
+    const user = req.raw != null ? (req.raw as Record<string, unknown>)['user'] : undefined
+    if (!user) throw new AuthenticationError('Not authenticated')
+    return this.mapUser(user)
+  }
+
+  public authorize(params: AuthorizeParams): boolean {
+    if (!params.requiredPermissions.length) return true
+    const permissions = new Set(params.auth.permissions ?? [])
+    const roles = new Set(params.auth.roles ?? [])
+    return params.requiredPermissions.every((p) => permissions.has(p) || roles.has(p))
+  }
+}
+
 export type AuthProvider = AuthStrategy
 export const AllowAllAuthProvider = AllowAllAuthStrategy
 export const ApiKeyAuthProvider = ApiKeyAuthStrategy
