@@ -57,6 +57,7 @@ export interface ResourceDefinition<
 
 export type { Repository, RepositoryCapabilities } from './repository.js'
 export type {
+  CreateOptions,
   ListOptions,
   ListResult,
   DeleteManyResult,

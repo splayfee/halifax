@@ -12,6 +12,7 @@ export interface HttpResponse<TRaw = unknown> {
   status(code: number): HttpResponse<TRaw>
   json(payload: unknown): void | Promise<void>
   send?(payload?: unknown): void | Promise<void>
+  setHeader?(name: string, value: string): void
   raw: TRaw
 }
 

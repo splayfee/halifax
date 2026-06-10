@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createExpressCrudRouter } from '@/adapters/http/express.js'
 import { ApiKeyAuthStrategy } from '@/auth/AuthStrategy.js'
 import type { ResourceDefinition } from '@/core/types.js'
-import type { Repository, ListResult } from '@/core/repository.js'
+import type { Repository, ListResult, CreateOptions } from '@/core/repository.js'
 
 type User = { id: number; email: string }
 
@@ -411,5 +411,136 @@ describe('createExpressCrudRouter — limit constraints', () => {
       .set('x-api-key', 'secret')
     expect(res.status).toBe(200)
     expect(res.body.results).toHaveLength(3)
+  })
+})
+
+describe('createExpressCrudRouter — HTTP 406', () => {
+  it('returns 406 when Accept excludes application/json', async () => {
+    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret').set('Accept', 'text/html')
+    expect(res.status).toBe(406)
+  })
+
+  it('returns 406 for Accept: text/plain, text/html', async () => {
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Accept', 'text/plain, text/html')
+    expect(res.status).toBe(406)
+  })
+
+  it('allows Accept: */*', async () => {
+    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret').set('Accept', '*/*')
+    expect(res.status).toBe(200)
+  })
+
+  it('allows Accept: application/json', async () => {
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Accept', 'application/json')
+    expect(res.status).toBe(200)
+  })
+
+  it('allows Accept: application/json, */*', async () => {
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('Accept', 'application/json, */*')
+    expect(res.status).toBe(200)
+  })
+
+  it('allows requests with no Accept header', async () => {
+    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret').unset('Accept')
+    expect(res.status).toBe(200)
+  })
+})
+
+describe('createExpressCrudRouter — X-Correlation-ID', () => {
+  it('echoes X-Correlation-ID in a success response', async () => {
+    const res = await request(createApp())
+      .get('/api/v1/users')
+      .set('x-api-key', 'secret')
+      .set('X-Correlation-ID', 'trace-abc')
+    expect(res.status).toBe(200)
+    expect(res.headers['x-correlation-id']).toBe('trace-abc')
+  })
+
+  it('echoes X-Correlation-ID in an error response', async () => {
+    const res = await request(createApp())
+      .get('/api/v1/users/not-a-valid-id')
+      .set('x-api-key', 'secret')
+      .set('X-Correlation-ID', 'trace-xyz')
+    expect(res.status).toBe(400)
+    expect(res.headers['x-correlation-id']).toBe('trace-xyz')
+  })
+
+  it('does not set X-Correlation-ID when the header is absent', async () => {
+    const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret')
+    expect(res.headers['x-correlation-id']).toBeUndefined()
+  })
+})
+
+describe('createExpressCrudRouter — Idempotency-Key', () => {
+  function createIdempotencyApp() {
+    const app = express()
+    app.use(express.json())
+
+    let capturedKey: string | undefined
+
+    const repo: Repository<User, Partial<User>, Partial<User>> = {
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne(data: Partial<User>, options?: CreateOptions) {
+        capturedKey = options?.idempotencyKey
+        return { id: 1, email: (data as User).email ?? '' }
+      },
+      async createMany(data: Partial<User>[], options?: CreateOptions) {
+        capturedKey = options?.idempotencyKey
+        return data.map((d) => ({ id: 1, email: (d as User).email ?? '' }))
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      },
+    }
+
+    const resource: ResourceDefinition = {
+      name: 'User',
+      routePrefix: 'users',
+      fields: [{ name: 'id' }, { name: 'email' }],
+      permissions: { allowCreate: true },
+      repository: repo,
+    }
+
+    app.use('/api/v1', createExpressCrudRouter([resource]))
+
+    return { app, getKey: () => capturedKey }
+  }
+
+  it('passes Idempotency-Key to repository createOne', async () => {
+    const { app, getKey } = createIdempotencyApp()
+    await request(app).post('/api/v1/users').send({ email: 'x@x.com' }).set('Idempotency-Key', 'key-abc-123')
+    expect(getKey()).toBe('key-abc-123')
+  })
+
+  it('passes Idempotency-Key to repository createMany', async () => {
+    const { app, getKey } = createIdempotencyApp()
+    await request(app)
+      .post('/api/v1/users')
+      .send([{ email: 'a@x.com' }, { email: 'b@x.com' }])
+      .set('Idempotency-Key', 'batch-key-456')
+    expect(getKey()).toBe('batch-key-456')
+  })
+
+  it('passes undefined options when Idempotency-Key is absent', async () => {
+    const { app, getKey } = createIdempotencyApp()
+    await request(app).post('/api/v1/users').send({ email: 'x@x.com' })
+    expect(getKey()).toBeUndefined()
   })
 })

@@ -38,6 +38,9 @@ function adaptResponse(res: Response): HttpResponse<Response> {
     },
     send(payload?: unknown) {
       res.send(payload)
+    },
+    setHeader(name: string, value: string) {
+      res.setHeader(name, value)
     }
   }
 }
