@@ -1,3 +1,4 @@
+/** SQL comparison operators used in query-builder WHERE clauses. */
 export enum SqlComparison {
   Between = 'BETWEEN',
   Equal = '=',

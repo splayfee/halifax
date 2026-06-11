@@ -10,6 +10,12 @@ import type { ResourceDefinition } from '@/core/types.js'
 
 const reservedQueryStringProperties = ['fields', 'limit', 'offset', 'order', 'include']
 
+/**
+ * Returns `true` when `value` is a safe 32-bit integer >= `min`.
+ * @param value - Raw value to test (string or number).
+ * @param min - Inclusive lower bound (default: `1`).
+ * @returns `true` when value is a valid integer within the 32-bit range and >= min.
+ */
 export function isValidInt32(value: string | number | null, min = 1): boolean {
   if (value === null || value === undefined) {
     return false
@@ -18,10 +24,20 @@ export function isValidInt32(value: string | number | null, min = 1): boolean {
   return Number.isSafeInteger(normalized) && normalized >= min && normalized <= 2147483647
 }
 
+/**
+ * Returns `true` when `value` is a valid RFC 4122 UUID.
+ * @param value - String to test.
+ * @returns `true` when `value` matches the UUID format.
+ */
 export function isValidUuid(value: string): boolean {
   return uuidValidate(value)
 }
 
+/**
+ * Asserts that `value` is a valid integer ID or UUID string.
+ * Throws {@link BadRequestError} when validation fails.
+ * @param value - Raw `:id` route parameter to validate.
+ */
 export function validateId(value: string | number | undefined): asserts value is string | number {
   if (value === undefined) {
     throw new BadRequestError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
@@ -33,12 +49,22 @@ export function validateId(value: string | number | undefined): asserts value is
   }
 }
 
+/**
+ * Returns the list of field names defined on a resource.
+ * @param resource - The resource definition to extract field names from.
+ * @returns Array of field name strings.
+ */
 export function getFieldNames(resource: ResourceDefinition): string[] {
   return resource.fields.map((field) => {
     return field.name
   })
 }
 
+/**
+ * Throws {@link UnprocessableEntityError} when any of `fields` are not defined on the resource.
+ * @param resource - The resource definition to validate against.
+ * @param fields - Field names to validate (empty array is a no-op).
+ */
 export function validateFields(resource: ResourceDefinition, fields: string[] = []): void {
   const validFields = new Set(getFieldNames(resource))
   const invalidFields = fields.filter((field) => {
@@ -50,6 +76,11 @@ export function validateFields(resource: ResourceDefinition, fields: string[] = 
   }
 }
 
+/**
+ * Throws {@link UnprocessableEntityError} when any of `fields` have `selectable: false`.
+ * @param resource - The resource definition to validate against.
+ * @param fields - Field names to check for selectability.
+ */
 export function validateSelectableFields(resource: ResourceDefinition, fields: string[]): void {
   const nonSelectable = fields.filter((name) => {
     const field = resource.fields.find((f) => f.name === name)
@@ -60,6 +91,11 @@ export function validateSelectableFields(resource: ResourceDefinition, fields: s
   }
 }
 
+/**
+ * Throws {@link UnprocessableEntityError} when any of `fields` have `sortable: false`.
+ * @param resource - The resource definition to validate against.
+ * @param fields - Field names to check for sortability.
+ */
 export function validateSortableFields(resource: ResourceDefinition, fields: string[]): void {
   const nonSortable = fields.filter((name) => {
     const field = resource.fields.find((f) => f.name === name)
@@ -70,6 +106,11 @@ export function validateSortableFields(resource: ResourceDefinition, fields: str
   }
 }
 
+/**
+ * Throws {@link UnprocessableEntityError} when any of `includes` reference non-includable relations.
+ * @param resource - The resource definition whose relations are checked.
+ * @param includes - Relation names to validate.
+ */
 export function validateIncludes(resource: ResourceDefinition, includes: string[] = []): void {
   const validIncludes = new Set(
     (resource.relations ?? [])
@@ -90,6 +131,12 @@ export function validateIncludes(resource: ResourceDefinition, includes: string[
   }
 }
 
+/**
+ * Validates that every query-string key is either a reserved parameter or a filterable field.
+ * Throws {@link UnprocessableEntityError} for non-filterable fields or unknown properties.
+ * @param resource - The resource definition whose fields are checked.
+ * @param query - The raw query-string object from the HTTP request.
+ */
 export function validateQueryString(
   resource: ResourceDefinition,
   query: Record<string, unknown>
@@ -121,6 +168,13 @@ export function validateQueryString(
   }
 }
 
+/**
+ * Validates a WHERE clause filter tree against the resource's field definitions.
+ * Throws {@link UnprocessableEntityError} on invalid fields, comparisons, operators, or exceeded nesting depth.
+ * @param resource - The resource definition whose fields and depth limit are used.
+ * @param where - Array of filter conditions to validate.
+ * @param depth - Current recursion depth (used for nesting-limit enforcement; start at `0`).
+ */
 export function validateWhere(
   resource: ResourceDefinition,
   where: IQueryFilter[] = [],
@@ -165,6 +219,12 @@ export function validateWhere(
   })
 }
 
+/**
+ * Validates a full query-builder AST (fields, orderBy, where) against the resource's schema.
+ * Throws {@link UnprocessableEntityError} on any invalid input.
+ * @param resource - The resource definition used for field and relation validation.
+ * @param query - The query AST to validate.
+ */
 export function validateAdvancedQuery(resource: ResourceDefinition, query: IQueryOptions): void {
   if (query.fields) {
     validateFields(resource, query.fields)

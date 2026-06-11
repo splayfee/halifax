@@ -362,7 +362,10 @@ describe('PrismaAdapter — schema introspection', () => {
 
   it('fieldsFromModel marks id and readOnly fields as non-writable', () => {
     const fields = PrismaAdapter.fieldsFromModel(model)
-    const byName = Object.fromEntries(fields.map((f) => [f.name, f])) as Record<string, typeof fields[0]>
+    const byName = Object.fromEntries(fields.map((f) => [f.name, f])) as Record<
+      string,
+      (typeof fields)[0]
+    >
     expect(byName['id']!.writable).toBe(false)
     expect(byName['email']!.writable).toBe(true)
     expect(byName['createdAt']!.writable).toBe(true)
@@ -416,9 +419,7 @@ describe('createPrismaResources', () => {
   const auditLogModel = {
     name: 'AuditLog',
     dbName: 'audit_logs',
-    fields: [
-      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true }
-    ]
+    fields: [{ name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true }]
   }
 
   function makeClient() {

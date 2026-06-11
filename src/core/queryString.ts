@@ -10,6 +10,13 @@ import {
   validateSortableFields
 } from '@/core/validation.js'
 
+/**
+ * Parses and validates a single integer query-string value.
+ * @param value - Raw query-string value (string, number, or array).
+ * @param property - Parameter name used in the error message (e.g. `'limit'`).
+ * @param min - Inclusive lower bound (default: `1`).
+ * @returns The parsed integer, or `undefined` when `value` is absent.
+ */
 function parseInteger(value: unknown, property: string, min = 1): number | undefined {
   if (value === undefined) return undefined
   const parsed = Number(Array.isArray(value) ? value[0] : value)
@@ -19,6 +26,11 @@ function parseInteger(value: unknown, property: string, min = 1): number | undef
   )
 }
 
+/**
+ * Splits a comma-separated string (or array) into a trimmed, non-empty string array.
+ * @param value - Raw query-string value to parse.
+ * @returns Array of trimmed strings, or `undefined` when the input is blank or absent.
+ */
 function parseCsv(value: unknown): string[] | undefined {
   const raw = Array.isArray(value) ? value.join(',') : value
   if (typeof raw !== 'string' || !raw.trim()) return undefined
@@ -28,6 +40,16 @@ function parseCsv(value: unknown): string[] | undefined {
     .filter(Boolean)
 }
 
+/**
+ * Parses and validates the raw query-string from a GET request into typed {@link ListOptions}.
+ *
+ * Validates field names, sort fields, includes, and filter keys against the resource schema.
+ * Applies `defaultLimit` and `maxLimit` from the resource definition when set.
+ *
+ * @param query - The raw query-string object from the HTTP request.
+ * @param resource - The resource definition used for field and relation validation.
+ * @returns Typed list options ready to pass to `repository.getMany()`.
+ */
 export function parseListOptions(
   query: Record<string, unknown>,
   resource: ResourceDefinition
