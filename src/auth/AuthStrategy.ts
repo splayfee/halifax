@@ -1,6 +1,6 @@
 import { AuthenticationError } from '@/errors/AuthenticationError.js'
 import type { CrudAction, ResourceDefinition } from '@/core/types.js'
-import type { HttpRequest } from '@/core/http.js'
+import type { HttpRequest } from '@/core/types.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 
 /** Resolved user identity and access information returned by {@link AuthStrategy.authenticate}. */
@@ -74,14 +74,14 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
    * Checks the API key header and returns an authenticated context.
    * @param req - The incoming HTTP request.
    * @returns An {@link AuthContext} with `isAuthenticated: true`.
-   * @throws {@link AuthorizationError} when the key is missing or incorrect.
+   * @throws {@link AuthenticationError} when the key is absent (401).
+   * @throws {@link AuthorizationError} when the key is present but incorrect (403).
    */
   public authenticate(req: HttpRequest): AuthContext {
     const header = req.headers[this.headerName.toLowerCase()] ?? req.headers[this.headerName]
     const apiKey = Array.isArray(header) ? header[0] : header
-    if (!apiKey || apiKey !== this.expectedApiKey) {
-      throw new AuthorizationError('Invalid API key')
-    }
+    if (!apiKey) throw new AuthenticationError('Missing API key')
+    if (apiKey !== this.expectedApiKey) throw new AuthorizationError('Invalid API key')
     return { isAuthenticated: true }
   }
 }

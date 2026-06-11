@@ -1,5 +1,6 @@
 import { AllowAllAuthStrategy, type AuthStrategy } from '@/auth/AuthStrategy.js'
 import { QueryBuilder } from '@/classes/QueryBuilder.js'
+import { BadRequestError } from '@/errors/BadRequestError.js'
 import { HttpError } from '@/errors/HttpError.js'
 import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
 import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
@@ -7,9 +8,10 @@ import { NotFoundError } from '@/errors/NotFoundError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js'
+import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
-import type { HttpRequest, HttpResponse, HttpServer } from '@/core/http.js'
+import type { HttpRequest, HttpResponse, HttpServer } from '@/core/types.js'
 import { parseListOptions } from '@/core/queryString.js'
 import { validateAdvancedQuery, validateId, isValidUuid } from '@/core/validation.js'
 import { ServerError } from '@/errors/ServerError.js'
@@ -98,6 +100,30 @@ export function normalizeError(error: unknown): {
     return { status: 500, code: 'INTERNAL_ERROR', message: error.message }
   }
   return { status: 500, code: 'INTERNAL_ERROR', message: 'Unknown error' }
+}
+
+/**
+ * Validates that all identifier-shaped values in a preview query are safe SQL identifiers.
+ * Field names and the table name are interpolated directly into SQL strings (not parameterized),
+ * so they must match `[a-zA-Z_][a-zA-Z0-9_.]*` to prevent unexpected SQL fragments.
+ * @param query - The query AST to inspect.
+ * @throws {@link BadRequestError} when any identifier contains disallowed characters.
+ */
+function assertSafePreviewIdentifiers(query: IQueryOptions): void {
+  const safe = /^[a-zA-Z_][a-zA-Z0-9_.]*$/
+  const check = (value: string, label: string) => {
+    if (!safe.test(value)) throw new BadRequestError(`Invalid ${label}: '${value}'.`)
+  }
+  if (query.tableName) check(query.tableName, 'table name')
+  for (const f of query.fields ?? []) check(f, 'field name')
+  for (const s of query.orderBy ?? []) check(s.field, 'sort field')
+  const checkFilters = (filters: IQueryFilter[]) => {
+    for (const f of filters) {
+      if (f.field) check(f.field, 'filter field')
+      if (f.children?.length) checkFilters(f.children)
+    }
+  }
+  checkFilters(query.where ?? [])
 }
 
 /**
@@ -339,6 +365,10 @@ export function registerCrudApi(
             tableName: resource.tableName
           } as IQueryOptions
           validateAdvancedQuery(resource, query)
+          if (!query.where?.length)
+            throw new UnprocessableEntityError(
+              'updateMany requires at least one WHERE filter to prevent unintended bulk updates.'
+            )
           const result = await repository.updateMany(query, update as never)
           await res.status(200).json(result)
         })
@@ -354,7 +384,8 @@ export function registerCrudApi(
           if (!repository.upsertOne)
             throw new NotImplementedError('This resource does not support upsert.')
           const id = parseId(req.params['id'])
-          const result = await repository.upsertOne(id, req.body as never)
+          const body = filterWritableFields(resource, req.body as Record<string, unknown>)
+          const result = await repository.upsertOne(id, body as never)
           await res.status(200).json(result)
         })
       )
@@ -388,6 +419,10 @@ export function registerCrudApi(
             tableName: resource.tableName
           } as IQueryOptions
           validateAdvancedQuery(resource, query)
+          if (!query.where?.length)
+            throw new UnprocessableEntityError(
+              'deleteMany requires at least one WHERE filter to prevent unintended bulk deletes.'
+            )
           const result = await repository.deleteMany(query)
           await res.status(200).json(result)
         })
@@ -433,7 +468,9 @@ export function registerCrudApi(
     'POST',
     previewPath,
     wrap(async (req, res) => {
+      await authStrategy.authenticate(req)
       const query = req.body as IQueryOptions
+      assertSafePreviewIdentifiers(query)
       await res.status(200).json({
         count: QueryBuilder.buildCountQuery(query),
         select: QueryBuilder.buildSelectQuery(query)

@@ -24,9 +24,9 @@ describe('QueryBuilder.buildSelectQuery', () => {
     expect(statement).toMatch(/^SELECT \* FROM posts/)
   })
 
-  it('adds ORDER BY id ASC when orderBy is absent', () => {
+  it('omits ORDER BY when orderBy is absent', () => {
     const { statement } = QueryBuilder.buildSelectQuery({ tableName: 'posts' })
-    expect(statement).toContain('ORDER BY id ASC')
+    expect(statement).not.toContain('ORDER BY')
   })
 
   it('omits OFFSET/FETCH when limit is not set', () => {

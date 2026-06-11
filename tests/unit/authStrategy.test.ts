@@ -7,7 +7,7 @@ import {
   PassportJwtStrategy,
   PassportSessionStrategy
 } from '@/auth/AuthStrategy.js'
-import type { HttpRequest } from '@/core/http.js'
+import type { HttpRequest } from '@/core/types.js'
 
 function req(
   headers: Record<string, string> = {},
@@ -41,8 +41,8 @@ describe('ApiKeyAuthStrategy', () => {
     )
   })
 
-  it('rejects a missing key with an AuthError (403)', () => {
-    expect(() => strategy.authenticate(req({}))).toThrow(expect.objectContaining({ status: 403 }))
+  it('rejects a missing key with AuthenticationError (401)', () => {
+    expect(() => strategy.authenticate(req({}))).toThrow(expect.objectContaining({ status: 401 }))
   })
 
   it('respects a custom header name', () => {

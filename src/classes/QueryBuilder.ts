@@ -47,20 +47,14 @@ function addFrom(tableName?: string): string {
 }
 
 /**
- * Returns the `ORDER BY` clause from the query options.
+ * Returns the `ORDER BY` clause from the query options, or an empty string when no sorts are given.
  * @param queryOptions - Query AST whose `orderBy` array is used.
- * @returns An `ORDER BY ...` SQL fragment, defaulting to `ORDER BY id ASC` when no sorts are given.
+ * @returns An `ORDER BY ...` SQL fragment, or `''` when `orderBy` is absent or empty.
  */
 function addOrderBy(queryOptions: IQueryOptions): string {
   const order: ISort[] = queryOptions.orderBy ?? []
-  const orderClauses = order.map((sort: ISort) => {
-    return `${sort.field} ${sort.order}`
-  })
-
-  if (orderClauses.length === 0) {
-    orderClauses.push('id ASC')
-  }
-
+  const orderClauses = order.map((sort: ISort) => `${sort.field} ${sort.order}`)
+  if (orderClauses.length === 0) return ''
   return `ORDER BY ${orderClauses.join(',')}`
 }
 
