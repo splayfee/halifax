@@ -2,11 +2,11 @@
 
 The query builder exposes an advanced `POST /:resource/query-builder` endpoint that accepts a structured JSON payload and executes parameterized SQL through the adapter's native query path. It is designed for power-user list queries that go beyond simple field filters.
 
-Enable it per-resource with the `allowReadManyWithQueryBuilder` permission:
+It is enabled by default, disable it per-resource with the `allowReadManyWithQueryBuilder` permission:
 
 ```ts
 permissions: {
-  allowReadManyWithQueryBuilder: true,
+  allowReadManyWithQueryBuilder: false,
 }
 ```
 
@@ -70,8 +70,8 @@ Fields are validated against the resource's field definitions. A field with `fil
 | `NOT LIKE`    | `field NOT LIKE $n`           | string                     | —        |
 | `IN`          | `field IN ($n, $m, …)`        | array of scalars           | —        |
 | `NOT IN`      | `field NOT IN ($n, $m, …)`    | array of scalars           | —        |
-| `BETWEEN`     | `field BETWEEN $n AND $m`     | scalar                     | scalar   |
-| `NOT BETWEEN` | `field NOT BETWEEN $n AND $m` | scalar                     | scalar   |
+| `BETWEEN`     | `field BETWEEN $n AND $m`     | string | number            | string | number |
+| `NOT BETWEEN` | `field NOT BETWEEN $n AND $m` | string | number            | string | number |
 | `IS NULL`     | `field IS NULL`               | —                          | —        |
 | `IS NOT NULL` | `field IS NOT NULL`           | —                          | —        |
 

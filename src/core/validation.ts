@@ -180,7 +180,7 @@ export function validateWhere(
   where: IQueryFilter[] = [],
   depth = 0
 ): void {
-  const maxDepth = resource.maxFilterDepth ?? 3
+  const maxDepth = resource.maxFilterDepth ?? 4
   if (depth > maxDepth) {
     throw new UnprocessableEntityError(
       `Filter nesting exceeds the maximum allowed depth of ${maxDepth}.`
