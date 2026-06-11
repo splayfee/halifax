@@ -8,7 +8,7 @@ The package is split into small, replaceable layers — nothing is imported into
 
 | Layer          | Supported                           |
 | -------------- | ----------------------------------- |
-| HTTP server    | Express 5                           |
+| HTTP server    | Express 4/5                           |
 | ORM / database | Prisma 7 + PostgreSQL               |
 | Auth           | API key, JWT/Bearer, Passport + JWT |
 
