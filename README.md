@@ -6,13 +6,18 @@ The package is split into small, replaceable layers — nothing is imported into
 
 ## Current Support
 
-| Layer          | Supported                           |
-| -------------- | ----------------------------------- |
-| HTTP server    | Express 4/5                           |
-| ORM / database | Prisma 7 + PostgreSQL               |
-| Auth           | API key, JWT/Bearer, Passport + JWT |
+| Layer          | Supported                                            |
+| -------------- | ---------------------------------------------------- |
+| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express |
+| ORM / database | Prisma 7 + PostgreSQL                                |
+| Auth           | API key, JWT/Bearer, Passport + JWT                  |
 
-> **Roadmap** — Fastify, Hyper Express, Sequelize, MSSQL, MySQL, and SQLite adapters are planned for future releases.
+Every HTTP adapter is interchangeable and behaves identically — same routes, status codes,
+error-body shape, and content negotiation — so you can switch frameworks without touching
+your resource definitions, auth, or query logic. See
+[README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) for per-framework usage.
+
+> **Roadmap** — Sequelize, MSSQL, MySQL, and SQLite adapters are planned for future releases.
 
 ## Install
 
@@ -74,7 +79,7 @@ app.listen(3000)
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | [README_AUTOCRUD.md](./README_AUTOCRUD.md)           | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes |
 | [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) | Prisma 7 setup, `PrismaAdapter` options, capabilities, custom repositories                    |
-| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express adapter, `createExpressCrudRouter`, custom HTTP adapters                              |
+| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters          |
 | [README_AUTH.md](./README_AUTH.md)                   | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, custom `authorize`      |
 | [README_MULTITENANCY.md](./README_MULTITENANCY.md)   | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour |
 | [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)   | Query builder payload, comparisons, nested filters, `QueryBuilder` class                      |

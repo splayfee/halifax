@@ -44,3 +44,44 @@ jobs:
 
       - name: Unit tests
         run: pnpm run test:unit
+
+  # Full-stack integration tests against a real PostgreSQL: every HTTP adapter (Express,
+  # Fastify, HyperExpress, Ultimate Express) is exercised end-to-end through PrismaAdapter.
+  # `globalSetup` runs `prisma generate` + `prisma db push` against the service container
+  # before any test executes.
+  integration:
+    name: integration (postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: halifax_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `test:integration` loads DATABASE_URL from .env.test via dotenv-cli.
+      - name: Write .env.test
+        run: echo 'DATABASE_URL="postgresql://postgres:postgres@localhost:5432/halifax_test"' > .env.test
+
+      - name: Integration tests
+        run: pnpm run test:integration
