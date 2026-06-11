@@ -49,11 +49,8 @@ const posts: ResourceDefinition = {
     { name: 'published', filterable: true, writable: true }
   ],
   permissions: {
-    allowCreate: true,
-    allowReadOne: true,
-    allowReadMany: true,
-    allowUpdateOne: true,
-    allowDeleteOne: true
+    allowUpdateMany: false,
+    allowDeleteMany: false
   },
   repository: new PrismaAdapter({
     delegate: prisma.post,
@@ -65,7 +62,7 @@ const posts: ResourceDefinition = {
 const app = express()
 app.use(express.json())
 app.use(
-  '/api',
+  '/api/v1',
   createExpressCrudRouter([posts], { authStrategy: new ApiKeyAuthStrategy(process.env.API_KEY!) })
 )
 app.listen(3000)

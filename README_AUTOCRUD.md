@@ -1,6 +1,6 @@
 # Auto CRUD
 
-Halifax generates REST endpoints automatically from a `ResourceDefinition`. Define the resource once; the router registers the routes, validates inputs, enforces field-level security, and handles auth.
+Halifax generates REST endpoints automatically from a `ResourceDefinition`. Define the resource once; the router registers the routes, validates inputs, enforces field-level security, and handles authentication and authorization.
 
 ## Resource Definition
 
@@ -24,12 +24,7 @@ export const postResource: ResourceDefinition = {
   ],
   relations: [{ name: 'author', includable: true }],
   permissions: {
-    allowCreate: true,
-    allowReadOne: true,
-    allowReadMany: true,
-    allowReadManyWithQueryBuilder: true,
-    allowUpdateOne: true,
-    allowDeleteOne: true
+    allowDeleteMany: false
   },
   requiredPermissions: {
     readMany: ['posts.read'],
@@ -48,17 +43,17 @@ Each `permissions` flag enables one route:
 
 | Flag                            | Method   | Path                   |
 | ------------------------------- | -------- | ---------------------- |
-| `allowReadMany`                 | `GET`    | `/posts`               |
-| `allowReadOne`                  | `GET`    | `/posts/:id`           |
-| `allowCreate`                   | `POST`   | `/posts`               |
-| `allowUpdateOne`                | `PATCH`  | `/posts/:id`           |
-| `allowUpdateMany`               | `PATCH`  | `/posts`               |
-| `allowUpsertOne`                | `PUT`    | `/posts/:id`           |
-| `allowDeleteOne`                | `DELETE` | `/posts/:id`           |
-| `allowDeleteMany`               | `DELETE` | `/posts`               |
-| `allowReadManyWithQueryBuilder` | `POST`   | `/posts/query-builder` |
+| `allowReadMany`                 | `GET`    | `../posts`               |
+| `allowReadOne`                  | `GET`    | `../posts/:id`           |
+| `allowCreate`                   | `POST`   | `../posts`               |
+| `allowUpdateOne`                | `PATCH`  | `../posts/:id`           |
+| `allowUpdateMany`               | `PATCH`  | `../posts`               |
+| `allowUpsertOne`                | `PUT`    | `../posts/:id`           |
+| `allowDeleteOne`                | `DELETE` | `../posts/:id`           |
+| `allowDeleteMany`               | `DELETE` | `../posts`               |
+| `allowReadManyWithQueryBuilder` | `POST`   | `../posts/query-builder` |
 
-All flags default to `false` except `allowReadOne` and `allowReadMany`, which default to `true`.
+All endpoint flags default to `true` — only set them explicitly to `false` to restrict access.
 
 ## The `:id` Parameter
 
@@ -217,7 +212,7 @@ The router itself does not enforce uniqueness; deduplication is the repository's
 
 ## Filter Depth Controls
 
-The `?where` / query-builder `children` filter lets callers nest conditions. To prevent abuse, nesting is capped at depth **3** by default. Set `maxFilterDepth` on the resource to override:
+The `?where` / query-builder `children` filter lets callers nest conditions. To prevent abuse, nesting is capped at depth **4** by default. Set `maxFilterDepth` on the resource to override:
 
 ```ts
 {

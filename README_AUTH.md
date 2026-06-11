@@ -164,7 +164,9 @@ class RoleBasedStrategy implements AuthStrategy {
 ## Environment Variables
 
 ```bash
+API_KEY="your-api-key"
+# or
 JWT_SECRET="your-secret-key"
 # or
-API_KEY="your-api-key"
+SESSION_SECRET="your-secret-key"
 ```
