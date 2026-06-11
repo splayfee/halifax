@@ -21,6 +21,26 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./express": {
+      "types": "./dist/adapters/http/ExpressAdapter.d.ts",
+      "import": "./dist/adapters/http/ExpressAdapter.js",
+      "default": "./dist/adapters/http/ExpressAdapter.js"
+    },
+    "./fastify": {
+      "types": "./dist/adapters/http/FastifyAdapter.d.ts",
+      "import": "./dist/adapters/http/FastifyAdapter.js",
+      "default": "./dist/adapters/http/FastifyAdapter.js"
+    },
+    "./hyper-express": {
+      "types": "./dist/adapters/http/HyperExpressAdapter.d.ts",
+      "import": "./dist/adapters/http/HyperExpressAdapter.js",
+      "default": "./dist/adapters/http/HyperExpressAdapter.js"
+    },
+    "./ultimate-express": {
+      "types": "./dist/adapters/http/UltimateExpressAdapter.d.ts",
+      "import": "./dist/adapters/http/UltimateExpressAdapter.js",
+      "default": "./dist/adapters/http/UltimateExpressAdapter.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -57,13 +77,25 @@
   },
   "peerDependencies": {
     "@prisma/client": ">=7.0.0",
-    "express": "^4.17.0 || ^5.0.0"
+    "express": "^4.17.0 || ^5.0.0",
+    "fastify": ">=4.0.0",
+    "hyper-express": ">=6.0.0",
+    "ultimate-express": ">=2.0.0"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
       "optional": true
     },
     "express": {
+      "optional": true
+    },
+    "fastify": {
+      "optional": true
+    },
+    "hyper-express": {
+      "optional": true
+    },
+    "ultimate-express": {
       "optional": true
     }
   },
@@ -80,7 +112,9 @@
     "eslint": "^10.4.1",
     "eslint-config-prettier": "^10.1.8",
     "express": "^5.2.1",
+    "fastify": "^5.8.5",
     "globals": "^17.6.0",
+    "hyper-express": "^6.17.3",
     "pg": "^8.21.0",
     "prettier": "^3.8.4",
     "prisma": "^7.8.0",
@@ -89,6 +123,7 @@
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",
+    "ultimate-express": "^2.1.1",
     "vitest": "^4.1.8"
   },
   "keywords": [
