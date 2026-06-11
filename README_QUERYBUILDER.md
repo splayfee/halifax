@@ -1,16 +1,16 @@
 # Query Builder
 
-The query builder exposes an advanced `POST /:resource/query-builder` endpoint that accepts a structured JSON payload and executes parameterized SQL through the adapter's native query path. It is designed for power-user list queries that go beyond simple field filters.
+The query builder exposes an advanced `POST /:resource/query` endpoint that accepts a structured JSON payload (an AST — abstract syntax tree) describing filters, sorting, pagination, and projection. It lets the front-end compose rich list queries "for free", without the back-end adding custom endpoints. (The path segment defaults to `query`; override it with the `queryBuilderPath` option.)
 
-It is enabled by default, disable it per-resource with the `allowReadManyWithQueryBuilder` permission:
+**Database-agnostic by design.** The payload is fully validated against the resource — every field name, comparison, sort, and nesting depth — and invalid input returns a structured `400`/`422` _before_ any database call. The validated AST is then compiled to portable **Prisma Client** calls (never raw SQL), so the exact same request behaves identically on PostgreSQL, MySQL/MariaDB, SQLite, SQL Server, CockroachDB, and MongoDB. Switch databases by changing only the Prisma `provider` — your client code never changes.
+
+It is enabled by default; disable it per-resource with the `allowReadManyWithQueryBuilder` permission:
 
 ```ts
 permissions: {
   allowReadManyWithQueryBuilder: false,
 }
 ```
-
-The adapter must have a `client` and `tableName` configured; without them the endpoint returns 501.
 
 ## Full Payload Reference
 
@@ -21,11 +21,11 @@ interface QueryPayload {
   orderBy?: SortEntry[] // sort order
   limit?: number // page size
   offset?: number // rows to skip
-  isDistinct?: boolean // emit SELECT DISTINCT
+  distinct?: string[] // return rows distinct on these columns
 }
 ```
 
-> `tableName` is always ignored in the request body for security — the server uses the `tableName` from the resource definition.
+> The query targets the resource's own model — there is no table name in the payload, so a caller can never point the query at another table.
 
 ### `fields`
 
@@ -58,22 +58,27 @@ Fields are validated against the resource's field definitions. A field with `fil
 
 #### Comparisons
 
-| `comparison`  | SQL emitted                   | `value1`                   | `value2` |
-| ------------- | ----------------------------- | -------------------------- | -------- | ------ | ------ |
-| `=`           | `field = $n`                  | scalar                     | —        |
-| `<>`          | `field <> $n`                 | scalar                     | —        |
-| `>`           | `field > $n`                  | scalar                     | —        |
-| `>=`          | `field >= $n`                 | scalar                     | —        |
-| `<`           | `field < $n`                  | scalar                     | —        |
-| `<=`          | `field <= $n`                 | scalar                     | —        |
-| `LIKE`        | `field LIKE $n`               | string (use `%` wildcards) | —        |
-| `NOT LIKE`    | `field NOT LIKE $n`           | string                     | —        |
-| `IN`          | `field IN ($n, $m, …)`        | array of scalars           | —        |
-| `NOT IN`      | `field NOT IN ($n, $m, …)`    | array of scalars           | —        |
-| `BETWEEN`     | `field BETWEEN $n AND $m`     | string                     | number   | string | number |
-| `NOT BETWEEN` | `field NOT BETWEEN $n AND $m` | string                     | number   | string | number |
-| `IS NULL`     | `field IS NULL`               | —                          | —        |
-| `IS NOT NULL` | `field IS NOT NULL`           | —                          | —        |
+| `comparison`  | Prisma mapping                          | `value1`                   | `value2` |
+| ------------- | --------------------------------------- | -------------------------- | -------- |
+| `=`           | `{ equals }`                            | scalar                     | —        |
+| `<>`          | `{ not }`                               | scalar                     | —        |
+| `>`           | `{ gt }`                                | scalar                     | —        |
+| `>=`          | `{ gte }`                               | scalar                     | —        |
+| `<`           | `{ lt }`                                | scalar                     | —        |
+| `<=`          | `{ lte }`                               | scalar                     | —        |
+| `LIKE`        | `{ contains / startsWith / endsWith }`† | string (use `%` wildcards) | —        |
+| `NOT LIKE`    | `{ NOT: … }`                            | string                     | —        |
+| `CONTAINS`    | `{ contains }`                          | string                     | —        |
+| `STARTS WITH` | `{ startsWith }`                        | string                     | —        |
+| `ENDS WITH`   | `{ endsWith }`                          | string                     | —        |
+| `IN`          | `{ in }`                                | array of scalars           | —        |
+| `NOT IN`      | `{ notIn }`                             | array of scalars           | —        |
+| `BETWEEN`     | `{ gte, lte }`                          | scalar                     | scalar   |
+| `NOT BETWEEN` | `{ OR: [{ lt }, { gt }] }`              | scalar                     | scalar   |
+| `IS NULL`     | `field: null`                           | —                          | —        |
+| `IS NOT NULL` | `{ not: null }`                         | —                          | —        |
+
+† `LIKE` parses `%` wildcards: `%x%` → `contains`, `x%` → `startsWith`, `%x` → `endsWith`, and a wildcard-free value collapses to `equals`. The portable `CONTAINS` / `STARTS WITH` / `ENDS WITH` operators (supported by both Prisma and Drizzle) are the recommended, dialect-independent way to do substring matching — unlike SQL `LIKE`, whose case-sensitivity varies by engine collation.
 
 #### Examples
 
@@ -169,26 +174,25 @@ Number of rows to skip before returning results. Use with `limit` for pagination
 { "limit": 25, "offset": 50 }
 ```
 
-The adapter emits ANSI SQL pagination: `OFFSET n ROWS FETCH NEXT n ROWS ONLY`, supported by PostgreSQL 8.4+.
+Pagination maps to Prisma `take`/`skip`, so it works identically on every supported database.
 
-### `isDistinct`
+### `distinct`
 
-When `true`, emits `SELECT DISTINCT` to deduplicate rows.
+Return only rows distinct on the given columns (maps to Prisma `distinct`; supported by both Prisma and Drizzle). Columns are validated against the resource like any other field.
 
 ```json
-{ "isDistinct": true, "fields": ["authorId"] }
+{ "distinct": ["authorId"], "fields": ["authorId"] }
 ```
 
 ## Full Example
 
 ```json
-POST /api/v1/posts/query-builder
+POST /api/v1/posts/query
 {
-  "fields":     ["id", "title", "authorId", "createdAt"],
-  "isDistinct": false,
+  "fields":  ["id", "title", "authorId", "createdAt"],
   "where": [
-    { "field": "published", "comparison": "=",    "value1": true,    "operator": "AND" },
-    { "field": "title",     "comparison": "LIKE",  "value1": "%api%" }
+    { "field": "published", "comparison": "=",        "value1": true,  "operator": "AND" },
+    { "field": "title",     "comparison": "CONTAINS",  "value1": "api" }
   ],
   "orderBy": [{ "field": "createdAt", "order": "DESC" }],
   "limit":   25,
@@ -213,31 +217,3 @@ POST /api/v1/posts/query-builder
 ```
 
 `count` is the total number of matching rows (before pagination), not the length of `results`.
-
-## Using `QueryBuilder` Directly
-
-The `QueryBuilder` class is exported for use outside the HTTP layer:
-
-```ts
-import { QueryBuilder, SqlComparison, SqlOrder } from '@edium/halifax'
-
-const { statement, parameters } = QueryBuilder.buildSelectQuery({
-  tableName: 'posts',
-  fields: ['id', 'title'],
-  where: [{ field: 'published', comparison: SqlComparison.Equal, value1: true }],
-  orderBy: [{ field: 'createdAt', order: SqlOrder.DESC }],
-  limit: 10,
-  offset: 0
-})
-// statement:  SELECT id,title FROM posts WHERE published = $1 ORDER BY createdAt DESC OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
-// parameters: [true]
-```
-
-| Method                                         | Description                                        |
-| ---------------------------------------------- | -------------------------------------------------- |
-| `QueryBuilder.buildSelectQuery(options)`       | Full `SELECT` with WHERE, ORDER BY, and pagination |
-| `QueryBuilder.buildCountQuery(options)`        | `SELECT COUNT(*) AS count` with optional WHERE     |
-| `QueryBuilder.buildUpdateQuery(options, data)` | `UPDATE … SET …` with WHERE                        |
-| `QueryBuilder.buildDeleteQuery(options)`       | `DELETE FROM …` with optional WHERE                |
-
-All methods return `{ statement: string, parameters: unknown[] }` with PostgreSQL-style `$1`, `$2`, … placeholders.

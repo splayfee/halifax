@@ -10,7 +10,7 @@
  * that scoping confines every operation to a single tenant.
  */
 
-import { PrismaPg } from '@prisma/adapter-pg'
+import { connectIntegrationDb } from '../helpers/integrationDb.js'
 import express from 'express'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -41,10 +41,9 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
   let repoB: PrismaAdapter
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
-    base = new PrismaAdapter({ delegate: prisma.widget, client: prisma, tableName: 'widgets' })
+    base = new PrismaAdapter({ delegate: prisma.widget })
     repoA = base.withScope({ field: 'companyId', value: COMPANY_A })
     repoB = base.withScope({ field: 'companyId', value: COMPANY_B })
   })
@@ -179,7 +178,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
   // ---- bulk SQL paths ----
 
-  it('executeQueryBuilder only returns rows for the caller tenant', async () => {
+  it('executeQuery only returns rows for the caller tenant', async () => {
     await prisma.widget.createMany({
       data: [
         { companyId: COMPANY_A, name: 'shared' },
@@ -187,8 +186,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
       ]
     })
 
-    const result = await repoA.executeQueryBuilder!({
-      tableName: 'widgets',
+    const result = await repoA.executeQuery!({
       where: [{ field: 'name', comparison: '=', value1: 'shared' }]
     } as AnyPrisma)
 
@@ -207,8 +205,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
     // Scoped to A, attempt: name='only-a' OR companyId=B. The OR is parenthesised under the
     // tenant predicate, so company B rows can never be reached.
-    const result = await repoA.executeQueryBuilder!({
-      tableName: 'widgets',
+    const result = await repoA.executeQuery!({
       where: [
         { field: 'name', comparison: '=', value1: 'only-a', operator: 'OR' },
         { field: 'companyId', comparison: '=', value1: COMPANY_B }
@@ -216,7 +213,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
     } as AnyPrisma)
 
     expect(result.count).toBe(1)
-    expect((result.results as AnyPrisma[]).every((r) => r.companyid === COMPANY_A)).toBe(true)
+    expect((result.results as AnyPrisma[]).every((r) => r.companyId === COMPANY_A)).toBe(true)
   })
 
   it('updateMany only affects the caller-tenant rows', async () => {
@@ -230,7 +227,6 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
     const result = await repoA.updateMany!(
       {
-        tableName: 'widgets',
         where: [{ field: 'name', comparison: '=', value1: 'old' }]
       } as AnyPrisma,
       { name: 'new', companyId: COMPANY_B } as AnyPrisma // tenant change attempt
@@ -252,7 +248,6 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
     })
 
     const result = await repoA.deleteMany!({
-      tableName: 'widgets',
       where: [{ field: 'name', comparison: '=', value1: 'gone' }]
     } as AnyPrisma)
 
@@ -274,7 +269,6 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
     const widget: ResourceDefinition = {
       name: 'Widget',
       routePrefix: 'widgets',
-      tableName: 'widgets',
       tenant: { field: 'companyId' },
       fields: [
         { name: 'id', filterable: true, sortable: true },
@@ -282,9 +276,7 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
         { name: 'name', filterable: true, sortable: true, writable: true }
       ],
       repository: new PrismaAdapter({
-        delegate: prisma.widget,
-        client: prisma,
-        tableName: 'widgets'
+        delegate: prisma.widget
       })
     }
 
@@ -314,8 +306,7 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
   }
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
     app = buildApp()
   })
@@ -404,7 +395,7 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
     })
 
     const res = await request(app)
-      .post('/api/v3/widgets/query-builder')
+      .post('/api/v3/widgets/query')
       .set(as(COMPANY_A))
       .send({ where: [{ field: 'name', comparison: '=', value1: 'shared' }] })
 

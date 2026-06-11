@@ -143,10 +143,9 @@ policies keyed on the same tenant column.
 
 ### What is _not_ scoped
 
-The `POST /query-builder/preview` endpoint only compiles a query to SQL for inspection and
-never touches the database, so it is not tenant-scoped. Relations eager-loaded via `?include=`
-are returned as Prisma resolves them; if a related model also needs isolation, expose it as its
-own scoped resource rather than relying on the include.
+Relations eager-loaded via `?include=` are returned as Prisma resolves them; if a related
+model also needs isolation, expose it as its own scoped resource rather than relying on the
+include.
 
 ## Custom repositories
 

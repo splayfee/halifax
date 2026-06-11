@@ -24,18 +24,10 @@ export interface PrismaDelegate {
   deleteMany?(args: any): Promise<{ count: number }>
 }
 
-/** Minimal Prisma client interface needed for raw SQL execution. */
-export interface PrismaNativeClient {
-  $queryRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>
-  $executeRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>
-}
-
 /** Construction options for {@link PrismaAdapter}. */
 export interface PrismaAdapterOptions {
   delegate: PrismaDelegate
-  client?: PrismaNativeClient
   idField?: string
-  tableName?: string
   returnCreated?: boolean
   model?: ModelSchema
   /**

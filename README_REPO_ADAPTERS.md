@@ -18,10 +18,10 @@ interface Repository<TRecord, TCreate, TUpdate> {
   updateOne(id: string | number, data: TUpdate): Promise<TRecord | null>
   deleteOne(id: string | number): Promise<boolean>
 
-  // Optional — requires native SQL support (client + tableName)
+  // Optional bulk / query-builder operations (PrismaAdapter implements all three)
   updateMany?(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>>
   deleteMany?(query: IQueryOptions): Promise<DeleteManyResult>
-  executeQueryBuilder?(query: IQueryOptions): Promise<NativeQueryResult<TRecord>>
+  executeQuery?(query: IQueryOptions): Promise<QueryResult<TRecord>>
 }
 ```
 
@@ -31,19 +31,14 @@ Repositories declare what they support through a `capabilities` property. Read i
 
 ```ts
 interface RepositoryCapabilities {
-  supportsNativeSql: boolean // raw SQL via client.$queryRawUnsafe
   supportsIncludes: boolean // ORM relation loading
   supportsTransactions: boolean // transaction wrapping
   supportsCreateManyReturn: boolean // createMany returns the created records
-  supportsNoSqlQueryAst: boolean // non-SQL query AST (e.g. MongoDB)
+  supportsQueryAst: boolean // executes the query-builder AST
 }
 ```
 
-```ts
-if (repo.capabilities?.supportsNativeSql) {
-  // safe to call executeQueryBuilder / updateMany / deleteMany
-}
-```
+`PrismaAdapter` implements `updateMany` / `deleteMany` / `executeQuery` for every database (they compile to portable Prisma Client calls) and reports `supportsQueryAst: true`.
 
 ## Prisma 7 Repository Adapter
 
@@ -130,19 +125,17 @@ export const postRepository = new PrismaAdapter<
   Prisma.PostCreateInput,
   Prisma.PostUpdateInput
 >({
-  delegate: prisma.post, // no cast needed
-  client: prisma, // required for updateMany / deleteMany / executeQueryBuilder
-  tableName: 'posts' // matches @@map in your schema
+  delegate: prisma.post // no cast needed
 })
 ```
+
+Just the model delegate — CRUD, bulk operations, and the query builder all run through it.
 
 #### Options
 
 | Option          | Type      | Required | Description                                                          |
 | --------------- | --------- | -------- | -------------------------------------------------------------------- |
 | `delegate`      | `any`     | yes      | The Prisma model delegate (`prisma.post`, `prisma.user`, …)          |
-| `client`        | `Prisma`  | no       | Full `PrismaClient` instance — enables raw SQL operations            |
-| `tableName`     | `string`  | no       | Table name for raw SQL; must match the `@@map` in your schema        |
 | `idField`       | `string`  | no       | Primary key field name (default: `"id"`)                             |
 | `returnCreated` | `boolean` | no       | When `true`, `createMany` returns created records (default: `false`) |
 
@@ -153,8 +146,6 @@ By default, `createMany` uses Prisma's bulk insert for efficiency but returns an
 ```ts
 new PrismaAdapter({
   delegate: prisma.post,
-  client: prisma,
-  tableName: 'posts',
   returnCreated: true // slower, but returns created records
 })
 ```
@@ -164,6 +155,66 @@ new PrismaAdapter({
 ### `select` vs `include`
 
 `select` (field projection) and `include` (relation loading) are mutually exclusive in Prisma. The adapter enforces this automatically: when `fields` is specified, it builds a `select` and ignores `include`; when only `include` is specified, it builds an `include`.
+
+## Supported Databases
+
+The **same `PrismaAdapter`** works with every database Prisma supports — there is no adapter-per-database. All CRUD and the query builder compile to portable Prisma Client calls, so behaviour is identical across engines. To switch databases you change only the Prisma `provider` and driver adapter:
+
+| Database        | Prisma `provider` | Driver adapter                   |
+| --------------- | ----------------- | -------------------------------- |
+| PostgreSQL      | `postgresql`      | `@prisma/adapter-pg`             |
+| CockroachDB     | `cockroachdb`     | `@prisma/adapter-pg`             |
+| MySQL / MariaDB | `mysql`           | `@prisma/adapter-mariadb`        |
+| SQL Server      | `sqlserver`       | `@prisma/adapter-mssql`          |
+| SQLite          | `sqlite`          | `@prisma/adapter-better-sqlite3` |
+| MongoDB         | `mongodb`         | _(built-in connector)_           |
+
+The integration suite runs unchanged against PostgreSQL, MySQL, and SQLite in CI to keep this honest; the others use the same harness (`HALIFAX_DB=<db>`).
+
+**MongoDB note.** Mongo keys are 24-character `ObjectId` strings (`@id @default(auto()) @map("_id") @db.ObjectId`). Halifax's `:id` route validation accepts integers, UUIDs, **and** ObjectIds, so id-based routes work on Mongo out of the box.
+
+## Targeting database Views
+
+A database **view is just a model** to Halifax. Prisma exposes a `view` block as a delegate with the same read API as a model (`prisma.activeUsers.findMany()`), so you point a resource's repository at it and disable writes:
+
+```ts
+const activeUsersResource: ResourceDefinition = {
+  name: 'ActiveUser',
+  routePrefix: 'active-users',
+  fields: [{ name: 'id' }, { name: 'email', filterable: true }],
+  permissions: {
+    allowReadOne: true,
+    allowReadMany: true,
+    allowReadManyWithQueryBuilder: true,
+    allowCreate: false,
+    allowUpdateOne: false,
+    allowUpdateMany: false,
+    allowUpsertOne: false,
+    allowDeleteOne: false,
+    allowDeleteMany: false
+  },
+  repository: new PrismaAdapter({ delegate: prisma.activeUsers })
+}
+```
+
+No adapter changes are needed — reads, filtering, sorting, pagination, and the query builder all work against the view. (Drizzle views behave the same way.)
+
+## Caching
+
+Any resource can be served through a pluggable read-through cache (in-memory or Redis), with
+per-resource TTLs, a never-expire mode, automatic write-invalidation, tenant-safe keys, and a
+cache-bust header:
+
+```ts
+const postResource: ResourceDefinition = {
+  /* … */
+  cache: { ttlSeconds: 60 } // cache reads for 60s; writes invalidate automatically
+}
+```
+
+See **[README_CACHE.md](./README_CACHE.md)** for in-memory and Redis examples, the
+never-expire (`ttlSeconds: 0`) and `cache: false` options, and the `Cache-Control: no-cache`
+bust header.
 
 ## Implementing a Custom Repository
 

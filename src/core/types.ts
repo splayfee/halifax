@@ -68,16 +68,14 @@ export interface HttpServer {
 
 /** Flags indicating which optional repository operations the adapter supports. */
 export interface RepositoryCapabilities {
-  /** True when the adapter can execute raw SQL via the query builder. */
-  supportsNativeSql: boolean
   /** True when the adapter supports `?include=` for eager-loading relations. */
   supportsIncludes: boolean
   /** True when the adapter can participate in database transactions. */
   supportsTransactions: boolean
   /** True when `createMany` returns the created records rather than an empty array. */
   supportsCreateManyReturn: boolean
-  /** True when the adapter accepts a NoSQL-style query AST (non-SQL ORMs). */
-  supportsNoSqlQueryAst: boolean
+  /** True when the adapter executes the query-builder AST (every Prisma provider does). */
+  supportsQueryAst: boolean
 }
 
 /** Options for paginated, filtered, and sorted list queries. */
@@ -118,8 +116,8 @@ export interface UpdateManyResult<TRecord> {
   results?: TRecord[]
 }
 
-/** Result envelope returned by `executeQueryBuilder`. */
-export interface NativeQueryResult<TRecord> {
+/** Result envelope returned by `executeQuery`. */
+export interface QueryResult<TRecord> {
   /** Total number of matching records (before pagination). */
   count?: number
   /** Records for the current page. */
@@ -221,7 +219,7 @@ export interface Repository<
    * @param query - Full query AST including table name, filters, pagination, and sort.
    * @returns A count-and-results envelope for the matching rows.
    */
-  executeQueryBuilder?(query: IQueryOptions): Promise<NativeQueryResult<TRecord>>
+  executeQuery?(query: IQueryOptions): Promise<QueryResult<TRecord>>
   /**
    * Return a request-scoped clone of this repository that transparently constrains
    * **every** operation to the given {@link TenantScope}. Reads are filtered by the
@@ -300,8 +298,6 @@ export interface ModelResourceOptions {
   tenant?: TenantResourceConfig | false
   /** Override the URL prefix (default: auto-derived kebab-plural of the model name). */
   routePrefix?: string
-  /** Override the database table name. */
-  tableName?: string
   /** Override the default CRUD permissions for this model. */
   permissions?: CrudPermissions
   /** Required permission strings per action for fine-grained access control. */
@@ -356,8 +352,6 @@ export interface ResourceDefinition<
   name: string
   /** URL path segment (e.g. `'users'`, `'blog-posts'`). */
   routePrefix: string
-  /** Database table name used by the query builder. */
-  tableName?: string
   /** Scalar field definitions — controls filtering, sorting, selection, and write access. */
   fields: FieldDefinition[]
   /** Relation definitions — controls `?include=` access. */
@@ -382,6 +376,19 @@ export interface ResourceDefinition<
   maxLimit?: number
   /** Maximum nesting depth for WHERE clause children. Defaults to 3. */
   maxFilterDepth?: number
+  /**
+   * Read-through caching for this resource. When set, the router caches
+   * `getOne`/`getMany`/query reads and invalidates them on any write to this resource.
+   * Overrides the API-wide default. Omit to inherit the API default (if any); set to
+   * `false` to explicitly disable caching for this resource even when a default is configured.
+   */
+  cache?: ResourceCacheConfig | false
+}
+
+/** Per-resource read-through cache configuration. */
+export interface ResourceCacheConfig {
+  /** Time-to-live for cached reads, in seconds. `0` means **never expire** (cache forever). */
+  ttlSeconds: number
 }
 
 /** Default permissions applied to every resource — all CRUD operations enabled. */

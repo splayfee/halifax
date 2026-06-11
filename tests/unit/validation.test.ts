@@ -40,6 +40,14 @@ describe('validateId', () => {
     expect(() => validateId('550e8400-e29b-41d4-a716-446655440000')).not.toThrow()
   })
 
+  it('accepts a valid MongoDB ObjectId string (24 hex chars)', () => {
+    expect(() => validateId('507f1f77bcf86cd799439011')).not.toThrow()
+  })
+
+  it('throws BadRequestError for a 23-char hex string (not a valid ObjectId)', () => {
+    expect(() => validateId('507f1f77bcf86cd79943901')).toThrow(BadRequestError)
+  })
+
   it('throws BadRequestError for a non-integer string', () => {
     expect(() => validateId('abc')).toThrow(BadRequestError)
   })
@@ -247,19 +255,18 @@ describe('validateWhere — depth controls', () => {
 
 describe('validateAdvancedQuery', () => {
   it('passes for an empty query', () => {
-    expect(() => validateAdvancedQuery(resource, { tableName: 'posts' })).not.toThrow()
+    expect(() => validateAdvancedQuery(resource, {})).not.toThrow()
   })
 
   it('validates fields selection', () => {
-    expect(() =>
-      validateAdvancedQuery(resource, { tableName: 'posts', fields: ['nonexistent'] })
-    ).toThrow(UnprocessableEntityError)
+    expect(() => validateAdvancedQuery(resource, { fields: ['nonexistent'] })).toThrow(
+      UnprocessableEntityError
+    )
   })
 
   it('validates orderBy fields', () => {
     expect(() =>
       validateAdvancedQuery(resource, {
-        tableName: 'posts',
         orderBy: [{ field: 'nonexistent', order: SqlOrder.ASC }]
       })
     ).toThrow(UnprocessableEntityError)
@@ -268,7 +275,6 @@ describe('validateAdvancedQuery', () => {
   it('throws for an invalid sort order value', () => {
     expect(() =>
       validateAdvancedQuery(resource, {
-        tableName: 'posts',
         orderBy: [{ field: 'id', order: 'SIDEWAYS' as SqlOrder }]
       })
     ).toThrow('Invalid sort order')
@@ -277,7 +283,6 @@ describe('validateAdvancedQuery', () => {
   it('validates where clause', () => {
     expect(() =>
       validateAdvancedQuery(resource, {
-        tableName: 'posts',
         where: [{ field: 'id', comparison: 'INVALID' }]
       })
     ).toThrow(UnprocessableEntityError)
@@ -286,7 +291,6 @@ describe('validateAdvancedQuery', () => {
   it('validates non-sortable fields in orderBy', () => {
     expect(() =>
       validateAdvancedQuery(resource, {
-        tableName: 'posts',
         orderBy: [{ field: 'secret', order: SqlOrder.ASC }]
       })
     ).toThrow(UnprocessableEntityError)

@@ -1,8 +1,8 @@
-import { QueryBuilder } from '@/classes/QueryBuilder.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import { ServerError } from '@/errors/ServerError.js'
 import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
+import { astToPrismaWhere, astToPrismaOrderBy } from './astToPrisma.js'
 
 /** Returns true for Prisma's P2025 "record not found" error. */
 function isNotFoundError(error: unknown): boolean {
@@ -20,33 +20,29 @@ import type {
   DeleteManyResult,
   ListOptions,
   ListResult,
-  NativeQueryResult,
+  QueryResult,
   TenantScope,
   UpdateManyResult
 } from '@/core/types.js'
 import type { FieldDefinition, RelationDefinition, ModelSchema } from '@/core/types.js'
-import type { PrismaDelegate, PrismaNativeClient, PrismaAdapterOptions } from './types.js'
+import type { PrismaDelegate, PrismaAdapterOptions } from './types.js'
 import { toSelect, toInclude, toOrderBy } from './helpers.js'
 
 /**
- * PrismaAdapter is a generic repository implementation that uses Prisma delegates to perform database operations.
- * It supports basic CRUD operations and can be extended to support more complex queries.
- * The adapter can optionally use a Prisma client for executing raw SQL queries when needed.
- * It also extracts field and relation definitions from a provided Prisma model schema to enhance query capabilities.
+ * PrismaAdapter is a generic repository implementation that uses Prisma delegates to perform
+ * database operations. It handles CRUD plus the query-builder/bulk paths by compiling the
+ * query AST to portable Prisma Client calls (no raw SQL), so it works on every Prisma
+ * provider. It also extracts field and relation definitions from a provided model schema.
  */
 export class PrismaAdapter<
   TRecord = unknown,
   TCreate = Partial<TRecord>,
   TUpdate = Partial<TRecord>
 > implements Repository<TRecord, TCreate, TUpdate> {
-  /** Private properties to hold the Prisma delegate, client, and configuration options. */
+  /** Private properties to hold the Prisma delegate and configuration options. */
   private readonly delegate: PrismaDelegate
-  /**  Optional Prisma client for executing raw SQL queries, required for certain operations like updateMany and deleteMany. */
-  private readonly client?: PrismaNativeClient | undefined
   /** The field name used for the primary key in the model. */
   private readonly idField: string
-  /** The name of the database table associated with the model. */
-  private readonly tableName?: string | undefined
   /** A flag indicating whether to return created records. */
   private readonly returnCreated: boolean
   /** The original construction options, used to build request-scoped clones. */
@@ -63,23 +59,22 @@ export class PrismaAdapter<
 
   /**
    * Constructs a new instance of PrismaAdapter with the provided options.
-   * @param options - An object containing the Prisma delegate, optional client, and configuration settings for the adapter.
+   * @param options - The Prisma delegate plus optional id field, return-created flag, and model schema.
    */
   public constructor(options: PrismaAdapterOptions) {
     this.options = options
     this.delegate = options.delegate
-    this.client = options.client
     this.idField = options.idField ?? 'id'
-    this.tableName = options.tableName
     this.returnCreated = options.returnCreated ?? false
     this.scope = options.scope
 
     this.capabilities = {
-      supportsNativeSql: !!options.client,
       supportsIncludes: true,
       supportsTransactions: false,
       supportsCreateManyReturn: this.returnCreated,
-      supportsNoSqlQueryAst: false
+      // The query builder compiles the AST to portable Prisma Client calls, so it runs on
+      // every provider (SQL or document) — no raw SQL involved.
+      supportsQueryAst: true
     }
 
     if (options.model) {
@@ -136,10 +131,9 @@ export class PrismaAdapter<
   }
 
   /**
-   * AND-s the bound tenant constraint into a query-builder WHERE clause for the SQL paths.
-   * The caller's filters are nested as a parenthesised child group beneath the tenant
-   * condition, so a caller-supplied `OR` can never break out of the tenant boundary
-   * (without the parentheses, SQL precedence would let `... AND a OR b` escape the scope).
+   * AND-s the bound tenant constraint into a query-builder WHERE clause. The caller's filters
+   * are nested as a child group beneath the tenant condition, so a caller-supplied `OR` can
+   * never break out of the tenant boundary once the AST is compiled to a Prisma `where`.
    * @param where - The caller-supplied filter list (may be undefined/empty).
    * @returns A new filter list with the tenant condition enforced, or `where` when unscoped.
    */
@@ -158,16 +152,14 @@ export class PrismaAdapter<
   }
 
   /**
-   * Resolves a query-builder AST for the SQL paths: fills in the adapter's table name and
-   * applies the tenant constraint via {@link PrismaAdapter.scopedFilters}. The `where` key is
-   * only set when defined (to satisfy `exactOptionalPropertyTypes`).
+   * Resolves a query-builder AST for the tenant-scoped paths: applies the tenant constraint
+   * via {@link PrismaAdapter.scopedFilters}. The `where` key is only set when defined (to
+   * satisfy `exactOptionalPropertyTypes`).
    * @param query - The incoming query AST.
-   * @returns A new AST with table name and tenant scope resolved.
+   * @returns A new AST with the tenant scope applied.
    */
   private resolveScopedQuery(query: IQueryOptions): IQueryOptions {
     const resolved: IQueryOptions = { ...query }
-    const tableName = query.tableName || this.tableName
-    if (tableName) resolved.tableName = tableName
     const where = this.scopedFilters(query.where)
     if (where) resolved.where = where
     return resolved
@@ -325,39 +317,31 @@ export class PrismaAdapter<
   }
 
   /**
-   * Updates multiple records that match the provided query options with the given data.
-   * This method requires a Prisma client for executing raw SQL queries, as Prisma does not
-   * natively support bulk updates with return values. It first selects the IDs of the records
-   * to be updated based on the query options, then executes an update query, and finally returns
-   * the IDs of the updated records.
+   * Updates every record matching the query and returns the IDs of the affected rows.
    *
-   * **Note:** The SELECT and UPDATE are issued as two separate queries without a transaction.
-   * Under concurrent writes, rows inserted or deleted between the two queries may cause the
-   * returned `updated` IDs to differ from the rows actually modified.
+   * The query AST is compiled to a portable Prisma `where` (no raw SQL), so this works on
+   * every Prisma provider. Because Prisma's `updateMany` only returns a count, the matching
+   * IDs are selected first and then the bulk update is applied.
    *
-   * @param query - An object containing query options to filter the records that should be updated, such as where conditions, sorting, and pagination.
-   * @param data - An object containing the data to update the matching records with.
-   * @returns A promise that resolves to an object containing an array of the IDs of the updated records.
-   * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
-   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries.
+   * **Note:** the SELECT and UPDATE are two separate statements without a transaction; under
+   * concurrent writes the returned `updated` IDs may differ from the rows actually modified.
+   *
+   * @param query - Query AST describing which rows to update (filtered, tenant-scoped).
+   * @param data - Fields to apply to all matching rows (the tenant field is stripped).
+   * @returns The IDs of the updated rows.
+   * @throws NotImplementedError when the delegate does not support `updateMany`.
    */
   public async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
-    if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new NotImplementedError('Native SQL updateMany requires a Prisma client and tableName.')
+    if (!this.delegate.updateMany) {
+      throw new NotImplementedError('This repository does not support updateMany.')
     }
-
-    const updateQuery = QueryBuilder.buildUpdateQuery(
-      this.resolveScopedQuery(query),
-      this.stripTenant(data) as Record<string, unknown>,
-      [this.idField],
-      this.idField
-    )
-    const updated = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      updateQuery.statement,
-      ...updateQuery.parameters
-    )
-
-    return { updated: updated.map((item) => item[this.idField]) }
+    const where = astToPrismaWhere(this.resolveScopedQuery(query).where)
+    const rows = (await this.delegate.findMany({
+      where,
+      select: { [this.idField]: true }
+    })) as Array<Record<string, unknown>>
+    await this.delegate.updateMany({ where, data: this.stripTenant(data) })
+    return { updated: rows.map((item) => item[this.idField]) }
   }
 
   /**
@@ -450,62 +434,56 @@ export class PrismaAdapter<
    * Under concurrent writes, rows inserted or deleted between the two queries may cause the
    * returned `deleted` IDs to differ from the rows actually removed.
    *
-   * @param query - An object containing query options to filter the records that should be deleted, such as where conditions, sorting, and pagination.
-   * @returns A promise that resolves to an object containing an array of the IDs of the deleted records.
-   * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
-   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries.
+   * @param query - Query AST describing which rows to delete (filtered, tenant-scoped).
+   * @returns The IDs of the deleted rows.
+   * @throws NotImplementedError when the delegate does not support `deleteMany`.
    */
   public async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
-    if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new NotImplementedError('Native SQL deleteMany requires a Prisma client and tableName.')
+    if (!this.delegate.deleteMany) {
+      throw new NotImplementedError('This repository does not support deleteMany.')
     }
-
-    const resolvedQuery = this.resolveScopedQuery(query)
-    const deleteQuery = QueryBuilder.buildDeleteQuery(resolvedQuery, [this.idField])
-
-    const deleted = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      deleteQuery.statement,
-      ...deleteQuery.parameters
-    )
-
-    return { deleted: deleted.map((item) => item[this.idField]) }
+    const where = astToPrismaWhere(this.resolveScopedQuery(query).where)
+    const rows = (await this.delegate.findMany({
+      where,
+      select: { [this.idField]: true }
+    })) as Array<Record<string, unknown>>
+    await this.delegate.deleteMany({ where })
+    return { deleted: rows.map((item) => item[this.idField]) }
   }
 
   /**
-   * Executes a query built using the QueryBuilder, which allows for complex filtering, sorting, pagination, and field selection. This method requires a Prisma client for executing raw SQL queries, as it relies on the QueryBuilder to generate SQL statements. It first builds a count query to get the total number of matching records and then builds a select query to retrieve the actual records based on the provided query options.
+   * Executes a query-builder AST as a portable Prisma query: the WHERE tree is compiled to a
+   * Prisma `where`, and field projection, ordering, pagination, and `distinct` are mapped to
+   * `findMany` arguments. No raw SQL is generated, so the same query runs identically on every
+   * Prisma provider (PostgreSQL, MySQL, SQLite, SQL Server, CockroachDB, MongoDB).
    *
-   * **Note:** The COUNT and SELECT are issued as two separate queries without a transaction.
-   * Under concurrent writes, rows inserted or deleted between the two queries may cause the
-   * returned `count` to differ from the actual number of rows in `results`.
+   * Validation (field/comparison/depth checks → 4xx) happens in the router *before* this
+   * method, so malformed queries never reach Prisma.
    *
-   * @param query - An object containing query options such as filtering conditions, sorting, pagination, and field selection, which will be used to build the SQL queries.
-   * @returns A promise that resolves to an object containing the total count of matching records and an array of the retrieved records.
-   * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
-   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries.
+   * **Note:** the COUNT and SELECT are two separate statements without a transaction; under
+   * concurrent writes the returned `count` may differ from the number of rows in `results`.
+   *
+   * @param query - The validated query AST (filters, sort, pagination, projection, distinct).
+   * @returns A count-and-results envelope for the matching rows.
    */
-  public async executeQueryBuilder(query: IQueryOptions): Promise<NativeQueryResult<TRecord>> {
-    if (!this.client?.$queryRawUnsafe || !this.tableName) {
-      throw new NotImplementedError(
-        'Native SQL query-builder requires a Prisma client and tableName.'
-      )
-    }
+  public async executeQuery(query: IQueryOptions): Promise<QueryResult<TRecord>> {
+    const resolved = this.resolveScopedQuery(query)
+    const where = astToPrismaWhere(resolved.where)
 
-    const resolvedQuery = this.resolveScopedQuery(query)
-    const countQuery = QueryBuilder.buildCountQuery(resolvedQuery)
-    const selectQuery = QueryBuilder.buildSelectQuery(resolvedQuery)
+    const args: Record<string, unknown> = { where }
+    const select = toSelect(resolved.fields)
+    if (select) args.select = select
+    const orderBy = astToPrismaOrderBy(resolved.orderBy)
+    if (orderBy) args.orderBy = orderBy
+    if (resolved.limit !== undefined) args.take = resolved.limit
+    if (resolved.offset !== undefined) args.skip = resolved.offset
+    if (resolved.distinct?.length) args.distinct = resolved.distinct
 
-    const countRows = await this.client.$queryRawUnsafe<Array<{ count: number }>>(
-      countQuery.statement,
-      ...countQuery.parameters
-    )
-    const results = await this.client.$queryRawUnsafe<TRecord[]>(
-      selectQuery.statement,
-      ...selectQuery.parameters
-    )
+    const [count, results] = await Promise.all([
+      this.delegate.count({ where }),
+      this.delegate.findMany(args)
+    ])
 
-    return {
-      count: Number(countRows[0]?.count ?? 0),
-      results
-    }
+    return { count, results: results as TRecord[] }
   }
 }

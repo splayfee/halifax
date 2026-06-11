@@ -33,3 +33,4 @@ tsconfig.tsbuildinfo
 
 # Prisma query engine binaries (generated at install time)
 node_modules/.prisma/
+tests/integration/.tmp/

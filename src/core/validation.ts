@@ -33,19 +33,35 @@ export function isValidUuid(value: string): boolean {
   return uuidValidate(value)
 }
 
+/** Matches a MongoDB ObjectId: exactly 24 hexadecimal characters. */
+const objectIdPattern = /^[a-f\d]{24}$/i
+
 /**
- * Asserts that `value` is a valid integer ID or UUID string.
+ * Returns `true` when `value` is a valid MongoDB ObjectId (24 hex chars).
+ * Lets MongoDB-backed resources accept their `_id` values through the same `:id` route
+ * validation that integer and UUID keys use.
+ * @param value - String to test.
+ * @returns `true` when `value` is a 24-character hex string.
+ */
+export function isValidObjectId(value: string): boolean {
+  return objectIdPattern.test(value)
+}
+
+/**
+ * Asserts that `value` is a valid integer ID, UUID, or MongoDB ObjectId string.
  * Throws {@link BadRequestError} when validation fails.
  * @param value - Raw `:id` route parameter to validate.
  */
 export function validateId(value: string | number | undefined): asserts value is string | number {
+  const message =
+    'Id parameter must be an integer (1–2147483647), a valid UUID, or a 24-character ObjectId.'
   if (value === undefined) {
-    throw new BadRequestError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
+    throw new BadRequestError(message)
   }
   const isInt = isValidInt32(value)
-  const isUuid = typeof value === 'string' && isValidUuid(value)
-  if (!isInt && !isUuid) {
-    throw new BadRequestError('Id parameter must be an integer (1–2147483647) or a valid UUID.')
+  const isStringId = typeof value === 'string' && (isValidUuid(value) || isValidObjectId(value))
+  if (!isInt && !isStringId) {
+    throw new BadRequestError(message)
   }
 }
 
@@ -229,6 +245,11 @@ export function validateAdvancedQuery(resource: ResourceDefinition, query: IQuer
   if (query.fields) {
     validateFields(resource, query.fields)
     validateSelectableFields(resource, query.fields)
+  }
+
+  if (query.distinct) {
+    validateFields(resource, query.distinct)
+    validateSelectableFields(resource, query.distinct)
   }
 
   if (query.orderBy) {

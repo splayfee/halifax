@@ -6,7 +6,7 @@
  * All tests are skipped when DATABASE_URL is not set.
  */
 
-import { PrismaPg } from '@prisma/adapter-pg'
+import { connectIntegrationDb } from '../helpers/integrationDb.js'
 import express from 'express'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -34,7 +34,6 @@ function buildPostApp(repo: PrismaAdapter) {
   const postResource: ResourceDefinition = {
     name: 'Post',
     routePrefix: 'posts',
-    tableName: 'posts',
     fields: [
       { name: 'id', filterable: true, sortable: true },
       { name: 'title', filterable: true, sortable: true, writable: true },
@@ -74,14 +73,10 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   let repo: PrismaAdapter
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    const adapter = new PrismaPg(process.env.DATABASE_URL!)
-    prisma = new PrismaClient({ adapter })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
     repo = new PrismaAdapter({
-      delegate: prisma.post,
-      client: prisma,
-      tableName: 'posts'
+      delegate: prisma.post
     })
   })
 
@@ -207,13 +202,12 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     expect(post.title).toBe('Upserted')
   })
 
-  it('executeQueryBuilder runs raw SQL and returns count + results', async () => {
+  it('executeQuery runs raw SQL and returns count + results', async () => {
     await repo.createMany([
       { title: 'QB Alpha', published: true },
       { title: 'QB Beta', published: true }
     ])
-    const result = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const result = await repo.executeQuery!({
       fields: ['id', 'title'],
       where: [{ field: 'published', comparison: '=', value1: true }],
       limit: 10,
@@ -240,13 +234,12 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     expect(results).toHaveLength(0)
   })
 
-  it('executeQueryBuilder with no where clause returns all records', async () => {
+  it('executeQuery with no where clause returns all records', async () => {
     await repo.createMany([
       { title: 'X', published: true },
       { title: 'Y', published: false }
     ])
-    const result = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const result = await repo.executeQuery!({
       fields: ['id', 'title'],
       limit: 100,
       offset: 0
@@ -255,14 +248,13 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     expect(result.results).toHaveLength(2)
   })
 
-  it('executeQueryBuilder with multiple filters returns the intersection', async () => {
+  it('executeQuery with multiple filters returns the intersection', async () => {
     await repo.createMany([
       { title: 'Long Published', published: true },
       { title: 'Short Published', published: true },
       { title: 'Draft', published: false }
     ])
-    const result = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const result = await repo.executeQuery!({
       fields: ['id', 'title'],
       where: [
         { field: 'published', comparison: '=', value1: true, operator: 'AND' },
@@ -282,7 +274,6 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     ])
     const result = await repo.updateMany!(
       {
-        tableName: 'posts',
         where: [{ field: 'published', comparison: '=', value1: false }]
       } as any,
       { published: true } as any
@@ -299,7 +290,6 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       { title: 'Del B', published: false }
     ])
     const result = await repo.deleteMany!({
-      tableName: 'posts',
       where: [{ field: 'published', comparison: '=', value1: false }]
     } as any)
     expect(result.deleted).toHaveLength(2)
@@ -307,11 +297,17 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     expect(count).toBe(1)
   })
 
-  it('executeQueryBuilder throws 501 when no client is configured', async () => {
+  it('executeQuery runs without a client (delegate-only, no raw SQL)', async () => {
+    await repo.createMany([
+      { title: 'NoClient A', published: true },
+      { title: 'NoClient B', published: false }
+    ])
     const repoNoClient = new PrismaAdapter({ delegate: prisma.post })
-    await expect(
-      repoNoClient.executeQueryBuilder!({ tableName: 'posts' } as any)
-    ).rejects.toMatchObject({ status: 501 })
+    const result = await repoNoClient.executeQuery!({
+      where: [{ field: 'published', comparison: '=', value1: true }]
+    } as any)
+    expect(result.count).toBe(1)
+    expect(result.results).toHaveLength(1)
   })
 })
 
@@ -324,13 +320,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   let app: ReturnType<typeof express>
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    const adapter = new PrismaPg(process.env.DATABASE_URL!)
-    prisma = new PrismaClient({ adapter })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
-    app = buildPostApp(
-      new PrismaAdapter({ delegate: prisma.post, client: prisma, tableName: 'posts' })
-    )
+    app = buildPostApp(new PrismaAdapter({ delegate: prisma.post }))
   })
 
   afterAll(async () => {
@@ -428,10 +420,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
       ]
     })
     const res = await request(app)
-      .post('/api/posts/query-builder')
+      .post('/api/posts/query')
       .set('x-api-key', API_KEY)
       .send({
-        tableName: 'posts',
         fields: ['id', 'title'],
         where: [{ field: 'published', comparison: '=', value1: true }],
         orderBy: [{ field: 'id', order: 'ASC' }],
@@ -446,9 +437,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   it('POST /posts/query-builder with no where clause returns all records', async () => {
     await prisma.post.createMany({ data: [{ title: 'A' }, { title: 'B' }, { title: 'C' }] })
     const res = await request(app)
-      .post('/api/posts/query-builder')
+      .post('/api/posts/query')
       .set('x-api-key', API_KEY)
-      .send({ tableName: 'posts', fields: ['id', 'title'], limit: 50, offset: 0 })
+      .send({ fields: ['id', 'title'], limit: 50, offset: 0 })
     expect(res.status).toBe(200)
     expect(res.body.count).toBe(3)
   })
@@ -513,9 +504,7 @@ describe.skipIf(!hasDb)('JwtClaimsAuthStrategy — permission enforcement', () =
   }
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    const adapter = new PrismaPg(process.env.DATABASE_URL!)
-    prisma = new PrismaClient({ adapter })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
 
     const repo = new PrismaAdapter({ delegate: prisma.post })
