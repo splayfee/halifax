@@ -6,18 +6,18 @@ The package is split into small, replaceable layers — nothing is imported into
 
 ## Current Support
 
-| Layer          | Supported                                            |
-| -------------- | ---------------------------------------------------- |
-| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express |
-| ORM / database | Prisma 7 + PostgreSQL                                |
-| Auth           | API key, JWT/Bearer, Passport + JWT                  |
+| Layer          | Supported                                                                     |
+| -------------- | ----------------------------------------------------------------------------- |
+| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                          |
+| ORM / database | Prisma 7 + Postgres, MySql, MariaDB, SQL Server, SQLite, MongoDB, CockroachDB |
+| Auth           | API key, JWT/Bearer, Passport + JWT                                           |
 
 Every HTTP adapter is interchangeable and behaves identically — same routes, status codes,
 error-body shape, and content negotiation — so you can switch frameworks without touching
 your resource definitions, auth, or query logic. See
 [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) for per-framework usage.
 
-> **Roadmap** — Sequelize, MSSQL, MySQL, and SQLite adapters are planned for future releases.
+> **Roadmap** — This project welcomes community-written adapters for Drizzle, Sequelize, etc.
 
 ## Install
 
