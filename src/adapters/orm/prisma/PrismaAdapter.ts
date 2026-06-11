@@ -1,6 +1,8 @@
 import { QueryBuilder } from '@/classes/QueryBuilder.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
+import { NotFoundError } from '@/errors/NotFoundError.js'
 import { ServerError } from '@/errors/ServerError.js'
+import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
 
 /** Returns true for Prisma's P2025 "record not found" error. */
 function isNotFoundError(error: unknown): boolean {
@@ -19,6 +21,7 @@ import type {
   ListOptions,
   ListResult,
   NativeQueryResult,
+  TenantScope,
   UpdateManyResult
 } from '@/core/types.js'
 import type { FieldDefinition, RelationDefinition, ModelSchema } from '@/core/types.js'
@@ -46,6 +49,10 @@ export class PrismaAdapter<
   private readonly tableName?: string | undefined
   /** A flag indicating whether to return created records. */
   private readonly returnCreated: boolean
+  /** The original construction options, used to build request-scoped clones. */
+  private readonly options: PrismaAdapterOptions
+  /** Tenant constraint bound to this instance, or `undefined` for unscoped access. */
+  private readonly scope?: TenantScope | undefined
 
   /** A set of capabilities that the repository supports. */
   public readonly capabilities: RepositoryCapabilities
@@ -59,11 +66,13 @@ export class PrismaAdapter<
    * @param options - An object containing the Prisma delegate, optional client, and configuration settings for the adapter.
    */
   public constructor(options: PrismaAdapterOptions) {
+    this.options = options
     this.delegate = options.delegate
     this.client = options.client
     this.idField = options.idField ?? 'id'
     this.tableName = options.tableName
     this.returnCreated = options.returnCreated ?? false
+    this.scope = options.scope
 
     this.capabilities = {
       supportsNativeSql: !!options.client,
@@ -77,6 +86,91 @@ export class PrismaAdapter<
       this.fields = PrismaAdapter.fieldsFromModel(options.model)
       this.relations = PrismaAdapter.relationsFromModel(options.model)
     }
+  }
+
+  /**
+   * Returns a request-scoped clone of this adapter bound to `scope`. Every read is
+   * filtered by the scope, every write is stamped with it, and every bulk/SQL operation
+   * has the scope AND-ed into its WHERE clause. The original instance is never mutated.
+   * @param scope - The resolved tenant constraint for the current request.
+   * @returns A new {@link PrismaAdapter} that enforces `scope` on all operations.
+   */
+  public withScope(scope: TenantScope): PrismaAdapter<TRecord, TCreate, TUpdate> {
+    return new PrismaAdapter<TRecord, TCreate, TUpdate>({ ...this.options, scope })
+  }
+
+  /**
+   * Merges the bound tenant constraint into a Prisma `where` object. The scope is spread
+   * last so it always wins over any caller-supplied value for the same key.
+   * @param where - The caller-derived where clause (may be undefined).
+   * @returns A where object with the tenant constraint applied, or `where` when unscoped.
+   */
+  private scopedWhere(where?: Record<string, unknown>): Record<string, unknown> | undefined {
+    if (!this.scope) return where
+    return { ...(where ?? {}), [this.scope.field]: this.scope.value }
+  }
+
+  /**
+   * Removes the tenant field from a write payload so callers can never reassign a row
+   * to another tenant via create/update/upsert bodies. No-op when unscoped.
+   * @param data - The write payload to sanitise.
+   * @returns A copy of `data` without the tenant field, or `data` when unscoped.
+   */
+  private stripTenant<T>(data: T): T {
+    if (!this.scope) return data
+    if (data === null || typeof data !== 'object') return data
+    const copy = { ...(data as Record<string, unknown>) }
+    delete copy[this.scope.field]
+    return copy as T
+  }
+
+  /**
+   * Stamps the bound tenant value onto a create payload, overriding any caller-supplied
+   * value for the tenant field. No-op when unscoped.
+   * @param data - The create payload.
+   * @returns A copy of `data` with the tenant field forced to the scope value.
+   */
+  private stampTenant<T>(data: T): T {
+    if (!this.scope) return data
+    return { ...(data as Record<string, unknown>), [this.scope.field]: this.scope.value } as T
+  }
+
+  /**
+   * AND-s the bound tenant constraint into a query-builder WHERE clause for the SQL paths.
+   * The caller's filters are nested as a parenthesised child group beneath the tenant
+   * condition, so a caller-supplied `OR` can never break out of the tenant boundary
+   * (without the parentheses, SQL precedence would let `... AND a OR b` escape the scope).
+   * @param where - The caller-supplied filter list (may be undefined/empty).
+   * @returns A new filter list with the tenant condition enforced, or `where` when unscoped.
+   */
+  private scopedFilters(where?: IQueryFilter[]): IQueryFilter[] | undefined {
+    if (!this.scope) return where
+    const tenantNode: IQueryFilter = {
+      field: this.scope.field,
+      comparison: '=',
+      value1: this.scope.value as QueryScalar
+    }
+    if (where?.length) {
+      tenantNode.operator = 'AND'
+      tenantNode.children = where
+    }
+    return [tenantNode]
+  }
+
+  /**
+   * Resolves a query-builder AST for the SQL paths: fills in the adapter's table name and
+   * applies the tenant constraint via {@link PrismaAdapter.scopedFilters}. The `where` key is
+   * only set when defined (to satisfy `exactOptionalPropertyTypes`).
+   * @param query - The incoming query AST.
+   * @returns A new AST with table name and tenant scope resolved.
+   */
+  private resolveScopedQuery(query: IQueryOptions): IQueryOptions {
+    const resolved: IQueryOptions = { ...query }
+    const tableName = query.tableName || this.tableName
+    if (tableName) resolved.tableName = tableName
+    const where = this.scopedFilters(query.where)
+    if (where) resolved.where = where
+    return resolved
   }
 
   /**
@@ -119,9 +213,21 @@ export class PrismaAdapter<
   ): Promise<TRecord | null> {
     const select = toSelect(options?.fields)
     const include = toInclude(options?.include)
-    const args: Record<string, unknown> = { where: { [this.idField]: id } }
+    const args: Record<string, unknown> = { where: this.scopedWhere({ [this.idField]: id }) }
     if (select) args.select = select
     else if (include) args.include = include
+
+    // When scoped, the WHERE carries a non-unique tenant predicate, so we must use
+    // findFirst (findUnique only accepts unique fields). This is what enforces that a
+    // row outside the caller's tenant reads back as "not found".
+    if (this.scope) {
+      if (this.delegate.findFirst) {
+        return (await this.delegate.findFirst(args)) as TRecord | null
+      }
+      throw new ServerError(
+        'Prisma delegate does not support findFirst (required for tenant scoping).'
+      )
+    }
 
     if (this.delegate.findUnique) {
       return (await this.delegate.findUnique(args)) as TRecord | null
@@ -143,8 +249,9 @@ export class PrismaAdapter<
   public async getMany(options: ListOptions = {}): Promise<ListResult<TRecord>> {
     const select = toSelect(options.fields)
     const include = toInclude(options.include)
+    const where = this.scopedWhere(options.where)
     const args: Record<string, unknown> = {
-      where: options.where,
+      where,
       orderBy: toOrderBy(options.orderBy),
       skip: options.offset,
       take: options.limit
@@ -153,7 +260,7 @@ export class PrismaAdapter<
     else if (include) args.include = include
 
     const [count, results] = await Promise.all([
-      this.delegate.count({ where: options.where }),
+      this.delegate.count({ where }),
       this.delegate.findMany(args)
     ])
 
@@ -167,7 +274,7 @@ export class PrismaAdapter<
    * @throws ServerError if the Prisma delegate does not support the create method.
    */
   public async createOne(data: TCreate): Promise<TRecord> {
-    return (await this.delegate.create({ data })) as TRecord
+    return (await this.delegate.create({ data: this.stampTenant(data) })) as TRecord
   }
 
   /**
@@ -182,7 +289,7 @@ export class PrismaAdapter<
       return await Promise.all(data.map((item) => this.createOne(item)))
     }
 
-    await this.delegate.createMany({ data })
+    await this.delegate.createMany({ data: data.map((item) => this.stampTenant(item)) })
     return []
   }
 
@@ -194,6 +301,21 @@ export class PrismaAdapter<
    * @throws ServerError if the Prisma delegate does not support the update method.
    */
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
+    // When scoped, confirm the row belongs to the caller's tenant before touching it,
+    // and strip the tenant field from the payload so the row can't be moved tenants.
+    if (this.scope) {
+      if (!this.delegate.findFirst) {
+        throw new ServerError(
+          'Prisma delegate does not support findFirst (required for tenant scoping).'
+        )
+      }
+      const owned = await this.delegate.findFirst({
+        where: this.scopedWhere({ [this.idField]: id }),
+        select: { [this.idField]: true }
+      })
+      if (!owned) return null
+      data = this.stripTenant(data)
+    }
     try {
       return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
     } catch (error) {
@@ -225,8 +347,8 @@ export class PrismaAdapter<
     }
 
     const updateQuery = QueryBuilder.buildUpdateQuery(
-      { ...query, tableName: query.tableName || this.tableName },
-      data as Record<string, unknown>,
+      this.resolveScopedQuery(query),
+      this.stripTenant(data) as Record<string, unknown>,
       [this.idField],
       this.idField
     )
@@ -252,6 +374,28 @@ export class PrismaAdapter<
       throw new NotImplementedError('Prisma delegate does not support upsert.')
     }
 
+    // When scoped, an upsert keyed on a unique id could otherwise overwrite a row owned
+    // by another tenant. Reject that case (hidden as "not found"), stamp the tenant on
+    // create, and forbid reassigning the tenant on update.
+    if (this.scope) {
+      if (!this.delegate.findFirst) {
+        throw new ServerError(
+          'Prisma delegate does not support findFirst (required for tenant scoping).'
+        )
+      }
+      const existing = (await this.delegate.findFirst({
+        where: { [this.idField]: id }
+      })) as Record<string, unknown> | null
+      if (existing && existing[this.scope.field] !== this.scope.value) {
+        throw new NotFoundError()
+      }
+      return (await this.delegate.upsert({
+        where: { [this.idField]: id },
+        create: this.stampTenant(data),
+        update: this.stripTenant(data) as TUpdate
+      })) as TRecord
+    }
+
     return (await this.delegate.upsert({
       where: { [this.idField]: id },
       create: data,
@@ -268,6 +412,27 @@ export class PrismaAdapter<
    * @throws ServerError if the Prisma delegate does not support the required methods for deleting records.
    */
   public async deleteOne(id: string | number): Promise<boolean> {
+    // When scoped, delete through deleteMany with the tenant predicate so the ownership
+    // check and the delete are a single atomic statement (no TOCTOU window). A row in
+    // another tenant simply matches nothing and reports as "not found".
+    if (this.scope) {
+      if (this.delegate.deleteMany) {
+        const result = await this.delegate.deleteMany({
+          where: this.scopedWhere({ [this.idField]: id })
+        })
+        return (result?.count ?? 0) > 0
+      }
+      if (!this.delegate.findFirst) {
+        throw new ServerError(
+          'Prisma delegate does not support deleteMany or findFirst (required for tenant scoping).'
+        )
+      }
+      const owned = await this.delegate.findFirst({
+        where: this.scopedWhere({ [this.idField]: id }),
+        select: { [this.idField]: true }
+      })
+      if (!owned) return false
+    }
     try {
       await this.delegate.delete({ where: { [this.idField]: id } })
       return true
@@ -295,7 +460,7 @@ export class PrismaAdapter<
       throw new NotImplementedError('Native SQL deleteMany requires a Prisma client and tableName.')
     }
 
-    const resolvedQuery = { ...query, tableName: query.tableName || this.tableName }
+    const resolvedQuery = this.resolveScopedQuery(query)
     const deleteQuery = QueryBuilder.buildDeleteQuery(resolvedQuery, [this.idField])
 
     const deleted = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
@@ -325,7 +490,7 @@ export class PrismaAdapter<
       )
     }
 
-    const resolvedQuery = { ...query, tableName: query.tableName || this.tableName }
+    const resolvedQuery = this.resolveScopedQuery(query)
     const countQuery = QueryBuilder.buildCountQuery(resolvedQuery)
     const selectQuery = QueryBuilder.buildSelectQuery(resolvedQuery)
 

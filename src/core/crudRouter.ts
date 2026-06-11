@@ -1,4 +1,4 @@
-import { AllowAllAuthStrategy, type AuthStrategy } from '@/auth/AuthStrategy.js'
+import { AllowAllAuthStrategy, type AuthContext, type AuthStrategy } from '@/auth/AuthStrategy.js'
 import { QueryBuilder } from '@/classes/QueryBuilder.js'
 import { BadRequestError } from '@/errors/BadRequestError.js'
 import { HttpError } from '@/errors/HttpError.js'
@@ -11,7 +11,7 @@ import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js
 import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
-import type { HttpRequest, HttpResponse, HttpServer } from '@/core/types.js'
+import type { HttpRequest, HttpResponse, HttpServer, Repository } from '@/core/types.js'
 import { parseListOptions } from '@/core/queryString.js'
 import { validateAdvancedQuery, validateId, isValidUuid } from '@/core/validation.js'
 import { ServerError } from '@/errors/ServerError.js'
@@ -56,10 +56,52 @@ function filterWritableFields(
   )
 }
 
+/** Context handed to {@link TenantOptions.resolveId} for the current request. */
+export interface TenantResolveContext {
+  /** The resolved authentication context for the request. */
+  auth: AuthContext
+  /** The incoming HTTP request. */
+  req: HttpRequest
+  /** The resource being accessed. */
+  resource: ResourceDefinition
+}
+
+/**
+ * Configures multi-tenant isolation for the whole API. When set, every resource that
+ * is tenant-scoped (see {@link ResourceDefinition.tenant}) has all of its reads, writes,
+ * and bulk operations confined to the tenant value returned by {@link TenantOptions.resolveId}.
+ */
+export interface TenantOptions {
+  /**
+   * Resolve the tenant key the current caller is bound to (e.g. their company id),
+   * derived from the authenticated session/token — never from client-supplied input.
+   * Return `null`/`undefined` to signal "no tenant"; combined with {@link TenantOptions.strict}
+   * this either denies the request (default) or serves it unscoped.
+   * @param ctx - The auth context, request, and resource being accessed.
+   * @returns The tenant key, or null/undefined when none applies.
+   */
+  resolveId: (ctx: TenantResolveContext) => unknown | Promise<unknown>
+  /**
+   * Default tenant column name used to auto-detect scoping: any resource that has a
+   * field with this name (and no explicit {@link ResourceDefinition.tenant}) is scoped
+   * on it. Defaults to `'tenantId'`.
+   */
+  field?: string
+  /**
+   * Fail-closed switch. When `true` (the default), a tenant-scoped resource whose
+   * {@link TenantOptions.resolveId} returns no value rejects the request with 403 rather
+   * than serving unscoped data. Only set to `false` if you deliberately allow
+   * cross-tenant ("god mode") access for callers with no tenant.
+   */
+  strict?: boolean
+}
+
 /** Options for {@link registerCrudApi} / {@link createExpressCrudRouter}. */
 export interface CrudApiOptions {
   /** Auth strategy used for all routes. Defaults to {@link AllowAllAuthStrategy}. */
   authStrategy?: AuthStrategy
+  /** Multi-tenant isolation config. When omitted, no tenant scoping is applied. */
+  tenant?: TenantOptions
   /** Path segment for the query-builder POST route (default: `'query-builder'`). */
   queryBuilderPath?: string
   /** Path for the query-builder preview route (default: `'/query-builder/preview'`). */
@@ -147,13 +189,14 @@ async function sendError(error: unknown, res: HttpResponse): Promise<void> {
  * @param resource - The resource being accessed (used to look up required permissions).
  * @param action - The CRUD action being performed.
  * @param authStrategy - The active auth strategy.
+ * @returns The resolved {@link AuthContext} (so callers can derive the tenant scope from it).
  */
 async function authorizeRequest(
   req: HttpRequest,
   resource: ResourceDefinition,
   action: CrudAction,
   authStrategy: AuthStrategy
-): Promise<void> {
+): Promise<AuthContext> {
   const auth = await authStrategy.authenticate(req)
   const requiredPermissions = resource.requiredPermissions?.[action] ?? []
 
@@ -166,7 +209,7 @@ async function authorizeRequest(
       req
     })
     if (!allowed) throw new AuthorizationError()
-    return
+    return auth
   }
 
   if (requiredPermissions.length) {
@@ -177,7 +220,30 @@ async function authorizeRequest(
     )
     if (!allowed) throw new AuthorizationError()
   }
+  return auth
 }
+
+/**
+ * Determines the column a resource is tenant-scoped on, applying this precedence:
+ * explicit `resource.tenant` (or `false` to opt out) → auto-detect the API's default
+ * tenant field when the resource actually has it → otherwise unscoped (global).
+ * @param resource - The resource being inspected.
+ * @param tenant - The API-wide tenant options, or `undefined` when tenancy is off.
+ * @returns The tenant field name, or `null` when the resource is not scoped.
+ */
+function effectiveTenantField(
+  resource: ResourceDefinition,
+  tenant: TenantOptions | undefined
+): string | null {
+  if (!tenant) return null
+  if (resource.tenant === false) return null
+  if (resource.tenant && resource.tenant.field) return resource.tenant.field
+  const fallback = tenant.field ?? 'tenantId'
+  return resource.fields.some((f) => f.name === fallback) ? fallback : null
+}
+
+/** Matches a safe SQL identifier — tenant fields are interpolated into SQL on bulk paths. */
+const safeIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
 /**
  * Reads a single header value by name (case-insensitive).
@@ -263,6 +329,37 @@ export function registerCrudApi(
     if (!repository)
       throw new ServerError(`Resource '${resource.name}' does not define a repository.`)
 
+    // Resolve tenancy once at registration and fail closed on misconfiguration, so a
+    // scoped resource can never be silently served unscoped at request time.
+    const tenantField = effectiveTenantField(resource, options.tenant)
+    if (tenantField) {
+      if (!safeIdentifier.test(tenantField))
+        throw new ServerError(
+          `Resource '${resource.name}' has an unsafe tenant field name '${tenantField}'.`
+        )
+      if (!repository.withScope)
+        throw new ServerError(
+          `Resource '${resource.name}' is tenant-scoped on '${tenantField}' but its repository ` +
+            `does not implement withScope(). Refusing to serve it unscoped.`
+        )
+    }
+
+    /**
+     * Returns the repository to use for this request: the tenant-scoped clone when the
+     * resource is scoped, or the bare repository otherwise. Throws 403 in strict mode
+     * (the default) when a scoped resource cannot resolve a tenant for the caller.
+     */
+    const resolveRepo = async (req: HttpRequest, auth: AuthContext): Promise<Repository> => {
+      if (!tenantField || !options.tenant) return repository
+      const value = await options.tenant.resolveId({ auth, req, resource })
+      if (value === undefined || value === null || value === '') {
+        if (options.tenant.strict !== false)
+          throw new AuthorizationError('No tenant is associated with this request.')
+        return repository
+      }
+      return repository.withScope!({ field: tenantField, value })
+    }
+
     const permissions = { ...defaultCrudPermissions, ...resource.permissions }
     const basePath = `/${resource.routePrefix}`
 
@@ -271,18 +368,19 @@ export function registerCrudApi(
         'POST',
         basePath,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'create', authStrategy)
+          const auth = await authorizeRequest(req, resource, 'create', authStrategy)
+          const repo = await resolveRepo(req, auth)
           const idempotencyKey = getHeaderValue(req, 'idempotency-key')
           const createOptions = idempotencyKey ? { idempotencyKey } : undefined
           const items = (Array.isArray(req.body) ? req.body : [req.body]).map(
             (item: Record<string, unknown>) => filterWritableFields(resource, item)
           )
           if (items.length === 1) {
-            const result = await repository.createOne(items[0] as never, createOptions)
+            const result = await repo.createOne(items[0] as never, createOptions)
             await res.status(201).json(result)
             return
           }
-          const results = await repository.createMany(items as never[], createOptions)
+          const results = await repo.createMany(items as never[], createOptions)
           await res.status(201).json(results)
         })
       )
@@ -293,9 +391,10 @@ export function registerCrudApi(
         'GET',
         basePath,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'readMany', authStrategy)
+          const auth = await authorizeRequest(req, resource, 'readMany', authStrategy)
+          const repo = await resolveRepo(req, auth)
           const listOptions = parseListOptions(req.query, resource)
-          const results = await repository.getMany(listOptions)
+          const results = await repo.getMany(listOptions)
           await res.status(200).json(results)
         })
       )
@@ -306,8 +405,14 @@ export function registerCrudApi(
         'POST',
         `${basePath}/${queryBuilderPath}`,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'readManyWithQueryBuilder', authStrategy)
-          if (!repository.executeQueryBuilder)
+          const auth = await authorizeRequest(
+            req,
+            resource,
+            'readManyWithQueryBuilder',
+            authStrategy
+          )
+          const repo = await resolveRepo(req, auth)
+          if (!repo.executeQueryBuilder)
             throw new NotImplementedError('This resource does not support the query builder.')
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
@@ -315,7 +420,7 @@ export function registerCrudApi(
             tableName: resource.tableName
           } as IQueryOptions
           validateAdvancedQuery(resource, query)
-          const results = await repository.executeQueryBuilder(query)
+          const results = await repo.executeQueryBuilder(query)
           await res.status(200).json(results)
         })
       )
@@ -326,10 +431,11 @@ export function registerCrudApi(
         'GET',
         `${basePath}/:id`,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'readOne', authStrategy)
+          const auth = await authorizeRequest(req, resource, 'readOne', authStrategy)
+          const repo = await resolveRepo(req, auth)
           const id = parseId(req.params['id'])
           const listOptions = parseListOptions(req.query, resource)
-          const result = await repository.getOne(id, {
+          const result = await repo.getOne(id, {
             fields: listOptions.fields,
             include: listOptions.include
           })
@@ -344,10 +450,11 @@ export function registerCrudApi(
         'PATCH',
         `${basePath}/:id`,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'updateOne', authStrategy)
+          const auth = await authorizeRequest(req, resource, 'updateOne', authStrategy)
+          const repo = await resolveRepo(req, auth)
           const id = parseId(req.params['id'])
           const body = filterWritableFields(resource, req.body as Record<string, unknown>)
-          const result = await repository.updateOne(id, body as never)
+          const result = await repo.updateOne(id, body as never)
           if (!result) throw new NotFoundError()
           await res.status(200).json(result)
         })
@@ -359,8 +466,9 @@ export function registerCrudApi(
         'PATCH',
         basePath,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'updateMany', authStrategy)
-          if (!repository.updateMany)
+          const auth = await authorizeRequest(req, resource, 'updateMany', authStrategy)
+          const repo = await resolveRepo(req, auth)
+          if (!repo.updateMany)
             throw new NotImplementedError('This resource does not support updateMany.')
           const { update, ...queryBody } = (req.body ?? {}) as Record<string, unknown>
           const filteredUpdate = filterWritableFields(
@@ -380,7 +488,7 @@ export function registerCrudApi(
             throw new UnprocessableEntityError(
               'updateMany requires at least one WHERE filter to prevent unintended bulk updates.'
             )
-          const result = await repository.updateMany(query, filteredUpdate as never)
+          const result = await repo.updateMany(query, filteredUpdate as never)
           await res.status(200).json(result)
         })
       )
@@ -391,12 +499,13 @@ export function registerCrudApi(
         'PUT',
         `${basePath}/:id`,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'upsertOne', authStrategy)
-          if (!repository.upsertOne)
+          const auth = await authorizeRequest(req, resource, 'upsertOne', authStrategy)
+          const repo = await resolveRepo(req, auth)
+          if (!repo.upsertOne)
             throw new NotImplementedError('This resource does not support upsert.')
           const id = parseId(req.params['id'])
           const body = filterWritableFields(resource, req.body as Record<string, unknown>)
-          const result = await repository.upsertOne(id, body as never)
+          const result = await repo.upsertOne(id, body as never)
           await res.status(200).json(result)
         })
       )
@@ -407,9 +516,10 @@ export function registerCrudApi(
         'DELETE',
         `${basePath}/:id`,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'deleteOne', authStrategy)
+          const auth = await authorizeRequest(req, resource, 'deleteOne', authStrategy)
+          const repo = await resolveRepo(req, auth)
           const id = parseId(req.params['id'])
-          const deleted = await repository.deleteOne(id)
+          const deleted = await repo.deleteOne(id)
           if (!deleted) throw new NotFoundError()
           await res.status(200).json({ deleted: true })
         })
@@ -421,8 +531,9 @@ export function registerCrudApi(
         'DELETE',
         basePath,
         wrap(async (req, res) => {
-          await authorizeRequest(req, resource, 'deleteMany', authStrategy)
-          if (!repository.deleteMany)
+          const auth = await authorizeRequest(req, resource, 'deleteMany', authStrategy)
+          const repo = await resolveRepo(req, auth)
+          if (!repo.deleteMany)
             throw new NotImplementedError('This resource does not support deleteMany.')
           const body = (req.body ?? {}) as Record<string, unknown>
           const query = {
@@ -434,7 +545,7 @@ export function registerCrudApi(
             throw new UnprocessableEntityError(
               'deleteMany requires at least one WHERE filter to prevent unintended bulk deletes.'
             )
-          const result = await repository.deleteMany(query)
+          const result = await repo.deleteMany(query)
           await res.status(200).json(result)
         })
       )
