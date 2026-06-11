@@ -1,5 +1,10 @@
 # Halifax
 
+[![CI](https://github.com/splayfee/halifax/actions/workflows/ci.yml/badge.svg)](https://github.com/splayfee/halifax/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@edium/halifax.svg)](https://www.npmjs.com/package/@edium/halifax)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
+
 Halifax is an adapter-driven TypeScript framework for building standardized REST CRUD APIs automatically from resource definitions. It generates standards-compliant REST endpoints from your data models, wires up authentication, and exposes a dynamic query-builder endpoint for advanced read/update/delete operations.
 
 The package is split into small, replaceable layers — nothing is imported into the core engine. Your ORM, HTTP server, and auth provider are all injected at startup.
@@ -9,7 +14,7 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🚀 **Zero-boilerplate CRUD** — define a resource once and get standards-compliant REST endpoints (list, read, create, update, upsert, delete, bulk) with correct status codes and a consistent error shape.
 - 🧩 **Adapter-driven & swappable** — your HTTP framework, ORM/database, and auth provider are injected, not baked in. Switch any layer without touching your resource definitions.
 - 🌐 **4 HTTP frameworks, identical behavior** — Express 4/5, Fastify, HyperExpress, and Ultimate Express, all verified against one shared conformance suite.
-- 🗄️ **7 databases, one adapter** — PostgreSQL, MySQL, MariaDB, SQL Server, SQLite, CockroachDB, and MongoDB via [Prisma](https://www.prisma.io/). The query builder compiles to portable Prisma calls (never raw SQL), so the **same client request behaves identically on every database** — switch engines by changing one line.
+- 🗄️ **Many databases, one adapter** — PostgreSQL, MySQL, MariaDB, SQL Server, SQLite, CockroachDB, and MongoDB via [Prisma](https://www.prisma.io/). The query builder compiles to portable Prisma calls (never raw SQL), so the **same client request behaves identically on every database** — switch engines by changing one line. (PostgreSQL, MySQL, and SQLite run in CI; the rest use the same adapter and test harness.)
 - 🔎 **Dynamic query-builder endpoint** — let the front-end compose rich filtered/sorted/paginated queries "for free" (`AND`/`OR`/nesting, `IN`, `BETWEEN`, `CONTAINS`, …) without hand-writing endpoints. Fully validated — bad fields/operators return structured `4xx` errors, never leaked DB internals.
 - 🏢 **Multi-tenancy built in** — per-resource tenant scoping with fail-closed guarantees; one tenant can never read or write another's rows.
 - ⚡ **Pluggable read-through caching** — in-memory or Redis, per-resource TTLs, never-expire mode, automatic write-invalidation, tenant-safe keys, and a `Cache-Control` bust header.

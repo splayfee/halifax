@@ -125,5 +125,12 @@ jobs:
             sqlite)   mkdir -p tests/integration/.tmp && echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tests/integration/.tmp/sqlite-test.db" >> "$GITHUB_ENV" ;;
           esac
 
+      # Type-check the runnable example against the generated client (keeps it from drifting).
+      - name: Type-check examples
+        if: matrix.db == 'postgres'
+        run: |
+          pnpm exec prisma generate --schema=tests/integration/prisma/schema.prisma
+          pnpm exec tsc --noEmit -p examples/tsconfig.json
+
       - name: Integration tests
         run: pnpm exec vitest run --config vitest.integration.config.ts
