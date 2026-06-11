@@ -127,15 +127,21 @@
     "vitest": "^4.1.8"
   },
   "keywords": [
-    "rest",
+    "abstract-syntax-tree",
+    "api",
+    "AST",
+    "autocrud",
     "crud",
-    "query-builder",
-    "typescript",
     "express",
-    "prisma",
-    "passport",
+    "fastify",
+    "hyper-express",
     "jwt",
-    "api"
+    "passport",
+    "prisma",
+    "query-builder",
+    "rest",
+    "typescript",
+    "ultimate-express"
   ],
   "packageManager": "pnpm@11.5.3",
   "dependencies": {
