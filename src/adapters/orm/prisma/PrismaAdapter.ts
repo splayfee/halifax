@@ -308,6 +308,11 @@ export class PrismaAdapter<
 
   /**
    * Executes a query built using the QueryBuilder, which allows for complex filtering, sorting, pagination, and field selection. This method requires a Prisma client for executing raw SQL queries, as it relies on the QueryBuilder to generate SQL statements. It first builds a count query to get the total number of matching records and then builds a select query to retrieve the actual records based on the provided query options.
+   *
+   * **Note:** The COUNT and SELECT are issued as two separate queries without a transaction.
+   * Under concurrent writes, rows inserted or deleted between the two queries may cause the
+   * returned `count` to differ from the actual number of rows in `results`.
+   *
    * @param query - An object containing query options such as filtering conditions, sorting, pagination, and field selection, which will be used to build the SQL queries.
    * @returns A promise that resolves to an object containing the total count of matching records and an array of the retrieved records.
    * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
