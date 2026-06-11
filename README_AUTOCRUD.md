@@ -41,8 +41,8 @@ export const postResource: ResourceDefinition = {
 
 Each `permissions` flag enables one route:
 
-| Flag                            | Method   | Path                   |
-| ------------------------------- | -------- | ---------------------- |
+| Flag                            | Method   | Path                     |
+| ------------------------------- | -------- | ------------------------ |
 | `allowReadMany`                 | `GET`    | `../posts`               |
 | `allowReadOne`                  | `GET`    | `../posts/:id`           |
 | `allowCreate`                   | `POST`   | `../posts`               |

@@ -59,7 +59,7 @@ Fields are validated against the resource's field definitions. A field with `fil
 #### Comparisons
 
 | `comparison`  | SQL emitted                   | `value1`                   | `value2` |
-| ------------- | ----------------------------- | -------------------------- | -------- |
+| ------------- | ----------------------------- | -------------------------- | -------- | ------ | ------ |
 | `=`           | `field = $n`                  | scalar                     | —        |
 | `<>`          | `field <> $n`                 | scalar                     | —        |
 | `>`           | `field > $n`                  | scalar                     | —        |
@@ -70,8 +70,8 @@ Fields are validated against the resource's field definitions. A field with `fil
 | `NOT LIKE`    | `field NOT LIKE $n`           | string                     | —        |
 | `IN`          | `field IN ($n, $m, …)`        | array of scalars           | —        |
 | `NOT IN`      | `field NOT IN ($n, $m, …)`    | array of scalars           | —        |
-| `BETWEEN`     | `field BETWEEN $n AND $m`     | string | number            | string | number |
-| `NOT BETWEEN` | `field NOT BETWEEN $n AND $m` | string | number            | string | number |
+| `BETWEEN`     | `field BETWEEN $n AND $m`     | string                     | number   | string | number |
+| `NOT BETWEEN` | `field NOT BETWEEN $n AND $m` | string                     | number   | string | number |
 | `IS NULL`     | `field IS NULL`               | —                          | —        |
 | `IS NOT NULL` | `field IS NOT NULL`           | —                          | —        |
 

@@ -484,7 +484,12 @@ export function registerCrudApi(
         const allowed = await authStrategy.authorize({
           auth,
           action: 'readManyWithQueryBuilder',
-          resource: { name: '__preview__', routePrefix: '__preview__', fields: [], repository: null! },
+          resource: {
+            name: '__preview__',
+            routePrefix: '__preview__',
+            fields: [],
+            repository: null!
+          },
           requiredPermissions: [],
           req
         })
