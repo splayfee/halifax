@@ -1,5 +1,5 @@
 export * from '@/adapters/http/ExpressAdapter.js'
-export * from '@/adapters/orm/PrismaAdapter.js'
+export * from '@/adapters/orm/prisma/index.js'
 export * from '@/auth/AuthStrategy.js'
 export * from '@/core/crudRouter.js'
 export * from '@/core/http.js'
