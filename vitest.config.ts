@@ -17,10 +17,12 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.d.ts',
+        'src/index.ts',
+        'src/adapters/orm/**/index.ts',
+        'src/adapters/orm/**/types.ts',
         'src/enums/**/*.ts',
         'src/interfaces/**/*.ts',
-        'src/types/**/*.ts',
-        'src/index.ts'
+        'src/types/**/*.ts'
       ]
     }
   }

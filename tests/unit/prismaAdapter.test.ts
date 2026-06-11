@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/PrismaAdapter.js'
+import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/prisma/index.js'
 import type { ModelSchema } from '@/core/types.js'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 
