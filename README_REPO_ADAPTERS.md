@@ -6,8 +6,8 @@ A repository is the data-access layer Halifax talks to. All adapters implement t
 
 ```ts
 interface Repository<TRecord, TCreate, TUpdate> {
-  readonly capabilities?: Partial<RepositoryCapabilities> 
-  
+  readonly capabilities?: Partial<RepositoryCapabilities>
+
   getOne(
     id: string | number,
     options?: { fields?: string[]; include?: string[] }

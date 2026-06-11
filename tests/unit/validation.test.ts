@@ -216,12 +216,12 @@ describe('validateWhere — depth controls', () => {
     ]
   }
 
-  it('passes at the default max depth (3 levels of children)', () => {
-    expect(() => validateWhere(resource, nestedFilter(3))).not.toThrow()
+  it('passes at the default max depth (4 levels of children)', () => {
+    expect(() => validateWhere(resource, nestedFilter(4))).not.toThrow()
   })
 
-  it('throws when nesting exceeds the default max depth of 3', () => {
-    expect(() => validateWhere(resource, nestedFilter(4))).toThrow('maximum allowed depth')
+  it('throws when nesting exceeds the default max depth of 4', () => {
+    expect(() => validateWhere(resource, nestedFilter(5))).toThrow('maximum allowed depth')
   })
 
   it('respects a custom maxFilterDepth=1 on the resource', () => {

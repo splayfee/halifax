@@ -1057,7 +1057,11 @@ describe('normalizeError', () => {
 
   it('normalizes a plain Error to INTERNAL_ERROR 500 with scrubbed message', () => {
     const result = normalizeError(new Error('boom'))
-    expect(result).toEqual({ status: 500, code: 'INTERNAL_ERROR', message: 'Internal server error' })
+    expect(result).toEqual({
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error'
+    })
   })
 
   it('normalizes an unknown throw value to INTERNAL_ERROR 500', () => {
