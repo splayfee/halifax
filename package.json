@@ -45,6 +45,7 @@
   },
   "files": [
     "dist",
+    "CHANGELOG.md",
     "README.md",
     "README_AUTH.md",
     "README_AUTOCRUD.md",
@@ -62,7 +63,7 @@
   "prepublishOnly": "npm run build",
   "scripts": {
     "build": "rm -rf dist && tsc --build && tsc-alias",
-    "dev": "tsx watch ./src/index.ts",
+    "dev": "tsx watch ./examples/express-prisma.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --check .",

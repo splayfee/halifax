@@ -5,11 +5,12 @@
  *   DATABASE_URL=postgresql://... pnpm exec prisma migrate dev
  *
  * Run:
- *   DATABASE_URL=postgresql://... API_KEY=dev-secret tsx examples/express-prisma.ts
+ *   DATABASE_URL=postgresql://... API_KEY=dev-secret pnpm dev
  */
 
 import express from 'express'
 import { PrismaClient } from '@prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
 import {
   ApiKeyAuthStrategy,
   PrismaAdapter,
@@ -17,12 +18,12 @@ import {
   type ResourceDefinition
 } from '../src/index.js'
 
-const prisma = new PrismaClient()
+// Prisma 7 connects through a driver adapter.
+const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
 
 const posts: ResourceDefinition = {
   name: 'Post',
   routePrefix: 'posts',
-  tableName: 'posts',
   fields: [
     { name: 'id', filterable: true, sortable: true },
     { name: 'title', filterable: true, sortable: true, writable: true },
@@ -40,11 +41,9 @@ const posts: ResourceDefinition = {
     allowUpdateOne: true,
     allowDeleteOne: true
   },
-  repository: new PrismaAdapter({
-    delegate: prisma.post,
-    client: prisma,
-    tableName: 'posts'
-  })
+  // Optional read-through cache: serve reads for 30s; writes invalidate automatically.
+  cache: { ttlSeconds: 30 },
+  repository: new PrismaAdapter({ delegate: prisma.post })
 }
 
 const app = express()
