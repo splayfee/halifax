@@ -1,5 +1,10 @@
 import type { ModelSchema, ModelResourceOptions, CrudPermissions } from '@/core/types.js'
 
+/**
+ * Minimal Prisma delegate interface needed for CRUD operations. This is not a full Prisma client,
+ * but only the methods required by the adapter. The actual Prisma client will have more methods
+ * and properties, but these are the ones that the adapter will use.
+ */
 export interface PrismaDelegate {
   findUnique?(args: any): Promise<any>
   findFirst?(args: any): Promise<any>

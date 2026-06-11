@@ -3,6 +3,14 @@ import type { CreatePrismaResourcesOptions, PrismaDelegate, PrismaNativeClient }
 import { PrismaAdapter } from './PrismaAdapter.js'
 import { toRoutePrefix } from './helpers.js'
 
+
+/**
+ * Creates resource definitions for Prisma models based on the provided schema and options. 
+ * @param prismaClient An instance of the Prisma client to be used for database operations.
+ * @param schema  An array of model definitions, where each model includes its name, optional database name, and fields.
+ * @param options An optional configuration object that allows customization of the generated resources, including model-specific options, default limits, and permissions.
+ * @returns An array of resource definitions that can be used to set up API endpoints or other data access layers based on the Prisma models. 
+ */
 export function createPrismaResources(
   prismaClient: object,
   schema: ReadonlyArray<{ name: string; dbName?: string | null; fields: ModelField[] }>,
