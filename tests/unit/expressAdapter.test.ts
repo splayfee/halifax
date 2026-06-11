@@ -63,7 +63,7 @@ function createApp(
     routePrefix: 'users',
     fields: [
       { name: 'id', filterable: true },
-      { name: 'email', filterable: true }
+      { name: 'email', filterable: true, writable: true }
     ],
     permissions: {
       allowCreate: true,
@@ -692,7 +692,7 @@ describe('createExpressCrudRouter — Idempotency-Key', () => {
     const resource: ResourceDefinition = {
       name: 'User',
       routePrefix: 'users',
-      fields: [{ name: 'id' }, { name: 'email' }],
+      fields: [{ name: 'id' }, { name: 'email', writable: true }],
       permissions: { allowCreate: true },
       repository: repo
     }
@@ -1055,14 +1055,18 @@ describe('normalizeError', () => {
     expect(result.status).toBe(501)
   })
 
-  it('normalizes a plain Error to INTERNAL_ERROR 500', () => {
+  it('normalizes a plain Error to INTERNAL_ERROR 500 with scrubbed message', () => {
     const result = normalizeError(new Error('boom'))
-    expect(result).toEqual({ status: 500, code: 'INTERNAL_ERROR', message: 'boom' })
+    expect(result).toEqual({ status: 500, code: 'INTERNAL_ERROR', message: 'Internal server error' })
   })
 
   it('normalizes an unknown throw value to INTERNAL_ERROR 500', () => {
     const result = normalizeError('something bad')
-    expect(result).toEqual({ status: 500, code: 'INTERNAL_ERROR', message: 'Unknown error' })
+    expect(result).toEqual({
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error'
+    })
   })
 })
 

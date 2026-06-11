@@ -152,11 +152,11 @@ function addWhere(queryItems: IQueryFilter[] | undefined): string {
  * @param update - Key-value pairs to assign (the `id` key is skipped).
  * @returns A parameterised SET clause and its ordered bind values.
  */
-function buildUpdate(update: Record<string, unknown>): IParamQuery {
+function buildUpdate(update: Record<string, unknown>, idField = 'id'): IParamQuery {
   const setClause = ['SET']
   const parameters: unknown[] = []
   const keys = Object.keys(update).filter((key) => {
-    return key !== 'id'
+    return key !== idField
   })
 
   keys.forEach((key: string, index: number) => {
@@ -252,14 +252,16 @@ export class QueryBuilder {
   }
 
   /**
-   * Builds a `DELETE FROM … WHERE …` query.
+   * Builds a `DELETE FROM … WHERE …` query, with an optional `RETURNING` clause.
    * @param queryOptions - Query AST including table name and WHERE clause.
+   * @param returning - Column names to include in a `RETURNING` clause (e.g. `['id']`).
    * @returns A parameterised SQL statement and its bind values, ready to execute.
    */
-  public static buildDeleteQuery(queryOptions: IQueryOptions): IParamQuery {
+  public static buildDeleteQuery(queryOptions: IQueryOptions, returning?: string[]): IParamQuery {
+    const returningClause = returning?.length ? `RETURNING ${returning.join(', ')}` : ''
     return {
       statement: numberParams(
-        ['DELETE FROM', queryOptions.tableName, addWhere(queryOptions.where)]
+        ['DELETE FROM', queryOptions.tableName, addWhere(queryOptions.where), returningClause]
           .filter(Boolean)
           .join(' ')
       ),
@@ -268,19 +270,29 @@ export class QueryBuilder {
   }
 
   /**
-   * Builds an `UPDATE … SET … WHERE …` query.
+   * Builds an `UPDATE … SET … WHERE …` query, with an optional `RETURNING` clause.
    * @param queryOptions - Query AST including table name and WHERE clause.
    * @param update - Key-value pairs to assign in the SET clause (`id` is excluded automatically).
+   * @param returning - Column names to include in a `RETURNING` clause (e.g. `['id']`).
    * @returns A parameterised SQL statement and its bind values, ready to execute.
    */
   public static buildUpdateQuery(
     queryOptions: IQueryOptions,
-    update: Record<string, unknown>
+    update: Record<string, unknown>,
+    returning?: string[],
+    idField = 'id'
   ): IParamQuery {
-    const updateClause = buildUpdate(update)
+    const updateClause = buildUpdate(update, idField)
+    const returningClause = returning?.length ? `RETURNING ${returning.join(', ')}` : ''
     return {
       statement: numberParams(
-        ['UPDATE', queryOptions.tableName, updateClause.statement, addWhere(queryOptions.where)]
+        [
+          'UPDATE',
+          queryOptions.tableName,
+          updateClause.statement,
+          addWhere(queryOptions.where),
+          returningClause
+        ]
           .filter(Boolean)
           .join(' ')
       ),

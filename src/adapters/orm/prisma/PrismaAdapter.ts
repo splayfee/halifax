@@ -1,6 +1,16 @@
 import { QueryBuilder } from '@/classes/QueryBuilder.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { ServerError } from '@/errors/ServerError.js'
+
+/** Returns true for Prisma's P2025 "record not found" error. */
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as Record<string, unknown>).code === 'P2025'
+  )
+}
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import type {
   Repository,
@@ -186,8 +196,9 @@ export class PrismaAdapter<
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     try {
       return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
-    } catch {
-      return null
+    } catch (error) {
+      if (isNotFoundError(error)) return null
+      throw error
     }
   }
 
@@ -215,20 +226,16 @@ export class PrismaAdapter<
 
     const updateQuery = QueryBuilder.buildUpdateQuery(
       { ...query, tableName: query.tableName || this.tableName },
-      data as Record<string, unknown>
+      data as Record<string, unknown>,
+      [this.idField],
+      this.idField
     )
-    const selectQuery = QueryBuilder.buildSelectQuery({
-      ...query,
-      tableName: query.tableName || this.tableName,
-      fields: ['id']
-    })
-    const selected = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      selectQuery.statement,
-      ...selectQuery.parameters
+    const updated = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      updateQuery.statement,
+      ...updateQuery.parameters
     )
-    await this.client.$queryRawUnsafe(updateQuery.statement, ...updateQuery.parameters)
 
-    return { updated: selected.map((item) => item.id) }
+    return { updated: updated.map((item) => item[this.idField]) }
   }
 
   /**
@@ -264,8 +271,9 @@ export class PrismaAdapter<
     try {
       await this.delegate.delete({ where: { [this.idField]: id } })
       return true
-    } catch {
-      return false
+    } catch (error) {
+      if (isNotFoundError(error)) return false
+      throw error
     }
   }
 
@@ -287,17 +295,15 @@ export class PrismaAdapter<
       throw new NotImplementedError('Native SQL deleteMany requires a Prisma client and tableName.')
     }
 
-    const resolvedQuery = { ...query, tableName: query.tableName || this.tableName, fields: ['id'] }
-    const selectQuery = QueryBuilder.buildSelectQuery(resolvedQuery)
-    const deleteQuery = QueryBuilder.buildDeleteQuery(resolvedQuery)
+    const resolvedQuery = { ...query, tableName: query.tableName || this.tableName }
+    const deleteQuery = QueryBuilder.buildDeleteQuery(resolvedQuery, [this.idField])
 
-    const selected = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
-      selectQuery.statement,
-      ...selectQuery.parameters
+    const deleted = await this.client.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      deleteQuery.statement,
+      ...deleteQuery.parameters
     )
-    await this.client.$queryRawUnsafe(deleteQuery.statement, ...deleteQuery.parameters)
 
-    return { deleted: selected.map((item) => item.id) }
+    return { deleted: deleted.map((item) => item[this.idField]) }
   }
 
   /**

@@ -481,11 +481,11 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     expect(res.body.results[0].title).toBe('FindMe')
   })
 
-  it('PUT /posts/:id creates a record via upsert', async () => {
+  it('PUT /posts/:id creates a record via upsert (returns 200)', async () => {
     const res = await request(app)
       .put('/api/posts/888001')
       .set('x-api-key', API_KEY)
-      .send({ id: 888001, title: 'Upserted via HTTP', published: false })
+      .send({ title: 'Upserted via HTTP', published: false })
     expect(res.status).toBe(200)
     expect(res.body.title).toBe('Upserted via HTTP')
   })

@@ -31,9 +31,11 @@ function parseId(raw: string | undefined): string | number {
 
 /**
  * Strips non-writable fields from a request body and rejects unknown fields with a 422.
+ * Only fields explicitly marked `writable: true` are allowed through; fields with
+ * `writable: false` or `writable` unset are silently dropped.
  * @param resource - The resource definition that defines writable fields.
  * @param data - The raw request body key-value map.
- * @returns A new object containing only known, writable fields.
+ * @returns A new object containing only explicitly writable fields.
  * @throws {@link UnprocessableEntityError} when the body contains keys not defined on the resource.
  */
 function filterWritableFields(
@@ -46,11 +48,12 @@ function filterWritableFields(
     throw new UnprocessableEntityError(`Unknown field(s): ${unknownFields.join(', ')}.`)
   }
 
-  const nonWritable = new Set(
-    resource.fields.filter((f) => f.writable === false).map((f) => f.name)
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => {
+      const field = resource.fields.find((f) => f.name === key)
+      return field?.writable === true
+    })
   )
-  if (nonWritable.size === 0) return data
-  return Object.fromEntries(Object.entries(data).filter(([key]) => !nonWritable.has(key)))
 }
 
 /** Options for {@link registerCrudApi} / {@link createExpressCrudRouter}. */
@@ -97,9 +100,9 @@ export function normalizeError(error: unknown): {
     }
   }
   if (error instanceof Error) {
-    return { status: 500, code: 'INTERNAL_ERROR', message: error.message }
+    return { status: 500, code: 'INTERNAL_ERROR', message: 'Internal server error' }
   }
-  return { status: 500, code: 'INTERNAL_ERROR', message: 'Unknown error' }
+  return { status: 500, code: 'INTERNAL_ERROR', message: 'Internal server error' }
 }
 
 /**
@@ -360,6 +363,14 @@ export function registerCrudApi(
           if (!repository.updateMany)
             throw new NotImplementedError('This resource does not support updateMany.')
           const { update, ...queryBody } = (req.body ?? {}) as Record<string, unknown>
+          const filteredUpdate = filterWritableFields(
+            resource,
+            (update ?? {}) as Record<string, unknown>
+          )
+          if (!Object.keys(filteredUpdate).length)
+            throw new UnprocessableEntityError(
+              'updateMany requires at least one writable field in the update payload.'
+            )
           const query = {
             ...queryBody,
             tableName: resource.tableName
@@ -369,7 +380,7 @@ export function registerCrudApi(
             throw new UnprocessableEntityError(
               'updateMany requires at least one WHERE filter to prevent unintended bulk updates.'
             )
-          const result = await repository.updateMany(query, update as never)
+          const result = await repository.updateMany(query, filteredUpdate as never)
           await res.status(200).json(result)
         })
       )
