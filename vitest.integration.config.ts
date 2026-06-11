@@ -13,6 +13,7 @@ export default defineConfig({
     include: ['tests/integration/**/*.test.ts'],
     globalSetup: ['tests/integration/globalSetup.ts'],
     testTimeout: 30_000,
-    fileParallelism: false
+    fileParallelism: false,
+    reporter: 'verbose'
   }
 })

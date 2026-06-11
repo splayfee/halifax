@@ -211,11 +211,18 @@ describe('PrismaAdapter — updateOne', () => {
     expect(result).toMatchObject({ email: 'updated@test.com' })
   })
 
-  it('returns null when update throws (record not found)', async () => {
-    const delegate = makeDelegate({ update: vi.fn().mockRejectedValue(new Error('Not found')) })
+  it('returns null when Prisma throws P2025 (record not found)', async () => {
+    const p2025 = Object.assign(new Error('Not found'), { code: 'P2025' })
+    const delegate = makeDelegate({ update: vi.fn().mockRejectedValue(p2025) })
     const a = new PrismaAdapter({ delegate })
-    const result = await a.updateOne(999, { email: 'x@t.com' })
-    expect(result).toBeNull()
+    expect(await a.updateOne(999, { email: 'x@t.com' })).toBeNull()
+  })
+
+  it('re-throws non-P2025 errors from update', async () => {
+    const err = new Error('Connection lost')
+    const delegate = makeDelegate({ update: vi.fn().mockRejectedValue(err) })
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.updateOne(1, { email: 'x@t.com' })).rejects.toThrow('Connection lost')
   })
 })
 
@@ -243,27 +250,32 @@ describe('PrismaAdapter — deleteOne', () => {
     expect(await a.deleteOne(1)).toBe(true)
   })
 
-  it('returns false when delete throws', async () => {
-    const delegate = makeDelegate({ delete: vi.fn().mockRejectedValue(new Error('Not found')) })
+  it('returns false when Prisma throws P2025 (record not found)', async () => {
+    const p2025 = Object.assign(new Error('Not found'), { code: 'P2025' })
+    const delegate = makeDelegate({ delete: vi.fn().mockRejectedValue(p2025) })
     const a = new PrismaAdapter({ delegate })
     expect(await a.deleteOne(999)).toBe(false)
+  })
+
+  it('re-throws non-P2025 errors from delete', async () => {
+    const err = new Error('Connection lost')
+    const delegate = makeDelegate({ delete: vi.fn().mockRejectedValue(err) })
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.deleteOne(1)).rejects.toThrow('Connection lost')
   })
 })
 
 describe('PrismaAdapter — updateMany (native SQL)', () => {
-  it('runs select then update and returns updated ids', async () => {
+  it('runs a single UPDATE ... RETURNING and returns updated ids', async () => {
     const client = {
-      $queryRawUnsafe: vi
-        .fn()
-        .mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
-        .mockResolvedValueOnce(undefined)
+      $queryRawUnsafe: vi.fn().mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
     }
     const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.updateMany(
       { tableName: 'users', where: [{ field: 'id', comparison: SqlComparison.Equal, value1: 1 }] },
       { email: 'new@test.com' } as Partial<Row>
     )
-    expect(client.$queryRawUnsafe).toHaveBeenCalledTimes(2)
+    expect(client.$queryRawUnsafe).toHaveBeenCalledTimes(1)
     expect(result.updated).toEqual([1, 2])
   })
 
@@ -286,18 +298,16 @@ describe('PrismaAdapter — updateMany (native SQL)', () => {
 })
 
 describe('PrismaAdapter — deleteMany (native SQL)', () => {
-  it('runs select then delete and returns deleted ids', async () => {
+  it('runs a single DELETE ... RETURNING and returns deleted ids', async () => {
     const client = {
-      $queryRawUnsafe: vi
-        .fn()
-        .mockResolvedValueOnce([{ id: 5 }])
-        .mockResolvedValueOnce(undefined)
+      $queryRawUnsafe: vi.fn().mockResolvedValueOnce([{ id: 5 }])
     }
     const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
     const result = await a.deleteMany({
       tableName: 'users',
       where: [{ field: 'id', comparison: SqlComparison.Equal, value1: 5 }]
     })
+    expect(client.$queryRawUnsafe).toHaveBeenCalledTimes(1)
     expect(result.deleted).toEqual([5])
   })
 
