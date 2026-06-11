@@ -9,15 +9,20 @@ interface HttpServer {
 }
 ```
 
-The current adapter is **Express 5**.
+The current adapter is the **Express adapter**, which works seamlessly with both **Express 4 and Express 5** — the same `ExpressHttpServer` / `createExpressCrudRouter` code runs unchanged on either major. The adapter only touches the route methods, `listen`, and request/response surface that are identical across both versions, and every route it registers uses plain segments and `:id` named params (never `*` path wildcards), so it is unaffected by the Express 5 `path-to-regexp` routing-syntax change. Bring whichever Express version your app already uses; no configuration or version flag is required.
 
 ## Express Adapter
 
 ### Install
 
 ```bash
+# Express 5
 pnpm add @edium/halifax express
 pnpm add -D @types/express
+
+# …or Express 4 — equally supported
+pnpm add @edium/halifax express@4
+pnpm add -D @types/express@4
 ```
 
 ### `createExpressCrudRouter`

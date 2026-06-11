@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Lint, type-check, and unit-test against BOTH Express 4 and Express 5 to guarantee
+  # the Express adapter stays seamless across both majors. The peer-dependency range is
+  # `^4.17.0 || ^5.0.0`; this matrix is what keeps that promise honest.
+  test:
+    name: test (express ${{ matrix.express }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        express: [4, 5]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The repo pins Express 5 as a dev dependency; for the v4 leg of the matrix we
+      # swap in Express 4 (and its matching @types) so the suite exercises that major.
+      # peerDependencies already allow both, so this only changes which version is resolved.
+      - name: Pin Express ${{ matrix.express }}
+        if: matrix.express == 4
+        run: pnpm add -D express@4 @types/express@4
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Type-check
+        run: pnpm run type-check
+
+      - name: Unit tests
+        run: pnpm run test:unit
