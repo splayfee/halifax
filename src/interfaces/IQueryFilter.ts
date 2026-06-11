@@ -12,7 +12,7 @@ export interface IQueryFilter {
   /** Primary value (or array of values for `IN` / `NOT IN`). */
   value1?: QueryScalar | QueryScalar[]
   /** Secondary value for range comparisons (`BETWEEN`, `NOT BETWEEN`). */
-  value2?: QueryScalar | QueryScalar[]
+  value2?: string | number
   /** Nested sub-conditions grouped in parentheses. */
   children?: IQueryFilter[]
 }

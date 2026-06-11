@@ -254,7 +254,7 @@ export function registerCrudApi(
   resources: ResourceDefinition[],
   options: CrudApiOptions = {}
 ): void {
-  const authStrategy = options.authStrategy ?? new AllowAllAuthStrategy()
+  const authStrategy: AuthStrategy = options.authStrategy ?? new AllowAllAuthStrategy()
   const queryBuilderPath = options.queryBuilderPath ?? 'query-builder'
   const previewPath = options.previewQueryBuilderPath ?? '/query-builder/preview'
 
@@ -479,7 +479,17 @@ export function registerCrudApi(
     'POST',
     previewPath,
     wrap(async (req, res) => {
-      await authStrategy.authenticate(req)
+      const auth = await authStrategy.authenticate(req)
+      if (authStrategy.authorize) {
+        const allowed = await authStrategy.authorize({
+          auth,
+          action: 'readManyWithQueryBuilder',
+          resource: { name: '__preview__', routePrefix: '__preview__', fields: [], repository: null! },
+          requiredPermissions: [],
+          req
+        })
+        if (!allowed) throw new AuthorizationError()
+      }
       const query = req.body as IQueryOptions
       assertSafePreviewIdentifiers(query)
       await res.status(200).json({

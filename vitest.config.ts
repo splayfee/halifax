@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    reporters: 'verbose',
     include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
