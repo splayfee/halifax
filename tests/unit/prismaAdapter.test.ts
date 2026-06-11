@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/prisma/index.js'
+import { toRoutePrefix } from '@/adapters/orm/prisma/helpers.js'
 import type { ModelSchema } from '@/core/types.js'
 import { SqlComparison } from '@/enums/SqlComparison.js'
 
@@ -393,6 +394,38 @@ describe('PrismaAdapter — schema introspection', () => {
     const a = new PrismaAdapter({ delegate: makeDelegate() })
     expect(a.fields).toBeUndefined()
     expect(a.relations).toBeUndefined()
+  })
+})
+
+describe('toRoutePrefix', () => {
+  it('lowercases and pluralises a simple PascalCase name', () => {
+    expect(toRoutePrefix('User')).toBe('users')
+  })
+
+  it('converts camelCase segments to kebab-case and pluralises', () => {
+    expect(toRoutePrefix('BlogPost')).toBe('blog-posts')
+  })
+
+  it('applies -ies rule for consonant-y endings', () => {
+    expect(toRoutePrefix('Category')).toBe('categories')
+    expect(toRoutePrefix('Body')).toBe('bodies')
+    expect(toRoutePrefix('Activity')).toBe('activities')
+  })
+
+  it('adds -s (not -ies) for vowel-y endings', () => {
+    expect(toRoutePrefix('Key')).toBe('keys')
+    expect(toRoutePrefix('Monkey')).toBe('monkeys')
+  })
+
+  it('applies -es rule for names ending in s, x, z, ch, sh', () => {
+    expect(toRoutePrefix('Status')).toBe('statuses')
+    expect(toRoutePrefix('Tax')).toBe('taxes')
+    expect(toRoutePrefix('Church')).toBe('churches')
+  })
+
+  it('handles a multi-word camelCase name', () => {
+    expect(toRoutePrefix('UserProfile')).toBe('user-profiles')
+    expect(toRoutePrefix('AuditLog')).toBe('audit-logs')
   })
 })
 

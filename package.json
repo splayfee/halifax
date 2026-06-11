@@ -27,11 +27,11 @@
     "dist",
     "src",
     "README.md",
-    "README_ADAPTERS.md",
     "README_AUTH.md",
     "README_AUTOCRUD.md",
+    "README_HTTP_ADAPTERS.md",
     "README_QUERYBUILDER.md",
-    "README_REPOSITORIES.md",
+    "README_REPO_ADAPTERS.md",
     "LICENSE"
   ],
   "publishConfig": {

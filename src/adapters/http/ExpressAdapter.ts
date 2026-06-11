@@ -6,7 +6,7 @@ import type {
   HttpResponse,
   HttpRouteHandler,
   HttpServer
-} from '@/core/http.js'
+} from '@/core/types.js'
 import { registerCrudApi, type CrudApiOptions } from '@/core/crudRouter.js'
 import type { ResourceDefinition } from '@/core/types.js'
 

@@ -73,13 +73,13 @@ app.listen(3000)
 
 ## Documentation
 
-| Guide                                              | Contents                                                                                      |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [README_AUTOCRUD.md](./README_AUTOCRUD.md)         | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes |
-| [README_REPOSITORIES.md](./README_REPOSITORIES.md) | Prisma 7 setup, `PrismaAdapter` options, capabilities, custom repositories                    |
-| [README_ADAPTERS.md](./README_ADAPTERS.md)         | Express adapter, `createExpressCrudRouter`, custom HTTP adapters                              |
-| [README_AUTH.md](./README_AUTH.md)                 | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, custom `authorize`      |
-| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md) | Query builder payload, comparisons, nested filters, `QueryBuilder` class                      |
+| Guide                                                | Contents                                                                                      |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [README_AUTOCRUD.md](./README_AUTOCRUD.md)           | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes |
+| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) | Prisma 7 setup, `PrismaAdapter` options, capabilities, custom repositories                    |
+| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express adapter, `createExpressCrudRouter`, custom HTTP adapters                              |
+| [README_AUTH.md](./README_AUTH.md)                   | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, custom `authorize`      |
+| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)   | Query builder payload, comparisons, nested filters, `QueryBuilder` class                      |
 
 ## Running Integration Tests
 

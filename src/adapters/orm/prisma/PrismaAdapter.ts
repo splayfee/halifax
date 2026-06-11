@@ -10,7 +10,7 @@ import type {
   ListResult,
   NativeQueryResult,
   UpdateManyResult
-} from '@/core/repository.js'
+} from '@/core/types.js'
 import type { FieldDefinition, RelationDefinition, ModelSchema } from '@/core/types.js'
 import type { PrismaDelegate, PrismaNativeClient, PrismaAdapterOptions } from './types.js'
 import { toSelect, toInclude, toOrderBy } from './helpers.js'
@@ -86,9 +86,9 @@ export class PrismaAdapter<
   }
 
   /**
-   * Extracts relation definitions from a Prisma model schema. 
+   * Extracts relation definitions from a Prisma model schema.
    * @param model - The Prisma model schema.
-   * @returns 
+   * @returns
    */
   public static relationsFromModel(model: ModelSchema): RelationDefinition[] {
     return model.fields
@@ -97,11 +97,11 @@ export class PrismaAdapter<
   }
 
   /**
-   * Retrieves a single record by its ID, with optional field selection and relation inclusion. 
+   * Retrieves a single record by its ID, with optional field selection and relation inclusion.
    * @param id - The ID of the record to retrieve.
    * @param options - Optional parameters for field selection and relation inclusion.
    * @returns A promise that resolves to the retrieved record or null if not found.
-    * @throws ServerError if the Prisma delegate does not support the required methods.
+   * @throws ServerError if the Prisma delegate does not support the required methods.
    */
   public async getOne(
     id: string | number,
@@ -128,7 +128,7 @@ export class PrismaAdapter<
    * Retrieves multiple records based on the provided query options, including filtering, sorting, pagination, and field selection.
    * @param options - An object containing query options such as filtering conditions, sorting, pagination, and field selection.
    * @returns A promise that resolves to an object containing the total count of matching records and an array of the retrieved records.
-    * @throws ServerError if the Prisma delegate does not support the required methods.
+   * @throws ServerError if the Prisma delegate does not support the required methods.
    */
   public async getMany(options: ListOptions = {}): Promise<ListResult<TRecord>> {
     const select = toSelect(options.fields)
@@ -151,7 +151,7 @@ export class PrismaAdapter<
   }
 
   /**
-   * Creates a new record in the database using the provided data. 
+   * Creates a new record in the database using the provided data.
    * @param data - An object containing the data for the new record to be created.
    * @returns A promise that resolves to the created record.
    * @throws ServerError if the Prisma delegate does not support the create method.
@@ -161,8 +161,8 @@ export class PrismaAdapter<
   }
 
   /**
-   * Creates multiple records in the database using the provided array of data objects. 
-   * If the Prisma delegate does not support createMany or if returnCreated is true, it falls back to creating records one by one and returns the created records. Otherwise, it uses createMany for better performance but does not return the created records. 
+   * Creates multiple records in the database using the provided array of data objects.
+   * If the Prisma delegate does not support createMany or if returnCreated is true, it falls back to creating records one by one and returns the created records. Otherwise, it uses createMany for better performance but does not return the created records.
    * @param data - An array of objects, each containing the data for a new record to be created.
    * @returns A promise that resolves to an array of the created records.
    * @throws ServerError if the Prisma delegate does not support the createMany method.
@@ -177,7 +177,7 @@ export class PrismaAdapter<
   }
 
   /**
-   * Updates a single record identified by its ID with the provided data. If the record does not exist, it returns null. 
+   * Updates a single record identified by its ID with the provided data. If the record does not exist, it returns null.
    * @param id - The ID of the record to be updated.
    * @param data - An object containing the data to update the record with.
    * @returns A promise that resolves to the updated record or null if the record does not exist.
@@ -196,8 +196,13 @@ export class PrismaAdapter<
    * This method requires a Prisma client for executing raw SQL queries, as Prisma does not
    * natively support bulk updates with return values. It first selects the IDs of the records
    * to be updated based on the query options, then executes an update query, and finally returns
-   * the IDs of the updated records. 
-   * @param query - An object containing query options to filter the records that should be updated, such as where conditions, sorting, and pagination. 
+   * the IDs of the updated records.
+   *
+   * **Note:** The SELECT and UPDATE are issued as two separate queries without a transaction.
+   * Under concurrent writes, rows inserted or deleted between the two queries may cause the
+   * returned `updated` IDs to differ from the rows actually modified.
+   *
+   * @param query - An object containing query options to filter the records that should be updated, such as where conditions, sorting, and pagination.
    * @param data - An object containing the data to update the matching records with.
    * @returns A promise that resolves to an object containing an array of the IDs of the updated records.
    * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
@@ -228,8 +233,8 @@ export class PrismaAdapter<
 
   /**
    * Upserts a single record identified by its ID with the provided data. If the record does not exist, it creates a new one.
-   * If it exists, it updates the existing record. This method requires the Prisma delegate to support the upsert operation. 
-   * @param id - The ID of the record to be upserted. 
+   * If it exists, it updates the existing record. This method requires the Prisma delegate to support the upsert operation.
+   * @param id - The ID of the record to be upserted.
    * @param data - An object containing the data to upsert the record with. This data will be used for both creating a new record if it does not exist and updating the existing record if it does exist.
    * @returns A promise that resolves to the upserted record, whether it was created or updated.
    * @throws NotImplementedError if the Prisma delegate does not support the upsert method.
@@ -249,12 +254,12 @@ export class PrismaAdapter<
 
   /**
    * Deletes a single record identified by its ID. If the record does not exist, it returns false.
-   * If the deletion is successful, it returns true. This method requires the Prisma delegate to support the delete operation. 
+   * If the deletion is successful, it returns true. This method requires the Prisma delegate to support the delete operation.
    * @param id - The ID of the record to be deleted.
    * @returns A promise that resolves to true if the record was successfully deleted, or false if the record did not exist.
    * @throws NotImplementedError if the Prisma delegate does not support the delete method.
    * @throws ServerError if the Prisma delegate does not support the required methods for deleting records.
-    */ 
+   */
   public async deleteOne(id: string | number): Promise<boolean> {
     try {
       await this.delegate.delete({ where: { [this.idField]: id } })
@@ -265,12 +270,17 @@ export class PrismaAdapter<
   }
 
   /**
-   * Deletes multiple records that match the provided query options. This method requires a Prisma client for
-   * executing raw SQL queries, as Prisma does not 
-   * @param query - An object containing query options to filter the records that should be deleted, such as where conditions, sorting, and pagination. 
+   * Deletes multiple records that match the provided query options. This method requires a Prisma
+   * client for executing raw SQL queries.
+   *
+   * **Note:** The SELECT and DELETE are issued as two separate queries without a transaction.
+   * Under concurrent writes, rows inserted or deleted between the two queries may cause the
+   * returned `deleted` IDs to differ from the rows actually removed.
+   *
+   * @param query - An object containing query options to filter the records that should be deleted, such as where conditions, sorting, and pagination.
    * @returns A promise that resolves to an object containing an array of the IDs of the deleted records.
    * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
-   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries.  
+   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries.
    */
   public async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
@@ -295,8 +305,8 @@ export class PrismaAdapter<
    * @param query - An object containing query options such as filtering conditions, sorting, pagination, and field selection, which will be used to build the SQL queries.
    * @returns A promise that resolves to an object containing the total count of matching records and an array of the retrieved records.
    * @throws NotImplementedError if the Prisma client or tableName is not provided, as they are required for executing raw SQL queries.
-   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries. 
-    */ 
+   * @throws ServerError if the Prisma client does not support the required methods for executing raw SQL queries.
+   */
   public async executeQueryBuilder(query: IQueryOptions): Promise<NativeQueryResult<TRecord>> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
       throw new NotImplementedError(

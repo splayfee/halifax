@@ -341,8 +341,8 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     await prisma.post.deleteMany()
   })
 
-  it('GET /posts returns 403 without auth', async () => {
-    expect((await request(app).get('/api/posts')).status).toBe(403)
+  it('GET /posts returns 401 without auth', async () => {
+    expect((await request(app).get('/api/posts')).status).toBe(401)
   })
 
   it('POST /posts creates a record', async () => {

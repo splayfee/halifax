@@ -1,8 +1,8 @@
-import type { ListOptions } from '@/core/repository.js'
+import type { ListOptions } from '@/core/types.js'
 
 /**
  * Converts an array of field names into a Prisma select object.
- * For example, ['id', 'name'] becomes { id: true, name: true }. 
+ * For example, ['id', 'name'] becomes { id: true, name: true }.
  * @param fields An array of field names to select. If undefined or empty, returns undefined to select all fields.
  * @returns A Prisma select object or undefined if no fields are specified.
  */
@@ -12,7 +12,7 @@ export function toSelect(fields?: string[]): Record<string, boolean> | undefined
 }
 
 /**
- * Converts an array of relation names into a Prisma include object. 
+ * Converts an array of relation names into a Prisma include object.
  * @param include An array of relation names to include. If undefined or empty, returns undefined to include no relations.
  * @returns A Prisma include object or undefined if no relations are specified.
  */
@@ -34,7 +34,7 @@ export function toOrderBy(
 }
 
 /**
- * Converts a model name into a route prefix by converting it to kebab-case and pluralizing it. 
+ * Converts a model name into a route prefix by converting it to kebab-case and pluralizing it.
  * @param modelName The name of the model to convert, e.g., 'UserProfile'.
  * @returns The route prefix, e.g., 'user-profiles'.
  */

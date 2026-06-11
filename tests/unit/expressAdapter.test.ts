@@ -11,7 +11,7 @@ import { BadRequestError } from '@/errors/BadRequestError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import type { ResourceDefinition } from '@/core/types.js'
-import type { Repository, ListResult, CreateOptions } from '@/core/repository.js'
+import type { Repository, ListResult, CreateOptions } from '@/core/types.js'
 
 type User = { id: number; email: string }
 
@@ -206,11 +206,11 @@ function createLimitedApp() {
 }
 
 describe('createExpressCrudRouter — auth', () => {
-  it('blocks requests with no API key', async () => {
-    expect((await request(createApp()).get('/api/v1/users')).status).toBe(403)
+  it('blocks requests with no API key (401)', async () => {
+    expect((await request(createApp()).get('/api/v1/users')).status).toBe(401)
   })
 
-  it('blocks requests with a wrong API key', async () => {
+  it('blocks requests with a wrong API key (403)', async () => {
     expect((await request(createApp()).get('/api/v1/users').set('x-api-key', 'bad')).status).toBe(
       403
     )
@@ -355,7 +355,97 @@ describe('createExpressCrudRouter — UUID id support', () => {
   })
 })
 
+function createUpsertSecuredApp() {
+  const app = express()
+  app.use(express.json())
+
+  const records: Array<{ id: number; email: string; role: string }> = [
+    { id: 1, email: 'one@example.com', role: 'user' }
+  ]
+
+  const repo: Repository<
+    (typeof records)[0],
+    Partial<(typeof records)[0]>,
+    Partial<(typeof records)[0]>
+  > = {
+    async getOne(id) {
+      return records.find((r) => r.id === Number(id)) ?? null
+    },
+    async getMany() {
+      return { count: records.length, results: [...records] }
+    },
+    async createOne(data) {
+      const r = { id: Date.now(), email: '', role: 'user', ...data }
+      records.push(r)
+      return r
+    },
+    async createMany(data) {
+      const rs = data.map((d) => ({ id: Date.now(), email: '', role: 'user', ...d }))
+      records.push(...rs)
+      return rs
+    },
+    async updateOne(id, data) {
+      const r = records.find((x) => x.id === Number(id))
+      if (!r) return null
+      Object.assign(r, data)
+      return r
+    },
+    async upsertOne(id, data) {
+      const r = records.find((x) => x.id === Number(id))
+      if (r) {
+        Object.assign(r, data)
+        return r
+      }
+      const created = { id: Number(id), email: '', role: 'user', ...data }
+      records.push(created)
+      return created
+    },
+    async deleteOne(id) {
+      const idx = records.findIndex((r) => r.id === Number(id))
+      if (idx === -1) return false
+      records.splice(idx, 1)
+      return true
+    }
+  }
+
+  const resource: ResourceDefinition = {
+    name: 'User',
+    routePrefix: 'users',
+    fields: [
+      { name: 'id', filterable: true, sortable: true, selectable: true },
+      { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
+      { name: 'role', filterable: false, sortable: false, selectable: false, writable: false }
+    ],
+    permissions: { allowUpsertOne: true },
+    repository: repo
+  }
+
+  app.use(
+    '/api/v1',
+    createExpressCrudRouter([resource], { authStrategy: new ApiKeyAuthStrategy('secret') })
+  )
+  return app
+}
+
 describe('createExpressCrudRouter — field security', () => {
+  it('strips non-writable fields from upsert body', async () => {
+    const res = await request(createUpsertSecuredApp())
+      .put('/api/v1/users/1')
+      .set('x-api-key', 'secret')
+      .send({ email: 'upserted@example.com', role: 'superadmin' })
+    expect(res.status).toBe(200)
+    expect(res.body.role).not.toBe('superadmin')
+  })
+
+  it('returns 422 when upsert body contains an unknown field', async () => {
+    const res = await request(createUpsertSecuredApp())
+      .put('/api/v1/users/1')
+      .set('x-api-key', 'secret')
+      .send({ email: 'x@example.com', injected: 'malicious' })
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].message).toMatch(/unknown field/i)
+  })
+
   it('returns 422 when filtering on a non-filterable field', async () => {
     const res = await request(createSecuredApp())
       .get('/api/v1/users?role=admin')
@@ -729,13 +819,25 @@ function createFullApp() {
 }
 
 describe('createExpressCrudRouter — updateMany', () => {
-  it('returns 200 with updated ids', async () => {
+  it('returns 200 with updated ids when WHERE clause is provided', async () => {
+    const res = await request(createFullApp())
+      .patch('/api/v1/users')
+      .set('Accept', 'application/json')
+      .send({
+        update: { email: 'bulk@x.com' },
+        where: [{ field: 'id', comparison: '>', value1: 0 }]
+      })
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('updated')
+  })
+
+  it('returns 422 when no WHERE clause is provided', async () => {
     const res = await request(createFullApp())
       .patch('/api/v1/users')
       .set('Accept', 'application/json')
       .send({ update: { email: 'bulk@x.com' } })
-    expect(res.status).toBe(200)
-    expect(res.body).toHaveProperty('updated')
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].message).toMatch(/WHERE filter/)
   })
 })
 
@@ -785,13 +887,22 @@ describe('createExpressCrudRouter — upsertOne', () => {
 })
 
 describe('createExpressCrudRouter — deleteMany', () => {
-  it('returns 200 with deleted ids', async () => {
+  it('returns 200 with deleted ids when WHERE clause is provided', async () => {
+    const res = await request(createFullApp())
+      .delete('/api/v1/users')
+      .set('Accept', 'application/json')
+      .send({ where: [{ field: 'id', comparison: '>', value1: 0 }] })
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('deleted')
+  })
+
+  it('returns 422 when no WHERE clause is provided', async () => {
     const res = await request(createFullApp())
       .delete('/api/v1/users')
       .set('Accept', 'application/json')
       .send({})
-    expect(res.status).toBe(200)
-    expect(res.body).toHaveProperty('deleted')
+    expect(res.status).toBe(422)
+    expect(res.body.errors[0].message).toMatch(/WHERE filter/)
   })
 })
 
@@ -858,6 +969,40 @@ describe('createExpressCrudRouter — preview route', () => {
     expect(res.status).toBe(200)
     expect(res.body.count.statement).toContain('COUNT(*)')
     expect(res.body.select.statement).toContain('FROM users')
+  })
+
+  it('returns 400 for an invalid table name identifier', async () => {
+    const app = express()
+    app.use(express.json())
+    app.use(createExpressCrudRouter([]))
+    const res = await request(app)
+      .post('/query-builder/preview')
+      .set('Accept', 'application/json')
+      .send({ tableName: 'users; DROP TABLE users; --' })
+    expect(res.status).toBe(400)
+    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
+  })
+
+  it('returns 400 for an invalid field name identifier', async () => {
+    const app = express()
+    app.use(express.json())
+    app.use(createExpressCrudRouter([]))
+    const res = await request(app)
+      .post('/query-builder/preview')
+      .set('Accept', 'application/json')
+      .send({ tableName: 'users', fields: ['id', 'bad field'] })
+    expect(res.status).toBe(400)
+  })
+
+  it('requires authentication when a non-AllowAll strategy is configured', async () => {
+    const app = express()
+    app.use(express.json())
+    app.use(createExpressCrudRouter([], { authStrategy: new ApiKeyAuthStrategy('secret') }))
+    const res = await request(app)
+      .post('/query-builder/preview')
+      .set('Accept', 'application/json')
+      .send({ tableName: 'users' })
+    expect(res.status).toBe(401)
   })
 })
 
