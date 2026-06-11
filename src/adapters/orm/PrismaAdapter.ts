@@ -21,45 +21,42 @@ import type {
 } from '@/core/types.js'
 import { ServerError } from '@/errors/ServerError.js'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/**
+ * Structural interface that any Prisma model delegate satisfies.
+ * All method signatures intentionally use `any` so that generated Prisma delegates
+ * can be passed without casting.
+ */
 export interface PrismaDelegate {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   findUnique?(args: any): Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   findFirst?(args: any): Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   findMany(args?: any): Promise<any[]>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   count(args?: any): Promise<number>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   create(args: any): Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createMany?(args: any): Promise<{ count: number }>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   update(args: any): Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   updateMany?(args: any): Promise<{ count: number }>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   upsert?(args: any): Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete(args: any): Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deleteMany?(args: any): Promise<{ count: number }>
 }
 
+/** Minimal Prisma client interface needed for raw SQL execution. */
 export interface PrismaNativeClient {
+  /** Execute a raw SQL query and return typed rows. */
   $queryRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>
+  /** Execute a raw SQL statement without returning rows. */
   $executeRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>
 }
 
-export interface PrismaAdapterOptions<
-  TRecord = unknown,
-  TCreate = Partial<TRecord>,
-  TUpdate = Partial<TRecord>
-> {
+/** Construction options for {@link PrismaAdapter}. */
+export interface PrismaAdapterOptions {
+  /** The Prisma model delegate (e.g. `prisma.user`). */
   delegate: PrismaDelegate
+  /** The Prisma client instance — required for raw SQL operations (updateMany, deleteMany, query builder). */
   client?: PrismaNativeClient
+  /** Name of the primary key field (default: `'id'`). */
   idField?: string
+  /** Database table name — required for raw SQL operations. */
   tableName?: string
   /** When true, createMany falls back to serial createOne calls so records are returned. */
   returnCreated?: boolean
@@ -67,6 +64,11 @@ export interface PrismaAdapterOptions<
   model?: ModelSchema
 }
 
+/**
+ * Converts a field list to a Prisma `select` argument.
+ * @param fields - Column names to include, or `undefined` for all columns.
+ * @returns A `{ [field]: true }` map for Prisma's `select`, or `undefined` when `fields` is empty.
+ */
 function toSelect(fields?: string[]): Record<string, boolean> | undefined {
   if (!fields?.length) {
     return undefined
@@ -79,6 +81,11 @@ function toSelect(fields?: string[]): Record<string, boolean> | undefined {
   )
 }
 
+/**
+ * Converts a relation list to a Prisma `include` argument.
+ * @param include - Relation names to eager-load, or `undefined`.
+ * @returns A `{ [relation]: true }` map for Prisma's `include`, or `undefined` when empty.
+ */
 function toInclude(include?: string[]): Record<string, boolean> | undefined {
   if (!include?.length) {
     return undefined
@@ -91,6 +98,11 @@ function toInclude(include?: string[]): Record<string, boolean> | undefined {
   )
 }
 
+/**
+ * Converts Halifax sort expressions to Prisma's `orderBy` array format.
+ * @param orderBy - Halifax sort array, or `undefined`.
+ * @returns A Prisma `orderBy` array (e.g. `[{ name: 'asc' }]`), or `undefined` when empty.
+ */
 function toOrderBy(
   orderBy?: ListOptions['orderBy']
 ): Array<Record<string, 'asc' | 'desc'>> | undefined {
@@ -103,6 +115,12 @@ function toOrderBy(
   })
 }
 
+/**
+ * Repository adapter that connects Halifax to a Prisma ORM model delegate.
+ *
+ * Pass `model: Prisma.dmmf.datamodel.models.find(m => m.name === 'User')` to enable
+ * automatic field/relation introspection — no manual `fields` array required.
+ */
 export class PrismaAdapter<
   TRecord = unknown,
   TCreate = Partial<TRecord>,
@@ -114,13 +132,17 @@ export class PrismaAdapter<
   private readonly tableName?: string | undefined
   private readonly returnCreated: boolean
 
+  /** Capability flags for this adapter instance. */
   public readonly capabilities: RepositoryCapabilities
   /** Field definitions derived from the DMMF model, if one was provided. */
   public readonly fields: FieldDefinition[] | undefined
   /** Relation definitions derived from the DMMF model, if one was provided. */
   public readonly relations: RelationDefinition[] | undefined
 
-  public constructor(options: PrismaAdapterOptions<TRecord, TCreate, TUpdate>) {
+  /**
+   * @param options - Delegate, optional Prisma client, ID field name, table name, and optional DMMF model.
+   */
+  public constructor(options: PrismaAdapterOptions) {
     this.delegate = options.delegate
     this.client = options.client
     this.idField = options.idField ?? 'id'
@@ -141,7 +163,12 @@ export class PrismaAdapter<
     }
   }
 
-  /** Derives FieldDefinition[] from a Prisma DMMF model. Relation fields are excluded. */
+  /**
+   * Derives {@link FieldDefinition}[] from a Prisma DMMF model.
+   * Relation fields (`kind === 'object'`) are excluded; ID and read-only fields get `writable: false`.
+   * @param model - The Prisma DMMF model to introspect.
+   * @returns Array of field definitions representing the model's scalar columns.
+   */
   public static fieldsFromModel(model: ModelSchema): FieldDefinition[] {
     return model.fields
       .filter((f) => f.kind !== 'object')
@@ -153,13 +180,24 @@ export class PrismaAdapter<
       }))
   }
 
-  /** Derives RelationDefinition[] from a Prisma DMMF model. Only relation fields are included. */
+  /**
+   * Derives {@link RelationDefinition}[] from a Prisma DMMF model.
+   * Only relation fields (`kind === 'object'`) are included, all marked `includable: true`.
+   * @param model - The Prisma DMMF model to introspect.
+   * @returns Array of relation definitions representing the model's associations.
+   */
   public static relationsFromModel(model: ModelSchema): RelationDefinition[] {
     return model.fields
       .filter((f) => f.kind === 'object')
       .map((f) => ({ name: f.name, includable: true }))
   }
 
+  /**
+   * Fetches a single record by primary key using `findUnique` (or `findFirst` as fallback).
+   * @param id - Primary key value (integer or UUID string).
+   * @param options - Optional field projection and relation includes.
+   * @returns The matching record, or `null` when not found.
+   */
   public async getOne(
     id: string | number,
     options?: Pick<ListOptions, 'fields' | 'include'>
@@ -181,6 +219,11 @@ export class PrismaAdapter<
     throw new ServerError('Prisma delegate does not support findUnique or findFirst.')
   }
 
+  /**
+   * Fetches a paginated list of records using `count` + `findMany` in parallel.
+   * @param options - Pagination, filtering, sorting, and projection options.
+   * @returns A count-and-results envelope for the current page.
+   */
   public async getMany(options: ListOptions = {}): Promise<ListResult<TRecord>> {
     const select = toSelect(options.fields)
     const include = toInclude(options.include)
@@ -201,10 +244,22 @@ export class PrismaAdapter<
     return { count, results: results as TRecord[] }
   }
 
+  /**
+   * Inserts a single record via Prisma's `create`.
+   * @param data - Record fields to insert.
+   * @returns The newly created record.
+   */
   public async createOne(data: TCreate): Promise<TRecord> {
     return (await this.delegate.create({ data })) as TRecord
   }
 
+  /**
+   * Inserts multiple records.
+   * Uses serial `createOne` calls when `createMany` is unavailable or `returnCreated` is true.
+   * Otherwise uses Prisma's `createMany` (which does not return the created rows).
+   * @param data - Array of record field objects to insert.
+   * @returns The created records, or an empty array when using bulk insert.
+   */
   public async createMany(data: TCreate[]): Promise<TRecord[]> {
     if (!this.delegate.createMany || this.returnCreated) {
       return await Promise.all(
@@ -218,6 +273,12 @@ export class PrismaAdapter<
     return []
   }
 
+  /**
+   * Updates a single record by primary key.
+   * @param id - Primary key of the record to update.
+   * @param data - Fields to apply to the record.
+   * @returns The updated record, or `null` when not found.
+   */
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     try {
       return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
@@ -226,6 +287,14 @@ export class PrismaAdapter<
     }
   }
 
+  /**
+   * Updates multiple records matching a raw SQL query.
+   * Requires both a `client` and a `tableName` to be set on the adapter.
+   * @param query - Query AST describing which rows to update.
+   * @param data - Fields to apply to all matching rows.
+   * @returns IDs of the updated rows.
+   * @throws {@link NotImplementedError} when `client` or `tableName` is not configured.
+   */
   public async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
       throw new NotImplementedError('Native SQL updateMany requires a Prisma client and tableName.')
@@ -253,6 +322,13 @@ export class PrismaAdapter<
     }
   }
 
+  /**
+   * Inserts or updates a single record by primary key using Prisma's `upsert`.
+   * @param id - Primary key to match for the update, or use for the insert.
+   * @param data - Fields to create or update.
+   * @returns The created or updated record.
+   * @throws {@link NotImplementedError} when the delegate does not support `upsert`.
+   */
   public async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
     if (!this.delegate.upsert) {
       throw new NotImplementedError('Prisma delegate does not support upsert.')
@@ -265,6 +341,11 @@ export class PrismaAdapter<
     })) as TRecord
   }
 
+  /**
+   * Deletes a single record by primary key.
+   * @param id - Primary key of the record to delete.
+   * @returns `true` when deleted successfully, `false` when not found.
+   */
   public async deleteOne(id: string | number): Promise<boolean> {
     try {
       await this.delegate.delete({ where: { [this.idField]: id } })
@@ -274,6 +355,13 @@ export class PrismaAdapter<
     }
   }
 
+  /**
+   * Deletes multiple records matching a raw SQL query.
+   * Requires both a `client` and a `tableName` to be set on the adapter.
+   * @param query - Query AST describing which rows to delete.
+   * @returns IDs of the deleted rows.
+   * @throws {@link NotImplementedError} when `client` or `tableName` is not configured.
+   */
   public async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
       throw new NotImplementedError('Native SQL deleteMany requires a Prisma client and tableName.')
@@ -296,6 +384,13 @@ export class PrismaAdapter<
     }
   }
 
+  /**
+   * Executes a query-builder AST, returning a count + page of results via raw SQL.
+   * Requires both a `client` and a `tableName` to be set on the adapter.
+   * @param query - Full query AST including table name, filters, pagination, and sort.
+   * @returns A count-and-results envelope for the matching rows.
+   * @throws {@link NotImplementedError} when `client` or `tableName` is not configured.
+   */
   public async executeQueryBuilder(query: IQueryOptions): Promise<NativeQueryResult<TRecord>> {
     if (!this.client?.$queryRawUnsafe || !this.tableName) {
       throw new NotImplementedError(
@@ -323,19 +418,28 @@ export class PrismaAdapter<
   }
 }
 
+/** Global options for {@link createPrismaResources}. */
 export interface CreatePrismaResourcesOptions {
-  /** Per-model overrides. Key is the Prisma model name (e.g. 'User', 'BlogPost'). */
+  /** Per-model overrides. Key is the Prisma model name (e.g. `'User'`, `'BlogPost'`). */
   models?: Record<string, ModelResourceOptions>
   /** Permission overrides applied to every resource (before per-model overrides). */
   permissions?: CrudPermissions
+  /** Default page size for all resources (overridden per model). */
   defaultLimit?: number
+  /** Hard page-size cap for all resources (overridden per model). */
   maxLimit?: number
-  /** Primary key field name for every model (default: 'id'). */
+  /** Primary key field name for every model (default: `'id'`). */
   idField?: string
-  /** When true, createMany returns created records via serial inserts (default: false). */
+  /** When true, `createMany` returns created records via serial inserts (default: false). */
   returnCreated?: boolean
 }
 
+/**
+ * Derives the pluralised kebab-case URL prefix from a PascalCase Prisma model name.
+ * Examples: `User` → `users`, `BlogPost` → `blog-posts`, `Category` → `categories`.
+ * @param modelName - PascalCase model name (e.g. `'BlogPost'`).
+ * @returns Pluralised kebab-case route prefix (e.g. `'blog-posts'`).
+ */
 function toRoutePrefix(modelName: string): string {
   const kebab = modelName.replace(/([A-Z])/g, (m, l, i) => (i > 0 ? '-' : '') + l.toLowerCase())
   if (kebab.endsWith('y') && !/[aeiou]y$/.test(kebab)) return kebab.slice(0, -1) + 'ies'
@@ -344,9 +448,14 @@ function toRoutePrefix(modelName: string): string {
 }
 
 /**
- * Generates a ResourceDefinition for every model in the provided schema, with all
+ * Generates a {@link ResourceDefinition} for every model in the provided schema, with all
  * CRUD operations enabled by default. Pass per-model overrides to exclude models,
  * restrict permissions, or customise routing.
+ *
+ * @param prismaClient - Your Prisma client instance (e.g. `new PrismaClient()`).
+ * @param schema - Prisma DMMF model array — pass `Prisma.dmmf.datamodel.models`.
+ * @param options - Global defaults and per-model overrides.
+ * @returns An array of resource definitions ready to pass to {@link createExpressCrudRouter}.
  *
  * @example
  * import { Prisma } from '@prisma/client'
@@ -360,7 +469,6 @@ export function createPrismaResources(
   schema: ReadonlyArray<{ name: string; dbName?: string | null; fields: ModelField[] }>,
   options: CreatePrismaResourcesOptions = {}
 ): ResourceDefinition[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = prismaClient as any
 
   return schema
@@ -389,7 +497,8 @@ export function createPrismaResources(
         permissions: { ...options.permissions, ...modelOpts.permissions }
       }
       if (adapter.relations?.length) resource.relations = adapter.relations
-      if (modelOpts.requiredPermissions) resource.requiredPermissions = modelOpts.requiredPermissions
+      if (modelOpts.requiredPermissions)
+        resource.requiredPermissions = modelOpts.requiredPermissions
       const defaultLimit = modelOpts.defaultLimit ?? options.defaultLimit
       const maxLimit = modelOpts.maxLimit ?? options.maxLimit
       const maxFilterDepth = modelOpts.maxFilterDepth
@@ -399,4 +508,3 @@ export function createPrismaResources(
       return resource
     })
 }
-

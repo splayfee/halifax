@@ -9,7 +9,11 @@ import {
 } from '@/auth/AuthStrategy.js'
 import type { HttpRequest } from '@/core/http.js'
 
-function req(headers: Record<string, string> = {}, method = 'GET', raw: unknown = null): HttpRequest {
+function req(
+  headers: Record<string, string> = {},
+  method = 'GET',
+  raw: unknown = null
+): HttpRequest {
   return { method, params: {}, query: {}, body: null, headers, raw }
 }
 

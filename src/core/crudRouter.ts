@@ -15,12 +15,25 @@ import { validateAdvancedQuery, validateId, isValidUuid } from '@/core/validatio
 import { ServerError } from '@/errors/ServerError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 
+/**
+ * Parses and validates a raw `:id` route parameter.
+ * @param raw - The raw string value from `req.params.id`.
+ * @returns A parsed integer for numeric IDs, or the original string for UUIDs.
+ * @throws {@link BadRequestError} when the value is not a valid integer or UUID.
+ */
 function parseId(raw: string | undefined): string | number {
   validateId(raw)
   if (typeof raw === 'string' && isValidUuid(raw)) return raw
   return typeof raw === 'string' ? parseInt(raw, 10) : raw
 }
 
+/**
+ * Strips non-writable fields from a request body and rejects unknown fields with a 422.
+ * @param resource - The resource definition that defines writable fields.
+ * @param data - The raw request body key-value map.
+ * @returns A new object containing only known, writable fields.
+ * @throws {@link UnprocessableEntityError} when the body contains keys not defined on the resource.
+ */
 function filterWritableFields(
   resource: ResourceDefinition,
   data: Record<string, unknown>
@@ -38,12 +51,17 @@ function filterWritableFields(
   return Object.fromEntries(Object.entries(data).filter(([key]) => !nonWritable.has(key)))
 }
 
+/** Options for {@link registerCrudApi} / {@link createExpressCrudRouter}. */
 export interface CrudApiOptions {
+  /** Auth strategy used for all routes. Defaults to {@link AllowAllAuthStrategy}. */
   authStrategy?: AuthStrategy
+  /** Path segment for the query-builder POST route (default: `'query-builder'`). */
   queryBuilderPath?: string
+  /** Path for the query-builder preview route (default: `'/query-builder/preview'`). */
   previewQueryBuilderPath?: string
 }
 
+/** Maps HTTP status codes to machine-readable error code strings. */
 const statusCodeMap: Record<number, string> = {
   400: 'BAD_REQUEST',
   401: 'UNAUTHORIZED',
@@ -56,6 +74,12 @@ const statusCodeMap: Record<number, string> = {
   501: 'NOT_IMPLEMENTED'
 }
 
+/**
+ * Converts any thrown value to a structured `{ status, code, message, details }` object.
+ * {@link HttpError} subclasses preserve their status; all other errors become 500.
+ * @param error - The caught value to normalise (may be any type).
+ * @returns A plain object with `status`, `code`, `message`, and optional `details`.
+ */
 export function normalizeError(error: unknown): {
   status: number
   code: string
@@ -76,6 +100,11 @@ export function normalizeError(error: unknown): {
   return { status: 500, code: 'INTERNAL_ERROR', message: 'Unknown error' }
 }
 
+/**
+ * Serialises a caught error and writes it as a JSON `{ errors: [...] }` response.
+ * @param error - The caught value to serialise.
+ * @param res - The response object to write to.
+ */
 async function sendError(error: unknown, res: HttpResponse): Promise<void> {
   const { status, code, message, details } = normalizeError(error)
   const item: Record<string, unknown> = { code, message }
@@ -83,6 +112,13 @@ async function sendError(error: unknown, res: HttpResponse): Promise<void> {
   await res.status(status).json({ errors: [item] })
 }
 
+/**
+ * Runs the auth strategy for `action` and throws {@link AuthorizationError} when not allowed.
+ * @param req - The incoming HTTP request.
+ * @param resource - The resource being accessed (used to look up required permissions).
+ * @param action - The CRUD action being performed.
+ * @param authStrategy - The active auth strategy.
+ */
 async function authorizeRequest(
   req: HttpRequest,
   resource: ResourceDefinition,
@@ -114,12 +150,22 @@ async function authorizeRequest(
   }
 }
 
+/**
+ * Reads a single header value by name (case-insensitive).
+ * @param req - The incoming HTTP request.
+ * @param name - Header name to look up (case-insensitive).
+ * @returns The header value as a string, or `undefined` when absent.
+ */
 function getHeaderValue(req: HttpRequest, name: string): string | undefined {
   const raw = req.headers[name.toLowerCase()] ?? req.headers[name]
   const value = Array.isArray(raw) ? raw[0] : raw
   return typeof value === 'string' ? value : undefined
 }
 
+/**
+ * Throws {@link UnsupportedMediaTypeError} when a body-carrying request uses a non-JSON Content-Type.
+ * @param req - The incoming HTTP request to check.
+ */
 function checkContentType(req: HttpRequest): void {
   if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method.toUpperCase())) return
   const contentType = getHeaderValue(req, 'content-type') ?? ''
@@ -128,6 +174,10 @@ function checkContentType(req: HttpRequest): void {
   }
 }
 
+/**
+ * Throws {@link NotAcceptableError} when the client's Accept header excludes `application/json`.
+ * @param req - The incoming HTTP request to check.
+ */
 function checkAcceptHeader(req: HttpRequest): void {
   const accept = getHeaderValue(req, 'accept') ?? ''
   if (
@@ -140,6 +190,12 @@ function checkAcceptHeader(req: HttpRequest): void {
   }
 }
 
+/**
+ * Wraps a route handler with Content-Type / Accept checks, error serialisation,
+ * and `X-Correlation-ID` echo-back.
+ * @param handler - The inner async route handler to wrap.
+ * @returns A new handler with pre/post-processing applied.
+ */
 function wrap(handler: (req: HttpRequest, res: HttpResponse) => Promise<void>) {
   return async (req: HttpRequest, res: HttpResponse): Promise<void> => {
     const correlationId = getHeaderValue(req, 'x-correlation-id')
@@ -154,6 +210,16 @@ function wrap(handler: (req: HttpRequest, res: HttpResponse) => Promise<void>) {
   }
 }
 
+/**
+ * Registers all CRUD routes for every resource on the given HTTP server.
+ *
+ * Routes are controlled by `resource.permissions` merged with {@link defaultCrudPermissions}.
+ * A global query-builder preview endpoint is also registered at `previewQueryBuilderPath`.
+ *
+ * @param server - The HTTP server adapter to register routes on (e.g. {@link ExpressHttpServer}).
+ * @param resources - Resource definitions to wire up as CRUD endpoints.
+ * @param options - Auth strategy, query-builder path overrides, and preview path overrides.
+ */
 export function registerCrudApi(
   server: HttpServer,
   resources: ResourceDefinition[],

@@ -5,20 +5,40 @@ import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import type { ISort } from '@/interfaces/ISort.js'
 
+/**
+ * Returns `true` when `value` is neither `undefined` nor `null`.
+ * @param value - Value to test.
+ * @returns `true` when `value` is defined and not null.
+ */
 function isDefined(value: unknown): boolean {
   return value !== undefined && value !== null
 }
 
-// PostgreSQL uses $1, $2, ... placeholders; replace the internal '?' markers in order.
+/**
+ * Replaces `?` placeholder markers with PostgreSQL-style `$1`, `$2`, … numbered parameters.
+ * @param statement - SQL string containing `?` placeholders.
+ * @returns The same SQL string with `?` replaced by `$1`, `$2`, etc. in order.
+ */
 function numberParams(statement: string): string {
   let i = 0
   return statement.replace(/\?/g, () => `$${++i}`)
 }
 
+/**
+ * Returns the SELECT field list, or `*` when no fields are specified.
+ * @param fields - Array of column names to include, or `undefined` for all columns.
+ * @returns A comma-separated field list, or `'*'`.
+ */
 function addFields(fields: string[] | undefined): string {
   return fields?.length ? fields.join(',') : '*'
 }
 
+/**
+ * Returns the `FROM <tableName>` clause.
+ * @param tableName - Target table name.
+ * @returns A `FROM <tableName>` SQL fragment.
+ * @throws {@link BadRequestError} when `tableName` is absent.
+ */
 function addFrom(tableName?: string): string {
   if (!tableName) {
     throw new BadRequestError('The query builder requires a table name.')
@@ -26,6 +46,11 @@ function addFrom(tableName?: string): string {
   return `FROM ${tableName}`
 }
 
+/**
+ * Returns the `ORDER BY` clause from the query options.
+ * @param queryOptions - Query AST whose `orderBy` array is used.
+ * @returns An `ORDER BY ...` SQL fragment, defaulting to `ORDER BY id ASC` when no sorts are given.
+ */
 function addOrderBy(queryOptions: IQueryOptions): string {
   const order: ISort[] = queryOptions.orderBy ?? []
   const orderClauses = order.map((sort: ISort) => {
@@ -39,6 +64,12 @@ function addOrderBy(queryOptions: IQueryOptions): string {
   return `ORDER BY ${orderClauses.join(',')}`
 }
 
+/**
+ * Builds the filter clause fragment for a list of {@link IQueryFilter} conditions.
+ * @param queryItems - Filter conditions to convert into SQL.
+ * @param includeParentheses - When `true`, wraps the result in parentheses (used for child groups).
+ * @returns A SQL fragment representing all conditions joined by their operators.
+ */
 function addSelectionFilter(queryItems: IQueryFilter[] = [], includeParentheses = false): string {
   const filterClause: string[] = []
 
@@ -91,14 +122,29 @@ function addSelectionFilter(queryItems: IQueryFilter[] = [], includeParentheses 
   return includeParentheses ? `(${filterClause.join(' ')})` : filterClause.join(' ')
 }
 
+/**
+ * Returns an `OFFSET <value> ROWS` SQL fragment.
+ * @param value - Number of rows to skip.
+ * @returns The OFFSET clause string.
+ */
 function addOffset(value: number): string {
   return `OFFSET ${value} ROWS`
 }
 
+/**
+ * Returns a `FETCH NEXT <value> ROWS ONLY` SQL fragment.
+ * @param value - Maximum number of rows to return.
+ * @returns The FETCH clause string.
+ */
 function addLimit(value: number): string {
   return `FETCH NEXT ${value} ROWS ONLY`
 }
 
+/**
+ * Returns a `WHERE ...` clause, or an empty string when there are no filters.
+ * @param queryItems - Array of filter conditions, or `undefined`.
+ * @returns A `WHERE ...` SQL fragment, or `''` when `queryItems` is empty.
+ */
 function addWhere(queryItems: IQueryFilter[] | undefined): string {
   if (!queryItems?.length) {
     return ''
@@ -106,6 +152,12 @@ function addWhere(queryItems: IQueryFilter[] | undefined): string {
   return `WHERE ${addSelectionFilter(queryItems)}`
 }
 
+/**
+ * Builds a `SET col = ?, ...` fragment and collects the corresponding parameter values.
+ * The `id` column is automatically excluded from the SET clause.
+ * @param update - Key-value pairs to assign (the `id` key is skipped).
+ * @returns A parameterised SET clause and its ordered bind values.
+ */
 function buildUpdate(update: Record<string, unknown>): IParamQuery {
   const setClause = ['SET']
   const parameters: unknown[] = []
@@ -125,6 +177,11 @@ function buildUpdate(update: Record<string, unknown>): IParamQuery {
   }
 }
 
+/**
+ * Recursively extracts the ordered list of bind parameters from a filter tree.
+ * @param queryItems - Array of filter conditions to extract parameters from.
+ * @returns Flat array of bind values in the same order as the `?` placeholders in the SQL.
+ */
 function getParameters(queryItems: IQueryFilter[] = []): unknown[] {
   let parameters: unknown[] = []
 
@@ -151,7 +208,13 @@ function getParameters(queryItems: IQueryFilter[] = []): unknown[] {
   return parameters
 }
 
+/** Generates parameterised PostgreSQL SQL statements from a query-builder AST. */
 export class QueryBuilder {
+  /**
+   * Builds a `SELECT COUNT(*) AS count FROM …` query.
+   * @param queryOptions - Query AST including table name and optional WHERE clause.
+   * @returns A parameterised SQL statement and its bind values, ready to execute.
+   */
   public static buildCountQuery(queryOptions: IQueryOptions): IParamQuery {
     const statementPieces: string[] = ['SELECT']
     if (queryOptions.isDistinct) {
@@ -167,6 +230,11 @@ export class QueryBuilder {
     }
   }
 
+  /**
+   * Builds a `SELECT … FROM … WHERE … ORDER BY … OFFSET … FETCH NEXT …` query.
+   * @param queryOptions - Full query AST including fields, pagination, sorting, and filters.
+   * @returns A parameterised SQL statement and its bind values, ready to execute.
+   */
   public static buildSelectQuery(queryOptions: IQueryOptions): IParamQuery {
     const statementPieces: string[] = ['SELECT']
     if (queryOptions.isDistinct) {
@@ -189,6 +257,11 @@ export class QueryBuilder {
     }
   }
 
+  /**
+   * Builds a `DELETE FROM … WHERE …` query.
+   * @param queryOptions - Query AST including table name and WHERE clause.
+   * @returns A parameterised SQL statement and its bind values, ready to execute.
+   */
   public static buildDeleteQuery(queryOptions: IQueryOptions): IParamQuery {
     return {
       statement: numberParams(
@@ -200,6 +273,12 @@ export class QueryBuilder {
     }
   }
 
+  /**
+   * Builds an `UPDATE … SET … WHERE …` query.
+   * @param queryOptions - Query AST including table name and WHERE clause.
+   * @param update - Key-value pairs to assign in the SET clause (`id` is excluded automatically).
+   * @returns A parameterised SQL statement and its bind values, ready to execute.
+   */
   public static buildUpdateQuery(
     queryOptions: IQueryOptions,
     update: Record<string, unknown>
