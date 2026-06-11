@@ -132,6 +132,19 @@ export interface CreateOptions {
   idempotencyKey?: string
 }
 
+/**
+ * A resolved tenant constraint for a single request: the column to scope on and
+ * the value the current caller is allowed to see. Produced by the router from
+ * {@link TenantResourceConfig} (the field) and the tenant resolver (the value),
+ * then handed to {@link Repository.withScope}.
+ */
+export interface TenantScope {
+  /** Column / property on the model that stores the tenant key (e.g. `'companyId'`). */
+  field: string
+  /** The tenant key the caller is bound to (e.g. their company id). */
+  value: unknown
+}
+
 /** Core data-access contract that every Halifax repository adapter must satisfy. */
 export interface Repository<
   TRecord = unknown,
@@ -209,6 +222,20 @@ export interface Repository<
    * @returns A count-and-results envelope for the matching rows.
    */
   executeQueryBuilder?(query: IQueryOptions): Promise<NativeQueryResult<TRecord>>
+  /**
+   * Return a request-scoped clone of this repository that transparently constrains
+   * **every** operation to the given {@link TenantScope}. Reads are filtered by the
+   * scope, writes are stamped with it, and bulk SQL operations have the scope AND-ed
+   * into their WHERE clause so callers can never reach another tenant's rows.
+   *
+   * Adapters that cannot enforce scoping safely should leave this undefined — the
+   * router treats a tenant-scoped resource whose repository lacks `withScope` as a
+   * fatal misconfiguration (fail-closed) rather than serving it unscoped.
+   *
+   * @param scope - The resolved tenant constraint for the current request.
+   * @returns A new repository instance bound to `scope` (the original is unchanged).
+   */
+  withScope?(scope: TenantScope): Repository<TRecord, TCreate, TUpdate>
 }
 
 // ─── CRUD / Resource ──────────────────────────────────────────────────────────
@@ -265,6 +292,12 @@ export interface ModelSchema {
 export interface ModelResourceOptions {
   /** When true, this model is skipped entirely. */
   exclude?: boolean
+  /**
+   * Tenant isolation for this model. Set `{ field }` to scope on a specific column,
+   * or `false` to opt this model out of an otherwise tenant-scoped API. When omitted,
+   * the model is auto-scoped if the API's default tenant field exists on it.
+   */
+  tenant?: TenantResourceConfig | false
   /** Override the URL prefix (default: auto-derived kebab-plural of the model name). */
   routePrefix?: string
   /** Override the database table name. */
@@ -295,6 +328,16 @@ export interface FieldDefinition {
   writable?: boolean
 }
 
+/**
+ * Declares that a resource is tenant-scoped: every request is confined to rows whose
+ * {@link TenantResourceConfig.field} equals the tenant value resolved for the caller.
+ * Omit `tenant` (or set it to `false`) to expose a resource globally / unscoped.
+ */
+export interface TenantResourceConfig {
+  /** Column / property on this model that stores the tenant key (e.g. `'companyId'`). */
+  field: string
+}
+
 /** Describes a relation that callers may eagerly load via `?include=`. */
 export interface RelationDefinition {
   /** Relation name as defined on the Prisma model. */
@@ -319,6 +362,14 @@ export interface ResourceDefinition<
   fields: FieldDefinition[]
   /** Relation definitions — controls `?include=` access. */
   relations?: RelationDefinition[]
+  /**
+   * Tenant isolation for this resource. When set (and a tenant resolver is configured
+   * on the API), every read/write/bulk operation is constrained to the caller's tenant.
+   * Set to `false` to explicitly opt a resource out of an otherwise tenant-scoped API.
+   * When omitted, the resource is scoped only if the API's default tenant field exists
+   * on this model (auto-detection); otherwise it is treated as global.
+   */
+  tenant?: TenantResourceConfig | false
   /** CRUD operation toggles. Defaults to {@link defaultCrudPermissions}. */
   permissions?: CrudPermissions
   /** The data adapter that handles reads and writes for this resource. */

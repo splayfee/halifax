@@ -1,4 +1,9 @@
-import type { ModelSchema, ModelResourceOptions, CrudPermissions } from '@/core/types.js'
+import type {
+  ModelSchema,
+  ModelResourceOptions,
+  CrudPermissions,
+  TenantScope
+} from '@/core/types.js'
 
 /**
  * Minimal Prisma delegate interface needed for CRUD operations. This is not a full Prisma client,
@@ -33,6 +38,12 @@ export interface PrismaAdapterOptions {
   tableName?: string
   returnCreated?: boolean
   model?: ModelSchema
+  /**
+   * Tenant constraint bound to this adapter instance. Set indirectly via
+   * {@link PrismaAdapter.withScope}; when present, every operation is confined to
+   * `scope.value` on `scope.field`. Leave undefined for unscoped (global) access.
+   */
+  scope?: TenantScope
 }
 
 /** Global options for {@link createPrismaResources}. */
@@ -43,4 +54,11 @@ export interface CreatePrismaResourcesOptions {
   maxLimit?: number
   idField?: string
   returnCreated?: boolean
+  /**
+   * Tenant column to scope on. Every generated resource that has a scalar field with
+   * this name is marked tenant-scoped on it (`resource.tenant = { field }`), unless the
+   * model overrides or opts out via {@link ModelResourceOptions.tenant}. Pair this with
+   * the API-level `tenant` option (the value resolver) to enforce isolation.
+   */
+  tenantField?: string
 }

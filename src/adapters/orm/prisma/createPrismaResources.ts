@@ -43,6 +43,18 @@ export function createPrismaResources(
         permissions: { ...options.permissions, ...modelOpts.permissions }
       }
       if (adapter.relations?.length) resource.relations = adapter.relations
+
+      // Tenant scoping: an explicit per-model setting wins (including `false` to opt out);
+      // otherwise auto-detect by the global tenant field when the model actually has it.
+      if (modelOpts.tenant !== undefined) {
+        resource.tenant = modelOpts.tenant
+      } else if (
+        options.tenantField &&
+        adapter.fields!.some((f) => f.name === options.tenantField)
+      ) {
+        resource.tenant = { field: options.tenantField }
+      }
+
       if (modelOpts.requiredPermissions)
         resource.requiredPermissions = modelOpts.requiredPermissions
       const defaultLimit = modelOpts.defaultLimit ?? options.defaultLimit

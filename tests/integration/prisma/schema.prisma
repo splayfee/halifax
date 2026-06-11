@@ -27,3 +27,19 @@ model Post {
 
   @@map("posts")
 }
+
+// Tenant-scoped model used by the multi-tenancy integration tests. `companyId` is the
+// tenant key; rows belonging to different companies must never be visible across tenants.
+model Widget {
+  // `companyId` is the tenant key. It is mapped to a lowercase column so the raw-SQL
+  // scoping paths (query-builder / updateMany / deleteMany) work: Halifax's QueryBuilder
+  // emits unquoted identifiers, which PostgreSQL folds to lowercase. A default Prisma
+  // column would be created case-sensitively ("companyId") and the unquoted SQL would miss it.
+  companyId Int      @map("companyid")
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("widgets")
+}

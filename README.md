@@ -76,6 +76,7 @@ app.listen(3000)
 | [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) | Prisma 7 setup, `PrismaAdapter` options, capabilities, custom repositories                    |
 | [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express adapter, `createExpressCrudRouter`, custom HTTP adapters                              |
 | [README_AUTH.md](./README_AUTH.md)                   | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, custom `authorize`      |
+| [README_MULTITENANCY.md](./README_MULTITENANCY.md)   | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour |
 | [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)   | Query builder payload, comparisons, nested filters, `QueryBuilder` class                      |
 
 ## Running Integration Tests
