@@ -184,80 +184,60 @@ describe('PrismaAdapter.withScope — writes', () => {
   })
 })
 
-describe('PrismaAdapter.withScope — SQL paths', () => {
-  function makeClient() {
-    const calls: Array<{ statement: string; parameters: unknown[] }> = []
-    const client = {
-      $queryRawUnsafe: vi.fn().mockImplementation((statement: string, ...parameters: unknown[]) => {
-        calls.push({ statement, parameters })
-        // count query first, then rows
-        if (/COUNT/i.test(statement)) return Promise.resolve([{ count: 0 }])
-        return Promise.resolve([])
-      })
-    }
-    return { client, calls }
-  }
+describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
+  it('executeQuery AND-s the tenant filter ahead of caller filters', async () => {
+    const delegate = makeDelegate({
+      count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([])
+    })
+    const repo = new PrismaAdapter<Row>({ delegate }).withScope(SCOPE)
 
-  it('executeQueryBuilder AND-s the tenant filter ahead of caller filters', async () => {
-    const { client, calls } = makeClient()
-    const repo = new PrismaAdapter<Row>({
-      delegate: makeDelegate(),
-      client,
-      tableName: 'rows'
-    }).withScope(SCOPE)
-
-    await repo.executeQueryBuilder({
-      tableName: 'rows',
+    await repo.executeQuery({
       where: [{ field: 'name', comparison: '=', value1: 'a' }]
     })
 
-    // First param is always the tenant value, and the tenant predicate leads the WHERE.
-    const countCall = calls.find((c) => /COUNT/i.test(c.statement))!
-    expect(countCall.statement).toMatch(/WHERE companyId = \$1 AND \(/)
-    expect(countCall.parameters[0]).toBe(7)
+    // The tenant predicate is AND-ed outside the caller's filters, every time.
+    const where = delegate.findMany.mock.calls[0]![0].where
+    expect(where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
   })
 
-  it('a caller OR cannot escape the tenant boundary (filters are parenthesised)', async () => {
-    const { client, calls } = makeClient()
-    const repo = new PrismaAdapter<Row>({
-      delegate: makeDelegate(),
-      client,
-      tableName: 'rows'
-    }).withScope(SCOPE)
+  it('a caller OR cannot escape the tenant boundary (nested under the tenant AND)', async () => {
+    const delegate = makeDelegate({
+      count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([])
+    })
+    const repo = new PrismaAdapter<Row>({ delegate }).withScope(SCOPE)
 
     // Attempt: companyId=7 AND ( name='a' OR companyId=999 ) — the OR stays inside the group.
-    await repo.executeQueryBuilder({
-      tableName: 'rows',
+    await repo.executeQuery({
       where: [
         { field: 'name', comparison: '=', value1: 'a', operator: 'OR' },
         { field: 'companyId', comparison: '=', value1: 999 }
       ]
     })
 
-    const selectCall = calls.find((c) => !/COUNT/i.test(c.statement))!
-    expect(selectCall.statement).toContain('companyId = $1 AND (')
-    expect(selectCall.statement.trim()).toMatch(/\)$|\) /)
-    expect(selectCall.parameters[0]).toBe(7)
+    const where = delegate.findMany.mock.calls[0]![0].where
+    expect(where.AND[0]).toEqual({ companyId: { equals: 7 } })
+    expect(where.AND[1]).toEqual({
+      OR: [{ name: { equals: 'a' } }, { companyId: { equals: 999 } }]
+    })
   })
 
-  it('updateMany scopes the WHERE and strips tenant from the SET payload', async () => {
-    const { client, calls } = makeClient()
-    const repo = new PrismaAdapter<Row>({
-      delegate: makeDelegate(),
-      client,
-      tableName: 'rows'
-    }).withScope(SCOPE)
+  it('updateMany scopes the WHERE and strips tenant from the payload', async () => {
+    const delegate = makeDelegate({
+      findMany: vi.fn().mockResolvedValue([{ id: 1 }]),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 })
+    })
+    const repo = new PrismaAdapter<Row>({ delegate }).withScope(SCOPE)
 
-    await repo.updateMany(
-      { tableName: 'rows', where: [{ field: 'name', comparison: '=', value1: 'a' }] },
-      { name: 'z', companyId: 999 } as Partial<Row>
-    )
+    await repo.updateMany({ where: [{ field: 'name', comparison: '=', value1: 'a' }] }, {
+      name: 'z',
+      companyId: 999
+    } as Partial<Row>)
 
-    const stmt = calls[0]!.statement
-    const setClause = stmt.slice(stmt.indexOf('SET'), stmt.indexOf('WHERE'))
-    expect(setClause).toMatch(/name = /)
-    expect(setClause).not.toContain('companyId') // tenant stripped from SET
-    expect(stmt).toMatch(/WHERE companyId = /)
+    const call = delegate.updateMany.mock.calls[0]![0]
+    expect(call.where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
+    expect(call.data).toEqual({ name: 'z' }) // tenant field stripped from the payload
   })
 })
 

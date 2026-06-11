@@ -32,9 +32,12 @@ jobs:
       # The repo pins Express 5 as a dev dependency; for the v4 leg of the matrix we
       # swap in Express 4 (and its matching @types) so the suite exercises that major.
       # peerDependencies already allow both, so this only changes which version is resolved.
+      # `pnpm add` re-resolves the tree and (unlike `pnpm install`) does not read the
+      # .npmrc `block-exotic-subdeps` setting, so pass it explicitly — the uWebSockets.js
+      # git sub-dep of hyper-express / ultimate-express would otherwise abort the install.
       - name: Pin Express ${{ matrix.express }}
         if: matrix.express == 4
-        run: pnpm add -D express@4 @types/express@4
+        run: pnpm add -D express@4 @types/express@4 --config.block-exotic-subdeps=false
 
       - name: Lint
         run: pnpm run lint
@@ -45,13 +48,24 @@ jobs:
       - name: Unit tests
         run: pnpm run test:unit
 
-  # Full-stack integration tests against a real PostgreSQL: every HTTP adapter (Express,
-  # Fastify, HyperExpress, Ultimate Express) is exercised end-to-end through PrismaAdapter.
-  # `globalSetup` runs `prisma generate` + `prisma db push` against the service container
-  # before any test executes.
+  # Full-stack integration tests against REAL databases, one matrix leg per engine. The same
+  # 143-test suite (every HTTP adapter × PrismaAdapter, query builder, tenant scoping) runs
+  # unchanged on each — proof that compiling the query AST to portable Prisma Client calls is
+  # genuinely database-agnostic. `HALIFAX_DB` selects the schema + driver adapter; globalSetup
+  # runs `prisma generate` + `prisma db push` before any test executes.
+  #
+  # PostgreSQL (pg-family SQL), MySQL (mysql-family SQL, different collation), and SQLite
+  # (embedded, no container) cover every axis that can actually differ. CockroachDB, MariaDB,
+  # MSSQL, and MongoDB are supported by the same harness (set HALIFAX_DB + DATABASE_URL); they
+  # are omitted here only because they re-exercise Prisma's dialect layer (Cockroach ≈ pg,
+  # MariaDB ≈ mysql) or need extra container setup (MSSQL SA password, MongoDB replica set).
   integration:
-    name: integration (postgres)
+    name: integration (${{ matrix.db }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [postgres, mysql, sqlite]
     services:
       postgres:
         image: postgres:17
@@ -63,6 +77,28 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: halifax_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uroot -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      # Shared by every leg — the Redis-backed cache integration test runs regardless of the DB.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -79,9 +115,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # `test:integration` loads DATABASE_URL from .env.test via dotenv-cli.
-      - name: Write .env.test
-        run: echo 'DATABASE_URL="postgresql://postgres:postgres@localhost:5432/halifax_test"' > .env.test
+      - name: Select database (${{ matrix.db }})
+        run: |
+          echo "HALIFAX_DB=${{ matrix.db }}" >> "$GITHUB_ENV"
+          echo "REDIS_URL=redis://localhost:6379" >> "$GITHUB_ENV"
+          case "${{ matrix.db }}" in
+            postgres) echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/halifax_test" >> "$GITHUB_ENV" ;;
+            mysql)    echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/halifax_test" >> "$GITHUB_ENV" ;;
+            sqlite)   mkdir -p tests/integration/.tmp && echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tests/integration/.tmp/sqlite-test.db" >> "$GITHUB_ENV" ;;
+          esac
 
       - name: Integration tests
-        run: pnpm run test:integration
+        run: pnpm exec vitest run --config vitest.integration.config.ts

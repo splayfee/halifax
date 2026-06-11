@@ -1,6 +1,5 @@
 import { AllowAllAuthStrategy, type AuthContext, type AuthStrategy } from '@/auth/AuthStrategy.js'
-import { QueryBuilder } from '@/classes/QueryBuilder.js'
-import { BadRequestError } from '@/errors/BadRequestError.js'
+import { createCachingRepository, InMemoryCacheStore, type CacheStore } from '@/core/cache/index.js'
 import { HttpError } from '@/errors/HttpError.js'
 import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
 import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
@@ -8,24 +7,29 @@ import { NotFoundError } from '@/errors/NotFoundError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js'
-import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
 import type { HttpRequest, HttpResponse, HttpServer, Repository } from '@/core/types.js'
 import { parseListOptions } from '@/core/queryString.js'
-import { validateAdvancedQuery, validateId, isValidUuid } from '@/core/validation.js'
+import {
+  validateAdvancedQuery,
+  validateId,
+  isValidUuid,
+  isValidObjectId
+} from '@/core/validation.js'
 import { ServerError } from '@/errors/ServerError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 
 /**
  * Parses and validates a raw `:id` route parameter.
  * @param raw - The raw string value from `req.params.id`.
- * @returns A parsed integer for numeric IDs, or the original string for UUIDs.
- * @throws {@link BadRequestError} when the value is not a valid integer or UUID.
+ * @returns A parsed integer for numeric IDs, or the original string for UUID / ObjectId keys.
+ * @throws {@link BadRequestError} when the value is not a valid integer, UUID, or ObjectId.
  */
 function parseId(raw: string | undefined): string | number {
   validateId(raw)
-  if (typeof raw === 'string' && isValidUuid(raw)) return raw
+  // UUID and Mongo ObjectId keys are passed through as strings; only numeric ids are parsed.
+  if (typeof raw === 'string' && (isValidUuid(raw) || isValidObjectId(raw))) return raw
   return typeof raw === 'string' ? parseInt(raw, 10) : raw
 }
 
@@ -102,10 +106,28 @@ export interface CrudApiOptions {
   authStrategy?: AuthStrategy
   /** Multi-tenant isolation config. When omitted, no tenant scoping is applied. */
   tenant?: TenantOptions
-  /** Path segment for the query-builder POST route (default: `'query-builder'`). */
+  /** Path segment for the query-builder POST route (default: `'query'`). */
   queryBuilderPath?: string
-  /** Path for the query-builder preview route (default: `'/query-builder/preview'`). */
-  previewQueryBuilderPath?: string
+  /**
+   * API-wide read-through caching. Provide a `store` (defaults to an in-process
+   * {@link InMemoryCacheStore}) and/or a default `ttlSeconds` applied to every resource that
+   * doesn't set its own {@link ResourceDefinition.cache}. Per-resource config takes precedence.
+   */
+  cache?: {
+    /** Backing cache store shared by all resources. Defaults to an in-process store. */
+    store?: CacheStore
+    /**
+     * Default TTL (seconds) applied to all resources lacking their own cache config.
+     * `0` means never expire; omit to leave caching off by default.
+     */
+    ttlSeconds?: number
+    /**
+     * Request header that force-refreshes the cache for that request. Defaults to
+     * `'Cache-Control'` (busts when the value contains `no-cache`/`no-store`). Set a custom
+     * header name to bust whenever that header is present with any value.
+     */
+    bustHeader?: string
+  }
 }
 
 /** Maps HTTP status codes to machine-readable error code strings. */
@@ -145,30 +167,6 @@ export function normalizeError(error: unknown): {
     return { status: 500, code: 'INTERNAL_ERROR', message: 'Internal server error' }
   }
   return { status: 500, code: 'INTERNAL_ERROR', message: 'Internal server error' }
-}
-
-/**
- * Validates that all identifier-shaped values in a preview query are safe SQL identifiers.
- * Field names and the table name are interpolated directly into SQL strings (not parameterized),
- * so they must match `[a-zA-Z_][a-zA-Z0-9_.]*` to prevent unexpected SQL fragments.
- * @param query - The query AST to inspect.
- * @throws {@link BadRequestError} when any identifier contains disallowed characters.
- */
-function assertSafePreviewIdentifiers(query: IQueryOptions): void {
-  const safe = /^[a-zA-Z_][a-zA-Z0-9_.]*$/
-  const check = (value: string, label: string) => {
-    if (!safe.test(value)) throw new BadRequestError(`Invalid ${label}: '${value}'.`)
-  }
-  if (query.tableName) check(query.tableName, 'table name')
-  for (const f of query.fields ?? []) check(f, 'field name')
-  for (const s of query.orderBy ?? []) check(s.field, 'sort field')
-  const checkFilters = (filters: IQueryFilter[]) => {
-    for (const f of filters) {
-      if (f.field) check(f.field, 'filter field')
-      if (f.children?.length) checkFilters(f.children)
-    }
-  }
-  checkFilters(query.where ?? [])
 }
 
 /**
@@ -258,6 +256,21 @@ function getHeaderValue(req: HttpRequest, name: string): string | undefined {
 }
 
 /**
+ * Decides whether the request asks to bypass (bust) the cache. For the standard
+ * `Cache-Control` header this means a `no-cache`/`no-store` directive; for any custom
+ * bust header, mere presence (with a non-empty value) triggers a refresh.
+ * @param req - The incoming HTTP request.
+ * @param header - The configured bust header name.
+ * @returns `true` when the cache should be force-refreshed for this request.
+ */
+function wantsCacheBust(req: HttpRequest, header: string): boolean {
+  const value = getHeaderValue(req, header)
+  if (!value) return false
+  if (header.toLowerCase() === 'cache-control') return /no-cache|no-store/i.test(value)
+  return true
+}
+
+/**
  * Throws {@link UnsupportedMediaTypeError} when a body-carrying request uses a non-JSON Content-Type.
  * @param req - The incoming HTTP request to check.
  */
@@ -309,11 +322,10 @@ function wrap(handler: (req: HttpRequest, res: HttpResponse) => Promise<void>) {
  * Registers all CRUD routes for every resource on the given HTTP server.
  *
  * Routes are controlled by `resource.permissions` merged with {@link defaultCrudPermissions}.
- * A global query-builder preview endpoint is also registered at `previewQueryBuilderPath`.
  *
  * @param server - The HTTP server adapter to register routes on (e.g. {@link ExpressHttpServer}).
  * @param resources - Resource definitions to wire up as CRUD endpoints.
- * @param options - Auth strategy, query-builder path overrides, and preview path overrides.
+ * @param options - Auth strategy and query-builder path overrides.
  */
 export function registerCrudApi(
   server: HttpServer,
@@ -321,8 +333,11 @@ export function registerCrudApi(
   options: CrudApiOptions = {}
 ): void {
   const authStrategy: AuthStrategy = options.authStrategy ?? new AllowAllAuthStrategy()
-  const queryBuilderPath = options.queryBuilderPath ?? 'query-builder'
-  const previewPath = options.previewQueryBuilderPath ?? '/query-builder/preview'
+  const queryBuilderPath = options.queryBuilderPath ?? 'query'
+  // One shared cache store for the whole API (created lazily only if any resource caches),
+  // so version-based invalidation is consistent across requests and resources.
+  const cacheStore: CacheStore = options.cache?.store ?? new InMemoryCacheStore()
+  const bustHeader = options.cache?.bustHeader ?? 'cache-control'
 
   resources.forEach((resource) => {
     const repository = resource.repository
@@ -344,20 +359,49 @@ export function registerCrudApi(
         )
     }
 
+    // Effective cache TTL: an explicit `cache: false` disables; otherwise per-resource config
+    // wins over the API-wide default. `0` means "never expire" (so `undefined` = no caching).
+    const cacheTtl =
+      resource.cache === false
+        ? undefined
+        : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
+    const cachingEnabled = cacheTtl !== undefined
+
+    /**
+     * Wraps a repository in the read-through cache when caching is enabled for this resource.
+     * The namespace embeds the resource name and tenant key, so one tenant can never read
+     * another's cached rows. `bust` (from the cache-bust header) force-refreshes this request.
+     * @param repo - The (possibly tenant-scoped) repository for this request.
+     * @param scopeKey - Stable key for the current tenant scope (or `'global'`).
+     * @param bust - Whether the caller requested a cache-busting refresh.
+     * @returns The repository, cache-wrapped when caching is enabled.
+     */
+    const withCache = (repo: Repository, scopeKey: string, bust: boolean): Repository =>
+      cachingEnabled
+        ? createCachingRepository(repo, {
+            store: cacheStore,
+            ttlSeconds: cacheTtl,
+            namespace: `${resource.name}:${scopeKey}`,
+            bust
+          })
+        : repo
+
     /**
      * Returns the repository to use for this request: the tenant-scoped clone when the
-     * resource is scoped, or the bare repository otherwise. Throws 403 in strict mode
-     * (the default) when a scoped resource cannot resolve a tenant for the caller.
+     * resource is scoped, or the bare repository otherwise — wrapped in the read-through
+     * cache when enabled. Throws 403 in strict mode (the default) when a scoped resource
+     * cannot resolve a tenant for the caller.
      */
     const resolveRepo = async (req: HttpRequest, auth: AuthContext): Promise<Repository> => {
-      if (!tenantField || !options.tenant) return repository
+      const bust = cachingEnabled && wantsCacheBust(req, bustHeader)
+      if (!tenantField || !options.tenant) return withCache(repository, 'global', bust)
       const value = await options.tenant.resolveId({ auth, req, resource })
       if (value === undefined || value === null || value === '') {
         if (options.tenant.strict !== false)
           throw new AuthorizationError('No tenant is associated with this request.')
-        return repository
+        return withCache(repository, 'global', bust)
       }
-      return repository.withScope!({ field: tenantField, value })
+      return withCache(repository.withScope!({ field: tenantField, value }), String(value), bust)
     }
 
     const permissions = { ...defaultCrudPermissions, ...resource.permissions }
@@ -412,15 +456,12 @@ export function registerCrudApi(
             authStrategy
           )
           const repo = await resolveRepo(req, auth)
-          if (!repo.executeQueryBuilder)
+          if (!repo.executeQuery)
             throw new NotImplementedError('This resource does not support the query builder.')
           const body = (req.body ?? {}) as Record<string, unknown>
-          const query = {
-            ...body,
-            tableName: resource.tableName
-          } as IQueryOptions
+          const query = { ...body } as IQueryOptions
           validateAdvancedQuery(resource, query)
-          const results = await repo.executeQueryBuilder(query)
+          const results = await repo.executeQuery(query)
           await res.status(200).json(results)
         })
       )
@@ -479,10 +520,7 @@ export function registerCrudApi(
             throw new UnprocessableEntityError(
               'updateMany requires at least one writable field in the update payload.'
             )
-          const query = {
-            ...queryBody,
-            tableName: resource.tableName
-          } as IQueryOptions
+          const query = { ...queryBody } as IQueryOptions
           validateAdvancedQuery(resource, query)
           if (!query.where?.length)
             throw new UnprocessableEntityError(
@@ -536,10 +574,7 @@ export function registerCrudApi(
           if (!repo.deleteMany)
             throw new NotImplementedError('This resource does not support deleteMany.')
           const body = (req.body ?? {}) as Record<string, unknown>
-          const query = {
-            ...body,
-            tableName: resource.tableName
-          } as IQueryOptions
+          const query = { ...body } as IQueryOptions
           validateAdvancedQuery(resource, query)
           if (!query.where?.length)
             throw new UnprocessableEntityError(
@@ -585,33 +620,4 @@ export function registerCrudApi(
       })
     }
   })
-
-  server.registerRoute(
-    'POST',
-    previewPath,
-    wrap(async (req, res) => {
-      const auth = await authStrategy.authenticate(req)
-      if (authStrategy.authorize) {
-        const allowed = await authStrategy.authorize({
-          auth,
-          action: 'readManyWithQueryBuilder',
-          resource: {
-            name: '__preview__',
-            routePrefix: '__preview__',
-            fields: [],
-            repository: null!
-          },
-          requiredPermissions: [],
-          req
-        })
-        if (!allowed) throw new AuthorizationError()
-      }
-      const query = req.body as IQueryOptions
-      assertSafePreviewIdentifiers(query)
-      await res.status(200).json({
-        count: QueryBuilder.buildCountQuery(query),
-        select: QueryBuilder.buildSelectQuery(query)
-      })
-    })
-  )
 }

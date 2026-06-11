@@ -23,7 +23,6 @@ type User = { id: number; email: string; role: string }
 function makeUserRepo(seed: User[]): Repository<User, Partial<User>, Partial<User>> {
   const records = [...seed]
   return {
-    capabilities: { supportsNativeSql: true } as never,
     async getOne(id) {
       return records.find((r) => r.id === Number(id)) ?? null
     },
@@ -73,7 +72,7 @@ function makeUserRepo(seed: User[]): Repository<User, Partial<User>, Partial<Use
       records.length = 0
       return { deleted }
     },
-    async executeQueryBuilder() {
+    async executeQuery() {
       return { count: records.length, results: [...records] }
     }
   }
@@ -89,7 +88,6 @@ export function contractResources(): ResourceDefinition[] {
     {
       name: 'User',
       routePrefix: 'users',
-      tableName: 'users',
       fields: [
         { name: 'id', filterable: true, sortable: true, selectable: true },
         { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
@@ -268,7 +266,7 @@ export function runAdapterContract(
     })
 
     it('runs the query-builder route (200)', async () => {
-      const res = await key(agent().post('/api/v1/users/query-builder')).send({
+      const res = await key(agent().post('/api/v1/users/query')).send({
         fields: ['id', 'email'],
         where: [{ field: 'id', comparison: '>', value1: 0 }]
       })
@@ -277,13 +275,12 @@ export function runAdapterContract(
       expect(res.body).toHaveProperty('results')
     })
 
-    it('runs the query-builder preview route (200)', async () => {
-      const res = await key(agent().post('/api/v1/query-builder/preview')).send({
-        tableName: 'users'
+    it('query-builder rejects an unknown field with 422 (validation in front of the adapter)', async () => {
+      const res = await key(agent().post('/api/v1/users/query')).send({
+        where: [{ field: 'bogus', comparison: '=', value1: 1 }]
       })
-      expect(res.status).toBe(200)
-      expect(res.body.count.statement).toContain('COUNT(*)')
-      expect(res.body.select.statement).toContain('FROM users')
+      expect(res.status).toBe(422)
+      expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
     })
   })
 }

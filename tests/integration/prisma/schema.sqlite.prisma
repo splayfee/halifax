@@ -1,9 +1,13 @@
+// SQLite variant of the integration schema. Identical models to schema.prisma — only the
+// datasource provider differs. This is the whole point of the AST→Prisma design: the same
+// adapter code and the same test suite run unchanged against a completely different engine.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model Author {
@@ -28,8 +32,6 @@ model Post {
   @@map("posts")
 }
 
-// Tenant-scoped model used by the multi-tenancy integration tests. `companyId` is the
-// tenant key; rows belonging to different companies must never be visible across tenants.
 model Widget {
   companyId Int
   id        Int      @id @default(autoincrement())

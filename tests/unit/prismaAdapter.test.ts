@@ -18,6 +18,8 @@ function makeDelegate(overrides: Record<string, unknown> = {}) {
         Promise.resolve({ id: 99, email: '', ...data } as Row)
       ),
     createMany: vi.fn().mockResolvedValue({ count: 2 }),
+    updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+    deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
     update: vi
       .fn()
       .mockImplementation(({ data }: { data: Partial<Row> }) =>
@@ -33,31 +35,10 @@ function makeDelegate(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function makeClient(rows: Row[] = [{ id: 1, email: 'a@test.com' }]) {
-  let call = 0
-  return {
-    $queryRawUnsafe: vi.fn().mockImplementation(() => {
-      call++
-      if (call === 1) return Promise.resolve([{ count: rows.length }])
-      if (call === 2) return Promise.resolve(rows)
-      return Promise.resolve(rows)
-    })
-  }
-}
-
 describe('PrismaAdapter — capabilities', () => {
-  it('reports supportsNativeSql=true when client is provided', () => {
-    const a = new PrismaAdapter({
-      delegate: makeDelegate(),
-      client: makeClient(),
-      tableName: 't'
-    })
-    expect(a.capabilities.supportsNativeSql).toBe(true)
-  })
-
-  it('reports supportsNativeSql=false without a client', () => {
+  it('reports supportsQueryAst=true (the AST runs on every provider)', () => {
     const a = new PrismaAdapter({ delegate: makeDelegate() })
-    expect(a.capabilities.supportsNativeSql).toBe(false)
+    expect(a.capabilities.supportsQueryAst).toBe(true)
   })
 
   it('reports supportsCreateManyReturn=true when returnCreated=true', () => {
@@ -265,92 +246,91 @@ describe('PrismaAdapter — deleteOne', () => {
   })
 })
 
-describe('PrismaAdapter — updateMany (native SQL)', () => {
-  it('runs a single UPDATE ... RETURNING and returns updated ids', async () => {
-    const client = {
-      $queryRawUnsafe: vi.fn().mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
-    }
-    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
+describe('PrismaAdapter — updateMany (delegate)', () => {
+  it('selects affected ids then bulk-updates via the delegate', async () => {
+    const delegate = makeDelegate({
+      findMany: vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
+      updateMany: vi.fn().mockResolvedValue({ count: 2 })
+    })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.updateMany(
-      { tableName: 'users', where: [{ field: 'id', comparison: SqlComparison.Equal, value1: 1 }] },
+      {
+        where: [{ field: 'id', comparison: SqlComparison.GreaterThan, value1: 0 }]
+      },
       { email: 'new@test.com' } as Partial<Row>
     )
-    expect(client.$queryRawUnsafe).toHaveBeenCalledTimes(1)
+    expect(delegate.findMany).toHaveBeenCalledTimes(1)
+    expect(delegate.updateMany).toHaveBeenCalledTimes(1)
+    // The compiled where reaches Prisma; validation/4xx happens upstream in the router.
+    expect(delegate.updateMany.mock.calls[0]![0]).toMatchObject({
+      where: { id: { gt: 0 } },
+      data: { email: 'new@test.com' }
+    })
     expect(result.updated).toEqual([1, 2])
   })
 
-  it('throws 501 when no client is provided', async () => {
-    const a = new PrismaAdapter({ delegate: makeDelegate(), tableName: 'users' })
-    await expect(a.updateMany({ tableName: 'users' }, {} as Partial<Row>)).rejects.toMatchObject({
-      status: 501
-    })
-  })
-
-  it('throws 501 when no tableName is set', async () => {
-    const a = new PrismaAdapter({
-      delegate: makeDelegate(),
-      client: { $queryRawUnsafe: vi.fn() }
-    })
-    await expect(a.updateMany({ tableName: 'users' }, {} as Partial<Row>)).rejects.toMatchObject({
+  it('throws 501 when the delegate does not support updateMany', async () => {
+    const a = new PrismaAdapter({ delegate: makeDelegate({ updateMany: undefined }) })
+    await expect(a.updateMany({}, {} as Partial<Row>)).rejects.toMatchObject({
       status: 501
     })
   })
 })
 
-describe('PrismaAdapter — deleteMany (native SQL)', () => {
-  it('runs a single DELETE ... RETURNING and returns deleted ids', async () => {
-    const client = {
-      $queryRawUnsafe: vi.fn().mockResolvedValueOnce([{ id: 5 }])
-    }
-    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
+describe('PrismaAdapter — deleteMany (delegate)', () => {
+  it('selects affected ids then bulk-deletes via the delegate', async () => {
+    const delegate = makeDelegate({
+      findMany: vi.fn().mockResolvedValue([{ id: 5 }]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 })
+    })
+    const a = new PrismaAdapter({ delegate })
     const result = await a.deleteMany({
-      tableName: 'users',
       where: [{ field: 'id', comparison: SqlComparison.Equal, value1: 5 }]
     })
-    expect(client.$queryRawUnsafe).toHaveBeenCalledTimes(1)
+    expect(delegate.deleteMany).toHaveBeenCalledTimes(1)
+    expect(delegate.deleteMany.mock.calls[0]![0]).toMatchObject({ where: { id: { equals: 5 } } })
     expect(result.deleted).toEqual([5])
   })
 
-  it('throws 501 when no client is provided', async () => {
-    const a = new PrismaAdapter({ delegate: makeDelegate(), tableName: 'users' })
-    await expect(a.deleteMany({ tableName: 'users' })).rejects.toMatchObject({ status: 501 })
+  it('throws 501 when the delegate does not support deleteMany', async () => {
+    const a = new PrismaAdapter({ delegate: makeDelegate({ deleteMany: undefined }) })
+    await expect(a.deleteMany({})).rejects.toMatchObject({ status: 501 })
   })
 })
 
-describe('PrismaAdapter — executeQueryBuilder (native SQL)', () => {
-  it('returns count and results', async () => {
-    const client = {
-      $queryRawUnsafe: vi
-        .fn()
-        .mockResolvedValueOnce([{ count: 2 }])
-        .mockResolvedValueOnce([
-          { id: 1, email: 'a@t.com' },
-          { id: 2, email: 'b@t.com' }
-        ])
-    }
-    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
-    const result = await a.executeQueryBuilder({ tableName: 'users' })
+describe('PrismaAdapter — executeQuery (delegate)', () => {
+  it('returns count and results via the delegate (no raw SQL, no client needed)', async () => {
+    const delegate = makeDelegate({
+      count: vi.fn().mockResolvedValue(2),
+      findMany: vi.fn().mockResolvedValue([
+        { id: 1, email: 'a@t.com' },
+        { id: 2, email: 'b@t.com' }
+      ])
+    })
+    const a = new PrismaAdapter({ delegate })
+    const result = await a.executeQuery({
+      fields: ['id', 'email'],
+      where: [{ field: 'email', comparison: SqlComparison.Contains, value1: '@t.com' }],
+      orderBy: [{ field: 'id', order: 'DESC' as never }],
+      limit: 10,
+      offset: 0
+    })
     expect(result.count).toBe(2)
     expect(result.results).toHaveLength(2)
-  })
-
-  it('throws 501 when no client is provided', async () => {
-    const a = new PrismaAdapter({ delegate: makeDelegate(), tableName: 'users' })
-    await expect(a.executeQueryBuilder({ tableName: 'users' })).rejects.toMatchObject({
-      status: 501
+    // The AST compiled to a portable Prisma findMany argument set.
+    expect(delegate.findMany.mock.calls[0]![0]).toMatchObject({
+      where: { email: { contains: '@t.com' } },
+      select: { id: true, email: true },
+      orderBy: [{ id: 'desc' }],
+      take: 10,
+      skip: 0
     })
   })
 
-  it('coerces count to number from BigInt-like string', async () => {
-    const client = {
-      $queryRawUnsafe: vi
-        .fn()
-        .mockResolvedValueOnce([{ count: '42' }])
-        .mockResolvedValueOnce([])
-    }
-    const a = new PrismaAdapter({ delegate: makeDelegate(), client, tableName: 'users' })
-    const result = await a.executeQueryBuilder({ tableName: 'users' })
-    expect(result.count).toBe(42)
+  it('works without a client (delegate-only)', async () => {
+    const a = new PrismaAdapter({ delegate: makeDelegate({ count: vi.fn().mockResolvedValue(0) }) })
+    const result = await a.executeQuery({})
+    expect(result.count).toBe(0)
   })
 })
 
@@ -484,17 +464,6 @@ describe('createPrismaResources', () => {
     const resources = createPrismaResources(makeClient(), [userModel, blogPostModel])
     expect(resources[0]!.routePrefix).toBe('users')
     expect(resources[1]!.routePrefix).toBe('blog-posts')
-  })
-
-  it('uses dbName as tableName when available', () => {
-    const resources = createPrismaResources(makeClient(), [userModel])
-    expect(resources[0]!.tableName).toBe('users')
-  })
-
-  it('falls back to model name when dbName is absent', () => {
-    const model = { name: 'User', fields: userModel.fields }
-    const resources = createPrismaResources(makeClient(), [model])
-    expect(resources[0]!.tableName).toBe('User')
   })
 
   it('excludes models marked exclude: true', () => {

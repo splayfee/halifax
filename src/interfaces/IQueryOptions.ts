@@ -1,18 +1,19 @@
 import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
 import type { ISort } from '@/interfaces/ISort.js'
 
-/** Options passed to the query builder to construct a SELECT, UPDATE, or DELETE statement. */
+/** The query-builder AST: a validated description of a filtered, sorted, paginated read. */
 export interface IQueryOptions {
-  /** When true, adds DISTINCT to the SELECT clause. */
-  isDistinct?: boolean
-  /** Maximum number of rows to return (FETCH NEXT n ROWS ONLY). */
+  /**
+   * Return only rows distinct on these columns. Portable across Prisma and Drizzle
+   * (`distinct` / `DISTINCT ON`). Columns are validated against the resource like any other field.
+   */
+  distinct?: string[]
+  /** Maximum number of rows to return. */
   limit?: number
-  /** Number of rows to skip (OFFSET n ROWS). */
+  /** Number of rows to skip (for pagination). */
   offset?: number
-  /** Columns to include in the SELECT clause; omit for `*`. */
+  /** Columns to include in the result; omit to return all. */
   fields?: string[]
-  /** Target table name. Required unless set on the adapter. */
-  tableName?: string
   /** WHERE conditions. */
   where?: IQueryFilter[]
   /** ORDER BY expressions. */

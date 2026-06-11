@@ -1,9 +1,13 @@
+// MySQL / MariaDB variant of the integration schema. Identical models to schema.prisma —
+// only the datasource provider differs. Prisma's `mysql` provider serves both MySQL and
+// MariaDB. Same adapter code, same test suite, different engine.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
 }
 
 model Author {
@@ -28,8 +32,6 @@ model Post {
   @@map("posts")
 }
 
-// Tenant-scoped model used by the multi-tenancy integration tests. `companyId` is the
-// tenant key; rows belonging to different companies must never be visible across tenants.
 model Widget {
   companyId Int
   id        Int      @id @default(autoincrement())

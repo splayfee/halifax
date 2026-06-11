@@ -31,7 +31,7 @@ imported unless you import their subpath.
 > identical. Fastify uses a radix-tree router (static segments beat parameters) rather than
 > registration order; the adapter compensates so all documented CRUD, 404, 400, 405, 406,
 > and 415 behaviour matches the others exactly. The only observable difference is for
-> contrived paths that collide a static segment with `:id` (e.g. `GET /posts/query-builder`),
+> contrived paths that collide a static segment with `:id` (e.g. `GET /posts/query`),
 > which is not a real-world CRUD scenario.
 
 ---
@@ -75,12 +75,12 @@ export function createApp() {
 
 All four factories accept the same options object:
 
-| Option                    | Type            | Description                                                                     |
-| ------------------------- | --------------- | ------------------------------------------------------------------------------- |
-| `authStrategy`            | `AuthStrategy`  | Auth strategy applied to every route (default: `AllowAll`)                      |
-| `tenant`                  | `TenantOptions` | Multi-tenant isolation config (see README_MULTITENANCY.md)                      |
-| `queryBuilderPath`        | `string`        | Path segment for the query-builder route (default: `query-builder`)             |
-| `previewQueryBuilderPath` | `string`        | Path for the query-builder preview endpoint (default: `/query-builder/preview`) |
+| Option             | Type                                   | Description                                                 |
+| ------------------ | -------------------------------------- | ----------------------------------------------------------- |
+| `authStrategy`     | `AuthStrategy`                         | Auth strategy applied to every route (default: `AllowAll`)  |
+| `tenant`           | `TenantOptions`                        | Multi-tenant isolation config (see README_MULTITENANCY.md)  |
+| `queryBuilderPath` | `string`                               | Path segment for the query-builder route (default: `query`) |
+| `cache`            | `{ store?, ttlSeconds?, bustHeader? }` | Read-through caching (see README_CACHE.md)                  |
 
 ### `ExpressHttpServer` (lower-level)
 

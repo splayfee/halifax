@@ -1,8 +1,8 @@
-import { PrismaPg } from '@prisma/adapter-pg'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { ApiKeyAuthStrategy, PrismaAdapter, type ResourceDefinition } from '@/index.js'
 import type { ContractApp } from './adapterContract.js'
+import { connectIntegrationDb } from './integrationDb.js'
 
 /** Shared API key used by every Prisma HTTP integration contract. */
 export const PRISMA_API_KEY = 'test-secret'
@@ -23,7 +23,6 @@ export function postResource(repo: PrismaAdapter): ResourceDefinition {
   return {
     name: 'Post',
     routePrefix: 'posts',
-    tableName: 'posts',
     fields: [
       { name: 'id', filterable: true, sortable: true },
       { name: 'title', filterable: true, sortable: true, writable: true },
@@ -72,11 +71,8 @@ export function runPrismaHttpContract(
     const key = (req: request.Test) => req.set('x-api-key', PRISMA_API_KEY)
 
     beforeAll(async () => {
-      const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-      const adapter = new PrismaPg(process.env.DATABASE_URL!)
-      prisma = new PrismaClient({ adapter })
-      await prisma.$connect()
-      const repo = new PrismaAdapter({ delegate: prisma.post, client: prisma, tableName: 'posts' })
+      prisma = await connectIntegrationDb()
+      const repo = new PrismaAdapter({ delegate: prisma.post })
       app = await mount([postResource(repo)], new ApiKeyAuthStrategy(PRISMA_API_KEY))
     })
 
@@ -196,8 +192,7 @@ export function runPrismaHttpContract(
           { title: 'Draft post', published: false }
         ]
       })
-      const res = await key(agent().post('/api/posts/query-builder')).send({
-        tableName: 'posts',
+      const res = await key(agent().post('/api/posts/query')).send({
         fields: ['id', 'title'],
         where: [{ field: 'published', comparison: '=', value1: true }],
         orderBy: [{ field: 'id', order: 'ASC' }],

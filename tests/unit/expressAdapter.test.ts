@@ -787,7 +787,7 @@ function createFullApp() {
       records.length = 0
       return { deleted: ids }
     },
-    async executeQueryBuilder() {
+    async executeQuery() {
       return { count: records.length, results: [...records] }
     }
   }
@@ -795,7 +795,6 @@ function createFullApp() {
   const resource: ResourceDefinition = {
     name: 'User',
     routePrefix: 'users',
-    tableName: 'users',
     fields: [
       { name: 'id', filterable: true, sortable: true },
       { name: 'email', filterable: true, writable: true }
@@ -909,7 +908,7 @@ describe('createExpressCrudRouter — deleteMany', () => {
 describe('createExpressCrudRouter — query-builder route', () => {
   it('returns 200 with count and results', async () => {
     const res = await request(createFullApp())
-      .post('/api/v1/users/query-builder')
+      .post('/api/v1/users/query')
       .set('Accept', 'application/json')
       .send({})
     expect(res.status).toBe(200)
@@ -917,7 +916,7 @@ describe('createExpressCrudRouter — query-builder route', () => {
     expect(res.body).toHaveProperty('results')
   })
 
-  it('returns 501 when repository has no executeQueryBuilder', async () => {
+  it('returns 501 when repository has no executeQuery', async () => {
     const app = express()
     app.use(express.json())
     const repo: Repository<{ id: number }, Partial<{ id: number }>, Partial<{ id: number }>> = {
@@ -944,65 +943,12 @@ describe('createExpressCrudRouter — query-builder route', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
-      tableName: 'xs',
       permissions: { allowReadManyWithQueryBuilder: true },
       repository: repo
     }
     app.use(createExpressCrudRouter([resource]))
-    const res = await request(app)
-      .post('/xs/query-builder')
-      .set('Accept', 'application/json')
-      .send({})
+    const res = await request(app).post('/xs/query').set('Accept', 'application/json').send({})
     expect(res.status).toBe(501)
-  })
-})
-
-describe('createExpressCrudRouter — preview route', () => {
-  it('returns count and select SQL for a valid query', async () => {
-    const app = express()
-    app.use(express.json())
-    app.use(createExpressCrudRouter([]))
-    const res = await request(app)
-      .post('/query-builder/preview')
-      .set('Accept', 'application/json')
-      .send({ tableName: 'users' })
-    expect(res.status).toBe(200)
-    expect(res.body.count.statement).toContain('COUNT(*)')
-    expect(res.body.select.statement).toContain('FROM users')
-  })
-
-  it('returns 400 for an invalid table name identifier', async () => {
-    const app = express()
-    app.use(express.json())
-    app.use(createExpressCrudRouter([]))
-    const res = await request(app)
-      .post('/query-builder/preview')
-      .set('Accept', 'application/json')
-      .send({ tableName: 'users; DROP TABLE users; --' })
-    expect(res.status).toBe(400)
-    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
-  })
-
-  it('returns 400 for an invalid field name identifier', async () => {
-    const app = express()
-    app.use(express.json())
-    app.use(createExpressCrudRouter([]))
-    const res = await request(app)
-      .post('/query-builder/preview')
-      .set('Accept', 'application/json')
-      .send({ tableName: 'users', fields: ['id', 'bad field'] })
-    expect(res.status).toBe(400)
-  })
-
-  it('requires authentication when a non-AllowAll strategy is configured', async () => {
-    const app = express()
-    app.use(express.json())
-    app.use(createExpressCrudRouter([], { authStrategy: new ApiKeyAuthStrategy('secret') }))
-    const res = await request(app)
-      .post('/query-builder/preview')
-      .set('Accept', 'application/json')
-      .send({ tableName: 'users' })
-    expect(res.status).toBe(401)
   })
 })
 
@@ -1137,7 +1083,6 @@ describe('createExpressCrudRouter — updateMany/deleteMany 501', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
-      tableName: 'xs',
       permissions: { allowUpdateMany: true, allowDeleteMany: true },
       repository: repo
     }

@@ -14,7 +14,7 @@
  * remain stable regardless of the current sequence value.
  */
 
-import { PrismaPg } from '@prisma/adapter-pg'
+import { connectIntegrationDb } from '../helpers/integrationDb.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { PrismaAdapter, SqlComparison } from '@/index.js'
 
@@ -32,11 +32,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   let id3: number
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    const adapter = new PrismaPg(process.env.DATABASE_URL!)
-    prisma = new PrismaClient({ adapter })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
-    repo = new PrismaAdapter({ delegate: prisma.post, client: prisma, tableName: 'posts' })
+    repo = new PrismaAdapter({ delegate: prisma.post })
   })
 
   afterAll(async () => {
@@ -61,8 +59,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   // ---------------------------------------------------------------------------
 
   it('Equal (=): returns rows matching boolean value', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'published', comparison: SqlComparison.Equal, value1: true }],
       limit: 10,
@@ -75,8 +72,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('Not Equal (<>): excludes rows matching the value', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'published', comparison: SqlComparison.NotEqual, value1: true }],
       limit: 10,
@@ -91,8 +87,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   // ---------------------------------------------------------------------------
 
   it('Greater Than (>): returns rows with id above threshold', async () => {
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'id', comparison: SqlComparison.GreaterThan, value1: id1 }],
       limit: 10,
@@ -102,8 +97,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('Less Than (<): returns rows with id below threshold', async () => {
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'id', comparison: SqlComparison.LessThan, value1: id3 }],
       limit: 10,
@@ -113,8 +107,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('Greater Than or Equal (>=): includes the boundary value', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'id', comparison: SqlComparison.GreaterThanOrEqual, value1: id2 }],
       limit: 10,
@@ -127,8 +120,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('Less Than or Equal (<=): includes the boundary value', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'id', comparison: SqlComparison.LessThanOrEqual, value1: id2 }],
       limit: 10,
@@ -145,8 +137,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   // ---------------------------------------------------------------------------
 
   it('BETWEEN: returns all rows within the inclusive range', async () => {
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id3 }],
       limit: 10,
@@ -156,8 +147,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('NOT BETWEEN: returns only rows outside the range', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'id', comparison: SqlComparison.NotBetween, value1: id1, value2: id2 }],
       limit: 10,
@@ -172,8 +162,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   // ---------------------------------------------------------------------------
 
   it('IN: returns rows whose column value is in the list', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'title', comparison: SqlComparison.In, value1: ['Alpha', 'Charlie'] }],
       limit: 10,
@@ -186,8 +175,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('NOT IN: excludes rows whose column value is in the list', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'title', comparison: SqlComparison.NotIn, value1: ['Alpha', 'Charlie'] }],
       limit: 10,
@@ -202,8 +190,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   // ---------------------------------------------------------------------------
 
   it('LIKE: returns rows matching the SQL pattern', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'title', comparison: SqlComparison.Like, value1: 'Alpha%' }],
       limit: 10,
@@ -214,8 +201,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('NOT LIKE: excludes rows matching the SQL pattern', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'title', comparison: SqlComparison.NotLike, value1: 'Alpha%' }],
       limit: 10,
@@ -232,8 +218,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
 
   it('IS NULL: returns rows where the nullable column is null', async () => {
     // Bravo and Charlie have null content; Alpha has 'body'
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'content', comparison: SqlComparison.IsNull }],
       limit: 10,
@@ -243,8 +228,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   })
 
   it('IS NOT NULL: returns rows where the nullable column has a value', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [{ field: 'content', comparison: SqlComparison.IsNotNull }],
       limit: 10,
@@ -262,11 +246,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   let id3: number
 
   beforeAll(async () => {
-    const { PrismaClient } = (await import('@prisma/client')) as AnyPrisma
-    const adapter = new PrismaPg(process.env.DATABASE_URL!)
-    prisma = new PrismaClient({ adapter })
+    prisma = await connectIntegrationDb()
     await prisma.$connect()
-    repo = new PrismaAdapter({ delegate: prisma.post, client: prisma, tableName: 'posts' })
+    repo = new PrismaAdapter({ delegate: prisma.post })
   })
 
   afterAll(async () => {
@@ -290,8 +272,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   // ---------------------------------------------------------------------------
 
   it('AND: narrows to only rows satisfying both conditions', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         { field: 'published', comparison: SqlComparison.Equal, value1: true, operator: 'AND' },
@@ -305,8 +286,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   })
 
   it('AND chain (three conditions): returns intersection of all', async () => {
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         { field: 'id', comparison: SqlComparison.GreaterThanOrEqual, value1: id1, operator: 'AND' },
@@ -324,8 +304,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   // ---------------------------------------------------------------------------
 
   it('OR: returns all rows satisfying either condition', async () => {
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         { field: 'title', comparison: SqlComparison.Equal, value1: 'Alpha', operator: 'OR' },
@@ -342,8 +321,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
 
   it('OR: with disjoint conditions returns the union', async () => {
     // content IS NOT NULL (Alpha) OR published = false (Bravo) → 2 rows
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         { field: 'content', comparison: SqlComparison.IsNotNull, operator: 'OR' },
@@ -367,8 +345,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   it('AND with nested children: sub-group is wrapped in parentheses', async () => {
     // WHERE published = true AND (title = 'Alpha')
     // → only Alpha
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         {
@@ -389,8 +366,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   it('OR with nested children: rows satisfying either branch are returned', async () => {
     // WHERE published = false OR (title LIKE 'Alpha%')
     // → Bravo (published=false) + Alpha (title like 'Alpha%') = 2 rows
-    const { count, results } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count, results } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         {
@@ -413,8 +389,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   it('nested IN inside an AND group: correct rows returned', async () => {
     // WHERE published = true AND (title IN ('Alpha', 'Charlie'))
     // → both Alpha and Charlie (published + in-list)
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         {
@@ -434,8 +409,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   it('nested BETWEEN inside an OR group: correct rows returned', async () => {
     // WHERE title = 'Bravo' OR (id BETWEEN id1 AND id1)
     // → Bravo + Alpha = 2 rows
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         {
@@ -455,8 +429,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
   it('multi-level nesting: children with their own children', async () => {
     // WHERE id = id1 OR (published = true AND (title = 'Charlie'))
     // → Alpha (id=id1) OR (published=true AND title='Charlie') → Alpha + Charlie = 2
-    const { count } = await repo.executeQueryBuilder!({
-      tableName: 'posts',
+    const { count } = await repo.executeQuery!({
       fields: FIELDS,
       where: [
         {

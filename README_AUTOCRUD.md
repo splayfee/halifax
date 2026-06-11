@@ -11,7 +11,6 @@ import { postRepository } from './repositories/post.js'
 export const postResource: ResourceDefinition = {
   name: 'Post',
   routePrefix: 'posts',
-  tableName: 'posts', // required for raw SQL operations
   defaultLimit: 50, // applied when the caller omits ?limit=
   maxLimit: 200, // requests above this are silently capped
   fields: [
@@ -41,27 +40,28 @@ export const postResource: ResourceDefinition = {
 
 Each `permissions` flag enables one route:
 
-| Flag                            | Method   | Path                     |
-| ------------------------------- | -------- | ------------------------ |
-| `allowReadMany`                 | `GET`    | `../posts`               |
-| `allowReadOne`                  | `GET`    | `../posts/:id`           |
-| `allowCreate`                   | `POST`   | `../posts`               |
-| `allowUpdateOne`                | `PATCH`  | `../posts/:id`           |
-| `allowUpdateMany`               | `PATCH`  | `../posts`               |
-| `allowUpsertOne`                | `PUT`    | `../posts/:id`           |
-| `allowDeleteOne`                | `DELETE` | `../posts/:id`           |
-| `allowDeleteMany`               | `DELETE` | `../posts`               |
-| `allowReadManyWithQueryBuilder` | `POST`   | `../posts/query-builder` |
+| Flag                            | Method   | Path             |
+| ------------------------------- | -------- | ---------------- |
+| `allowReadMany`                 | `GET`    | `../posts`       |
+| `allowReadOne`                  | `GET`    | `../posts/:id`   |
+| `allowCreate`                   | `POST`   | `../posts`       |
+| `allowUpdateOne`                | `PATCH`  | `../posts/:id`   |
+| `allowUpdateMany`               | `PATCH`  | `../posts`       |
+| `allowUpsertOne`                | `PUT`    | `../posts/:id`   |
+| `allowDeleteOne`                | `DELETE` | `../posts/:id`   |
+| `allowDeleteMany`               | `DELETE` | `../posts`       |
+| `allowReadManyWithQueryBuilder` | `POST`   | `../posts/query` |
 
 All endpoint flags default to `true` — only set them explicitly to `false` to restrict access.
 
 ## The `:id` Parameter
 
-`:id` accepts either an **integer** (1–2,147,483,647) or a **UUID** (RFC 4122, any version). The format is detected automatically — nothing to configure. Anything else returns 400.
+`:id` accepts an **integer** (1–2,147,483,647), a **UUID** (RFC 4122, any version), or a **MongoDB ObjectId** (24 hex chars). The format is detected automatically — nothing to configure. Anything else returns 400.
 
 ```
 GET /api/v1/posts/42
 GET /api/v1/posts/550e8400-e29b-41d4-a716-446655440000
+GET /api/v1/posts/507f1f77bcf86cd799439011
 ```
 
 ## Field Flags
@@ -147,7 +147,7 @@ POST /
   posts[({ title: 'First', published: false }, { title: 'Second', published: true })]
 ```
 
-Returns 201. Whether the created records are returned depends on the repository's `supportsCreateManyReturn` capability (see [README_REPOSITORIES.md](./README_REPOSITORIES.md)).
+Returns 201. Whether the created records are returned depends on the repository's `supportsCreateManyReturn` capability (see [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)).
 
 ## HTTP Headers
 
