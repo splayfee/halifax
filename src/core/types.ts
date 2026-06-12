@@ -426,6 +426,16 @@ export interface ResourceDefinition<
    * `false` to explicitly disable caching for this resource even when a default is configured.
    */
   cache?: ResourceCacheConfig | false
+  /**
+   * Wrap every success response body for this resource under a single key
+   * (e.g. `'data'` →
+   * `{ "data": <body> }`). Applies uniformly to all success payloads — list
+   * (`{ data: { count, results } }`), single object, create/update/upsert, and the
+   * `{ deleted: true }` confirmation. Error responses are never enveloped.
+   * Overrides the API-wide {@link CrudApiOptions.envelope}. Omit (or set `null`/`''`) for
+   * a bare body — the default, and backward compatible.
+   */
+  envelope?: string | null
 }
 
 /** Per-resource read-through cache configuration. */

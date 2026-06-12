@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0]
+
+### Added
+
+- **Configurable response envelope.** A new `envelope` option wraps every success response body
+  under a single key (e.g. `envelope: 'data'` → `{ "data": <body> }`). Set it API-wide on
+  `createExpressCrudRouter`/`registerCrudApi` options, or per resource on `ResourceDefinition`
+  (the per-resource setting wins, including an explicit `null`/`''` to opt a single resource out
+  of an API-wide envelope). The wrap is uniform across list, single, create/update/upsert, and
+  the delete confirmation; **error responses are never enveloped**, keeping one stable error
+  contract. Applied at the response boundary (after the cache), so cached payloads are
+  envelope-agnostic. Eases adopting Halifax behind clients that expect a legacy `{ data: ... }`
+  shape. Defaults to off — fully backward compatible.
+
 ## [2.0.0]
 
 A breaking release with two themes: **permissive, minimal-by-default resource definitions**
