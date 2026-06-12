@@ -203,6 +203,13 @@ export interface CrudApiOptions {
   /** Path segment for the query-builder POST route (default: `'query'`). */
   queryBuilderPath?: string
   /**
+   * Wrap every success response body under a single key (e.g. `'data'` → `{ "data": <body> }`)
+   * for all resources. Per-resource {@link ResourceDefinition.envelope} takes precedence.
+   * Error responses are never enveloped. Omit (or set `null`/`''`) for bare bodies — the
+   * default, and backward compatible.
+   */
+  envelope?: string | null
+  /**
    * API-wide read-through caching. Provide a `store` (defaults to an in-process
    * {@link InMemoryCacheStore}) and/or a default `ttlSeconds` applied to every resource that
    * doesn't set its own {@link ResourceDefinition.cache}. Per-resource config takes precedence.
@@ -273,6 +280,35 @@ async function sendError(error: unknown, res: HttpResponse): Promise<void> {
   const item: Record<string, unknown> = { code, message }
   if (details !== undefined) item['details'] = details
   await res.status(status).json({ errors: [item] })
+}
+
+/**
+ * Resolves the effective envelope key: a non-empty string enables wrapping; `null`, `undefined`,
+ * and `''` all mean "no envelope" (an empty key would produce a meaningless `{ "": body }`).
+ * @param value - The per-resource or API-wide envelope setting.
+ * @returns The envelope key, or `null` when responses should be sent bare.
+ */
+function normalizeEnvelope(value: string | null | undefined): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+/**
+ * Writes a success body as JSON, wrapping it under `envelope` when one is configured.
+ * The single seam through which every success response is serialised, so the envelope is
+ * applied consistently and exactly once. Applied at the response boundary (after the cache),
+ * so cached payloads stay envelope-agnostic.
+ * @param res - The response object to write to.
+ * @param status - HTTP status code to send.
+ * @param body - The success payload (wrapped under `envelope` when set).
+ * @param envelope - Resolved envelope key, or `null` to send the body bare.
+ */
+function writeSuccess(
+  res: HttpResponse,
+  status: number,
+  body: unknown,
+  envelope: string | null
+): void | Promise<void> {
+  return res.status(status).json(envelope ? { [envelope]: body } : body)
 }
 
 /**
@@ -445,6 +481,12 @@ export function registerCrudApi(
     // truth with all defaults already applied.
     const resource = normalizeResource(rawResource)
 
+    // Resolve the response envelope once: an explicit per-resource setting wins over the
+    // API-wide default — including an explicit `null`/`''`, which opts this resource out.
+    const envelope = normalizeEnvelope(
+      resource.envelope !== undefined ? resource.envelope : options.envelope
+    )
+
     // Resolve tenancy once at registration and fail closed on misconfiguration, so a
     // scoped resource can never be silently served unscoped at request time.
     const tenantField = effectiveTenantField(resource, options.tenant)
@@ -522,11 +564,11 @@ export function registerCrudApi(
           )
           if (items.length === 1) {
             const result = await repo.createOne(items[0] as never, createOptions)
-            await res.status(201).json(result)
+            await writeSuccess(res, 201, result, envelope)
             return
           }
           const results = await repo.createMany(items as never[], createOptions)
-          await res.status(201).json(results)
+          await writeSuccess(res, 201, results, envelope)
         })
       )
     }
@@ -540,7 +582,7 @@ export function registerCrudApi(
           const repo = await resolveRepo(req, auth)
           const listOptions = parseListOptions(req.query, resource)
           const results = await repo.getMany(listOptions)
-          await res.status(200).json(results)
+          await writeSuccess(res, 200, results, envelope)
         })
       )
     }
@@ -563,7 +605,7 @@ export function registerCrudApi(
           const query = { ...body } as IQueryOptions
           validateAdvancedQuery(resource, query)
           const results = await repo.executeQuery(query)
-          await res.status(200).json(results)
+          await writeSuccess(res, 200, results, envelope)
         })
       )
     }
@@ -582,7 +624,7 @@ export function registerCrudApi(
             include: listOptions.include
           })
           if (!result) throw new NotFoundError()
-          await res.status(200).json(result)
+          await writeSuccess(res, 200, result, envelope)
         })
       )
     }
@@ -598,7 +640,7 @@ export function registerCrudApi(
           const body = filterWritableFields(resource, req.body as Record<string, unknown>)
           const result = await repo.updateOne(id, body as never)
           if (!result) throw new NotFoundError()
-          await res.status(200).json(result)
+          await writeSuccess(res, 200, result, envelope)
         })
       )
     }
@@ -628,7 +670,7 @@ export function registerCrudApi(
               'updateMany requires at least one WHERE filter to prevent unintended bulk updates.'
             )
           const result = await repo.updateMany(query, filteredUpdate as never)
-          await res.status(200).json(result)
+          await writeSuccess(res, 200, result, envelope)
         })
       )
     }
@@ -645,7 +687,7 @@ export function registerCrudApi(
           const id = parseId(req.params['id'])
           const body = filterWritableFields(resource, req.body as Record<string, unknown>)
           const result = await repo.upsertOne(id, body as never)
-          await res.status(200).json(result)
+          await writeSuccess(res, 200, result, envelope)
         })
       )
     }
@@ -660,7 +702,7 @@ export function registerCrudApi(
           const id = parseId(req.params['id'])
           const deleted = await repo.deleteOne(id)
           if (!deleted) throw new NotFoundError()
-          await res.status(200).json({ deleted: true })
+          await writeSuccess(res, 200, { deleted: true }, envelope)
         })
       )
     }
@@ -682,7 +724,7 @@ export function registerCrudApi(
               'deleteMany requires at least one WHERE filter to prevent unintended bulk deletes.'
             )
           const result = await repo.deleteMany(query)
-          await res.status(200).json(result)
+          await writeSuccess(res, 200, result, envelope)
         })
       )
     }
