@@ -65,13 +65,6 @@ function createApp(
       { name: 'id', filterable: true },
       { name: 'email', filterable: true, writable: true }
     ],
-    permissions: {
-      allowCreate: true,
-      allowReadOne: true,
-      allowReadMany: true,
-      allowUpdateOne: true,
-      allowDeleteOne: true
-    },
     repository: makeUserRepo(seed)
   }
 
@@ -133,12 +126,6 @@ function createSecuredApp() {
       { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
       { name: 'role', filterable: false, sortable: false, selectable: false, writable: false }
     ],
-    permissions: {
-      allowCreate: true,
-      allowReadOne: true,
-      allowReadMany: true,
-      allowUpdateOne: true
-    },
     repository: repo
   }
 
@@ -192,7 +179,6 @@ function createLimitedApp() {
     name: 'User',
     routePrefix: 'users',
     fields: [{ name: 'id' }, { name: 'email' }],
-    permissions: { allowReadMany: true },
     defaultLimit: 5,
     maxLimit: 10,
     repository: repo
@@ -416,7 +402,6 @@ function createUpsertSecuredApp() {
       { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
       { name: 'role', filterable: false, sortable: false, selectable: false, writable: false }
     ],
-    permissions: { allowUpsertOne: true },
     repository: repo
   }
 
@@ -693,7 +678,6 @@ describe('createExpressCrudRouter — Idempotency-Key', () => {
       name: 'User',
       routePrefix: 'users',
       fields: [{ name: 'id' }, { name: 'email', writable: true }],
-      permissions: { allowCreate: true },
       repository: repo
     }
 
@@ -799,17 +783,6 @@ function createFullApp() {
       { name: 'id', filterable: true, sortable: true },
       { name: 'email', filterable: true, writable: true }
     ],
-    permissions: {
-      allowCreate: true,
-      allowReadOne: true,
-      allowReadMany: true,
-      allowUpdateOne: true,
-      allowUpdateMany: true,
-      allowUpsertOne: true,
-      allowDeleteOne: true,
-      allowDeleteMany: true,
-      allowReadManyWithQueryBuilder: true
-    },
     repository: repo
   }
 
@@ -876,7 +849,6 @@ describe('createExpressCrudRouter — upsertOne', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
-      permissions: { allowUpsertOne: true },
       repository: repo
     }
     app.use(createExpressCrudRouter([resource]))
@@ -943,7 +915,6 @@ describe('createExpressCrudRouter — query-builder route', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
-      permissions: { allowReadManyWithQueryBuilder: true },
       repository: repo
     }
     app.use(createExpressCrudRouter([resource]))
@@ -1083,7 +1054,6 @@ describe('createExpressCrudRouter — updateMany/deleteMany 501', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
-      permissions: { allowUpdateMany: true, allowDeleteMany: true },
       repository: repo
     }
 
@@ -1138,7 +1108,6 @@ describe('createExpressCrudRouter — requiredPermissions enforcement', () => {
       name: 'User',
       routePrefix: 'users',
       fields: [{ name: 'id' }, { name: 'email' }],
-      permissions: { allowReadMany: true },
       requiredPermissions: { readMany: ['users.read'] },
       repository: repo
     }
@@ -1188,7 +1157,6 @@ describe('createExpressCrudRouter — requiredPermissions enforcement', () => {
       name: 'User',
       routePrefix: 'users',
       fields: [{ name: 'id' }, { name: 'email' }],
-      permissions: { allowReadMany: true },
       requiredPermissions: { readMany: ['users.read'] },
       repository: repo
     }

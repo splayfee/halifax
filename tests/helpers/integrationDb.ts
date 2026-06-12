@@ -19,6 +19,34 @@ export function integrationDbName(): IntegrationDbName {
   return (process.env.HALIFAX_DB ?? 'postgres') as IntegrationDbName
 }
 
+/**
+ * The runtime shape of a primary key for the selected engine. Every SQL engine uses an
+ * integer autoincrement/sequence/identity key; MongoDB keys documents by a 24-char hex
+ * ObjectId string. The shared suite is written once and adapts its key assertions to this
+ * so the *same* tests run honestly against both key kinds.
+ */
+export type IdKind = 'int' | 'objectid'
+
+/** The primary-key kind for the selected database. */
+export function idKind(db: IntegrationDbName = integrationDbName()): IdKind {
+  return db === 'mongodb' ? 'objectid' : 'int'
+}
+
+/** The `typeof` an id value for the selected engine — feed to `expect(...).toBeTypeOf(...)`. */
+export function idTypeName(db: IntegrationDbName = integrationDbName()): 'number' | 'string' {
+  return idKind(db) === 'objectid' ? 'string' : 'number'
+}
+
+/**
+ * A well-formed primary key that is guaranteed not to exist — for 404 / missing-row probes
+ * and for upsert-creates that must target an absent key. An all-`f` ObjectId for MongoDB
+ * (valid format, astronomically unlikely to collide), or a high integer for SQL engines.
+ * @param db - The target database (defaults to the current selection).
+ */
+export function missingId(db: IntegrationDbName = integrationDbName()): string | number {
+  return idKind(db) === 'objectid' ? 'ffffffffffffffffffffffff' : 999_999
+}
+
 const prismaDir = path.join(fileURLToPath(import.meta.url), '../../integration/prisma')
 
 /**
@@ -79,13 +107,20 @@ export async function connectIntegrationDb(): Promise<{
     }
     case 'mssql': {
       const { PrismaMssql } = await loadDriver('@prisma/adapter-mssql')
-      prisma = new PrismaClient({ adapter: new PrismaMssql(url) })
+      // node-mssql doesn't understand Prisma's JDBC-style `sqlserver://host:port;k=v;…` URL,
+      // so translate it into the `mssql` config object the adapter expects.
+      prisma = new PrismaClient({ adapter: new PrismaMssql(mssqlConfigFromUrl(url)) })
       break
     }
     case 'mongodb': {
-      // MongoDB uses Prisma's built-in connector (no driver adapter); the URL comes from env.
-      prisma = new PrismaClient()
-      break
+      // Prisma 7 dropped MongoDB support (no driver adapter exists, and the client constructor
+      // requires `adapter` or `accelerateUrl`); it is "coming soon in v7" per Prisma's upgrade
+      // guide. The schema, the ObjectId-aware suite, and the compose service are all kept ready
+      // so this leg lights up the moment Prisma 7 ships MongoDB — until then, fail loudly.
+      throw new Error(
+        'MongoDB integration tests are not runnable on Prisma 7 yet — Prisma ORM v7 does not ' +
+          'support MongoDB (see https://pris.ly/d/prisma7-mongodb). The harness is forward-ready.'
+      )
     }
     case 'postgres':
     case 'cockroachdb':
@@ -98,4 +133,33 @@ export async function connectIntegrationDb(): Promise<{
 
   await prisma.$connect()
   return prisma
+}
+
+/**
+ * Translates a Prisma SQL Server connection URL into a node-mssql config object.
+ * Prisma uses a JDBC-style URL — `sqlserver://host:port;database=…;user=…;password=…;…` —
+ * which the `mssql` driver (and therefore `@prisma/adapter-mssql`) cannot parse directly.
+ * @param url - The `sqlserver://` DATABASE_URL.
+ * @returns A node-mssql `config` object suitable for `new PrismaMssql(config)`.
+ */
+function mssqlConfigFromUrl(url: string): Record<string, unknown> {
+  const [hostPart = '', ...kvParts] = url.replace(/^sqlserver:\/\//, '').split(';')
+  const [server, port] = hostPart.split(':')
+  const params = new Map<string, string>()
+  for (const part of kvParts) {
+    if (!part) continue
+    const eq = part.indexOf('=')
+    params.set(part.slice(0, eq).toLowerCase(), part.slice(eq + 1))
+  }
+  return {
+    server,
+    port: port ? Number(port) : 1433,
+    database: params.get('database'),
+    user: params.get('user'),
+    password: params.get('password'),
+    options: {
+      encrypt: params.get('encrypt') !== 'false',
+      trustServerCertificate: params.get('trustservercertificate') === 'true'
+    }
+  }
 }

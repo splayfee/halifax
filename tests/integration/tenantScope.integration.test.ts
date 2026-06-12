@@ -10,7 +10,7 @@
  * that scoping confines every operation to a single tenant.
  */
 
-import { connectIntegrationDb } from '../helpers/integrationDb.js'
+import { connectIntegrationDb, missingId } from '../helpers/integrationDb.js'
 import express from 'express'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -168,8 +168,8 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
   })
 
   it('upsertOne stamps the tenant when creating a new row', async () => {
-    const created = (await repoA.upsertOne!(999_123, {
-      id: 999_123,
+    // Key comes from the first arg, not the payload — see the note in prismaExpress upsert tests.
+    const created = (await repoA.upsertOne!(missingId(), {
       name: 'fresh',
       companyId: COMPANY_B
     } as AnyPrisma)) as AnyPrisma

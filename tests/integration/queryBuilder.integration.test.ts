@@ -27,9 +27,10 @@ const FIELDS = ['id', 'title', 'published', 'content']
 describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () => {
   let prisma: AnyPrisma
   let repo: PrismaAdapter
-  let id1: number
-  let id2: number
-  let id3: number
+  // Integer keys on SQL engines, 24-char ObjectId strings on MongoDB — captured after insert.
+  let id1: string | number
+  let id2: string | number
+  let id3: string | number
 
   beforeAll(async () => {
     prisma = await connectIntegrationDb()
@@ -242,8 +243,8 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
 describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and nesting', () => {
   let prisma: AnyPrisma
   let repo: PrismaAdapter
-  let id1: number
-  let id3: number
+  let id1: string | number
+  let id3: string | number
 
   beforeAll(async () => {
     prisma = await connectIntegrationDb()

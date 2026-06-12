@@ -45,7 +45,6 @@ describe.skipIf(!hasDb || !hasRedis)('Read-through caching via Redis (lookup tab
         { name: 'title', filterable: true, writable: true },
         { name: 'published', filterable: true, writable: true }
       ],
-      permissions: { allowReadMany: true, allowReadOne: true, allowCreate: true },
       cache: { ttlSeconds: 0 },
       repository: new PrismaAdapter({ delegate: prisma.post })
     }

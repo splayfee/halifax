@@ -306,12 +306,3 @@ export class PassportSessionStrategy implements AuthStrategy {
     return params.requiredPermissions.every((p) => permissions.has(p) || roles.has(p))
   }
 }
-
-/** @deprecated Use {@link AuthStrategy} instead. */
-export type AuthProvider = AuthStrategy
-/** @deprecated Use {@link AllowAllAuthStrategy} instead. */
-export const AllowAllAuthProvider = AllowAllAuthStrategy
-/** @deprecated Use {@link ApiKeyAuthStrategy} instead. */
-export const ApiKeyAuthProvider = ApiKeyAuthStrategy
-/** @deprecated Use {@link JwtClaimsAuthStrategy} instead. */
-export const PermissionAuthProvider = JwtClaimsAuthStrategy

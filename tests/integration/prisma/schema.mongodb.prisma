@@ -1,0 +1,53 @@
+// NOT YET ACTIVE in the CI matrix — Prisma ORM v7 dropped MongoDB support (it is "coming soon
+// in v7"), and the integration matrix targets Prisma 7, so this leg is dormant. (MongoDB still
+// works on Prisma 6, which Halifax also supports.) This schema and the ObjectId-aware test suite
+// are kept ready so the MongoDB leg lights up unchanged once Prisma 7 ships MongoDB support.
+// See https://pris.ly/d/prisma7-mongodb.
+//
+// MongoDB variant of the integration schema. Same logical models as schema.prisma, but
+// MongoDB has no integer autoincrement: every document is keyed by a 24-char hex ObjectId
+// stored as `_id`. The id (and the `authorId` foreign key) are therefore String/@db.ObjectId
+// rather than Int. The shared suite adapts its key assertions to this — see `idKind()` in
+// tests/helpers/integrationDb.ts. Everything else (adapter, query builder, tenant scoping)
+// runs identically. Requires a replica set (Prisma uses transactions); docker-compose.test.yml
+// runs a single-node `rs0`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+}
+
+model Author {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  name  String
+  email String @unique
+  posts Post[]
+
+  @@map("authors")
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  String?  @db.ObjectId
+  author    Author?  @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("posts")
+}
+
+model Widget {
+  companyId Int
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("widgets")
+}

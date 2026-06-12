@@ -2,7 +2,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { ApiKeyAuthStrategy, PrismaAdapter, type ResourceDefinition } from '@/index.js'
 import type { ContractApp } from './adapterContract.js'
-import { connectIntegrationDb } from './integrationDb.js'
+import { connectIntegrationDb, idTypeName, missingId } from './integrationDb.js'
 
 /** Shared API key used by every Prisma HTTP integration contract. */
 export const PRISMA_API_KEY = 'test-secret'
@@ -32,15 +32,6 @@ export function postResource(repo: PrismaAdapter): ResourceDefinition {
       { name: 'createdAt', sortable: true }
     ],
     relations: [{ name: 'author', includable: true }],
-    permissions: {
-      allowCreate: true,
-      allowReadOne: true,
-      allowReadMany: true,
-      allowReadManyWithQueryBuilder: true,
-      allowUpdateOne: true,
-      allowUpsertOne: true,
-      allowDeleteOne: true
-    },
     repository: repo
   }
 }
@@ -100,7 +91,7 @@ export function runPrismaHttpContract(
       })
       expect(res.status).toBe(201)
       expect(res.body.title).toBe('Via HTTP')
-      expect(res.body.id).toBeTypeOf('number')
+      expect(res.body.id).toBeTypeOf(idTypeName())
     })
 
     it('POST /posts with an array creates multiple records (201)', async () => {
@@ -127,7 +118,7 @@ export function runPrismaHttpContract(
     })
 
     it('GET /posts/:id returns 404 for a missing id', async () => {
-      expect((await key(agent().get('/api/posts/999999'))).status).toBe(404)
+      expect((await key(agent().get(`/api/posts/${missingId()}`))).status).toBe(404)
     })
 
     it('GET /posts/:id returns 400 for a non-integer id', async () => {
@@ -144,12 +135,12 @@ export function runPrismaHttpContract(
     })
 
     it('PATCH /posts/:id returns 404 for a missing id', async () => {
-      const res = await key(agent().patch('/api/posts/999999')).send({ title: 'Ghost' })
+      const res = await key(agent().patch(`/api/posts/${missingId()}`)).send({ title: 'Ghost' })
       expect(res.status).toBe(404)
     })
 
     it('PUT /posts/:id creates a record via upsert (200)', async () => {
-      const res = await key(agent().put('/api/posts/888001')).send({
+      const res = await key(agent().put(`/api/posts/${missingId()}`)).send({
         title: 'Upserted via HTTP',
         published: false
       })
@@ -165,7 +156,7 @@ export function runPrismaHttpContract(
     })
 
     it('DELETE /posts/:id returns 404 for a missing id', async () => {
-      expect((await key(agent().delete('/api/posts/999999'))).status).toBe(404)
+      expect((await key(agent().delete(`/api/posts/${missingId()}`))).status).toBe(404)
     })
 
     it('GET /posts with ?limit and ?offset returns the correct page', async () => {

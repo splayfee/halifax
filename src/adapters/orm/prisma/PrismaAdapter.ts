@@ -42,7 +42,7 @@ export class PrismaAdapter<
   /** Private properties to hold the Prisma delegate and configuration options. */
   private readonly delegate: PrismaDelegate
   /** The field name used for the primary key in the model. */
-  private readonly idField: string
+  public readonly idField: string
   /** A flag indicating whether to return created records. */
   private readonly returnCreated: boolean
   /** The original construction options, used to build request-scoped clones. */
@@ -52,10 +52,10 @@ export class PrismaAdapter<
 
   /** A set of capabilities that the repository supports. */
   public readonly capabilities: RepositoryCapabilities
-  /** An array of field definitions for the model. */
-  public readonly fields: FieldDefinition[] | undefined
-  /** An array of relation definitions for the model. */
-  public readonly relations: RelationDefinition[] | undefined
+  /** An array of field definitions for the model (present when built with a `model`). */
+  public readonly fields?: FieldDefinition[]
+  /** An array of relation definitions for the model (present when built with a `model`). */
+  public readonly relations?: RelationDefinition[]
 
   /**
    * Constructs a new instance of PrismaAdapter with the provided options.
@@ -70,11 +70,7 @@ export class PrismaAdapter<
 
     this.capabilities = {
       supportsIncludes: true,
-      supportsTransactions: false,
-      supportsCreateManyReturn: this.returnCreated,
-      // The query builder compiles the AST to portable Prisma Client calls, so it runs on
-      // every provider (SQL or document) — no raw SQL involved.
-      supportsQueryAst: true
+      supportsCreateManyReturn: this.returnCreated
     }
 
     if (options.model) {

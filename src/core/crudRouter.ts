@@ -9,7 +9,14 @@ import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js'
 import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
-import type { HttpRequest, HttpResponse, HttpServer, Repository } from '@/core/types.js'
+import type {
+  FieldDefinition,
+  HttpRequest,
+  HttpResponse,
+  HttpServer,
+  RelationDefinition,
+  Repository
+} from '@/core/types.js'
 import { parseListOptions } from '@/core/queryString.js'
 import {
   validateAdvancedQuery,
@@ -35,18 +42,20 @@ function parseId(raw: string | undefined): string | number {
 
 /**
  * Strips non-writable fields from a request body and rejects unknown fields with a 422.
- * Only fields explicitly marked `writable: true` are allowed through; fields with
- * `writable: false` or `writable` unset are silently dropped.
- * @param resource - The resource definition that defines writable fields.
+ * Operates on a {@link normalizeResource | normalized} resource, whose fields carry explicit
+ * `writable` booleans (permissive by default; the primary key protected). Fields with
+ * `writable: false` are silently dropped.
+ * @param resource - The normalized resource definition.
  * @param data - The raw request body key-value map.
- * @returns A new object containing only explicitly writable fields.
+ * @returns A new object containing only writable fields.
  * @throws {@link UnprocessableEntityError} when the body contains keys not defined on the resource.
  */
 function filterWritableFields(
   resource: ResourceDefinition,
   data: Record<string, unknown>
 ): Record<string, unknown> {
-  const knownFields = new Set(resource.fields.map((f) => f.name))
+  const fields = resource.fields ?? []
+  const knownFields = new Set(fields.map((f) => f.name))
   const unknownFields = Object.keys(data).filter((key) => !knownFields.has(key))
   if (unknownFields.length) {
     throw new UnprocessableEntityError(`Unknown field(s): ${unknownFields.join(', ')}.`)
@@ -54,10 +63,95 @@ function filterWritableFields(
 
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => {
-      const field = resource.fields.find((f) => f.name === key)
-      return field?.writable === true
+      const field = fields.find((f) => f.name === key)
+      return field?.writable !== false
     })
   )
+}
+
+/**
+ * Derives a human-readable resource name from a route prefix when none is given:
+ * de-kebabs/de-snakes and title-cases each word (`'blog-posts'` → `'Blog Posts'`).
+ * @param routePrefix - The resource's URL path segment.
+ * @returns A title-cased display name.
+ */
+function deriveResourceName(routePrefix: string): string {
+  return (
+    routePrefix
+      .split(/[-_/\s]+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ') || routePrefix
+  )
+}
+
+/**
+ * Resolves the effective field list for a resource. When the repository exposes a field
+ * schema it forms the base, and the resource's own `fields` are merged over it **by name**
+ * as sparse overrides (entries with no matching base field are added). When the repository
+ * exposes no schema, the resource's `fields` are the authoritative list.
+ *
+ * Every resolved field gets explicit, permissive defaults — `filterable`/`sortable`/
+ * `selectable`/`writable` default to `true` — except the primary key, which is non-writable
+ * unless a field entry explicitly sets `writable: true`.
+ *
+ * @param resource - The raw resource definition.
+ * @param idField - The repository's primary-key field name (protected from writes).
+ * @returns The fully-resolved field list.
+ * @throws {@link ServerError} when neither the repository nor the resource provides any fields.
+ */
+function resolveFields(resource: ResourceDefinition, idField: string): FieldDefinition[] {
+  const byName = new Map<string, FieldDefinition>()
+  for (const field of resource.repository?.fields ?? []) byName.set(field.name, { ...field })
+  for (const override of resource.fields ?? [])
+    byName.set(override.name, { ...byName.get(override.name), ...override })
+
+  const merged = [...byName.values()]
+  if (merged.length === 0) {
+    throw new ServerError(
+      `Resource '${resource.name ?? resource.routePrefix}' has no fields. Provide 'fields', ` +
+        `or construct its repository with a model so the schema can be derived.`
+    )
+  }
+
+  return merged.map((field) => ({
+    name: field.name,
+    filterable: field.filterable !== false,
+    sortable: field.sortable !== false,
+    selectable: field.selectable !== false,
+    // Permissive by default — but the primary key is protected: writable only when opted in.
+    writable: field.name === idField ? field.writable === true : field.writable !== false
+  }))
+}
+
+/**
+ * Merges the repository's relation schema with the resource's own relations, by name.
+ * @param resource - The raw resource definition.
+ * @returns The resolved relation list (may be empty).
+ */
+function resolveRelations(resource: ResourceDefinition): RelationDefinition[] {
+  const byName = new Map<string, RelationDefinition>()
+  for (const relation of resource.repository?.relations ?? []) byName.set(relation.name, relation)
+  for (const relation of resource.relations ?? []) byName.set(relation.name, relation)
+  return [...byName.values()]
+}
+
+/**
+ * Produces a fully-resolved resource: `name` filled in (derived from `routePrefix` when
+ * omitted), and `fields`/`relations` resolved from the repository schema + the resource's
+ * own (override) entries. Every downstream router stage operates on this normalized form,
+ * so defaults live in exactly one place.
+ * @param resource - The raw resource definition supplied by the caller.
+ * @returns A normalized resource with guaranteed `name` and resolved `fields`/`relations`.
+ */
+function normalizeResource(resource: ResourceDefinition): ResourceDefinition {
+  const idField = resource.repository?.idField ?? 'id'
+  return {
+    ...resource,
+    name: resource.name ?? deriveResourceName(resource.routePrefix),
+    fields: resolveFields(resource, idField),
+    relations: resolveRelations(resource)
+  }
 }
 
 /** Context handed to {@link TenantOptions.resolveId} for the current request. */
@@ -237,7 +331,7 @@ function effectiveTenantField(
   if (resource.tenant === false) return null
   if (resource.tenant && resource.tenant.field) return resource.tenant.field
   const fallback = tenant.field ?? 'tenantId'
-  return resource.fields.some((f) => f.name === fallback) ? fallback : null
+  return (resource.fields ?? []).some((f) => f.name === fallback) ? fallback : null
 }
 
 /** Matches a safe SQL identifier — tenant fields are interpolated into SQL on bulk paths. */
@@ -339,10 +433,17 @@ export function registerCrudApi(
   const cacheStore: CacheStore = options.cache?.store ?? new InMemoryCacheStore()
   const bustHeader = options.cache?.bustHeader ?? 'cache-control'
 
-  resources.forEach((resource) => {
-    const repository = resource.repository
+  resources.forEach((rawResource) => {
+    const repository = rawResource.repository
     if (!repository)
-      throw new ServerError(`Resource '${resource.name}' does not define a repository.`)
+      throw new ServerError(
+        `Resource '${rawResource.name ?? rawResource.routePrefix}' does not define a repository.`
+      )
+
+    // Resolve name + field/relation schema once, here, so every downstream stage (validation,
+    // write-filtering, tenant auto-detection, cache namespace) works off a single source of
+    // truth with all defaults already applied.
+    const resource = normalizeResource(rawResource)
 
     // Resolve tenancy once at registration and fail closed on misconfiguration, so a
     // scoped resource can never be silently served unscoped at request time.

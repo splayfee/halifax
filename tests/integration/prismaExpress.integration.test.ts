@@ -6,7 +6,7 @@
  * All tests are skipped when DATABASE_URL is not set.
  */
 
-import { connectIntegrationDb } from '../helpers/integrationDb.js'
+import { connectIntegrationDb, idTypeName, missingId } from '../helpers/integrationDb.js'
 import express from 'express'
 import request from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
@@ -43,15 +43,6 @@ function buildPostApp(repo: PrismaAdapter) {
       { name: 'createdAt', sortable: true }
     ],
     relations: [{ name: 'author', includable: true }],
-    permissions: {
-      allowCreate: true,
-      allowReadOne: true,
-      allowReadMany: true,
-      allowReadManyWithQueryBuilder: true,
-      allowUpdateOne: true,
-      allowUpsertOne: true,
-      allowDeleteOne: true
-    },
     repository: repo
   }
 
@@ -91,7 +82,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
 
   it('createOne returns the created record', async () => {
     const post = await repo.createOne({ title: 'Hello', published: false })
-    expect((post as AnyPrisma).id).toBeTypeOf('number')
+    expect((post as AnyPrisma).id).toBeTypeOf(idTypeName())
     expect((post as AnyPrisma).title).toBe('Hello')
   })
 
@@ -105,7 +96,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   })
 
   it('getOne returns null for a missing id', async () => {
-    expect(await repo.getOne(999_999)).toBeNull()
+    expect(await repo.getOne(missingId())).toBeNull()
   })
 
   it('getOne returns the record by id', async () => {
@@ -180,7 +171,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   })
 
   it('updateOne returns null for a missing id', async () => {
-    expect(await repo.updateOne(999_999, { title: 'Ghost' })).toBeNull()
+    expect(await repo.updateOne(missingId(), { title: 'Ghost' })).toBeNull()
   })
 
   it('deleteOne removes the record and returns true', async () => {
@@ -190,12 +181,15 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   })
 
   it('deleteOne returns false for a missing id', async () => {
-    expect(await repo.deleteOne(999_999)).toBe(false)
+    expect(await repo.deleteOne(missingId())).toBe(false)
   })
 
   it('upsertOne creates a record when absent', async () => {
-    const post = (await repo.upsertOne!(999_001, {
-      id: 999_001,
+    // The key is supplied via the first arg (the `where`); it is intentionally NOT repeated
+    // in the payload. Restating an auto-managed PK in the create body is rejected by
+    // identity-column engines (SQL Server) and ObjectId keys (MongoDB), and is redundant
+    // everywhere else.
+    const post = (await repo.upsertOne!(missingId(), {
       title: 'Upserted',
       published: false
     })) as AnyPrisma
@@ -220,7 +214,6 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   it('upsertOne updates a record that already exists', async () => {
     const post = (await repo.createOne({ title: 'Original', published: false })) as AnyPrisma
     const updated = (await repo.upsertOne!(post.id, {
-      id: post.id,
       title: 'Updated via upsert',
       published: true
     })) as AnyPrisma
@@ -344,7 +337,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
       .send({ title: 'Via HTTP', published: false })
     expect(res.status).toBe(201)
     expect(res.body.title).toBe('Via HTTP')
-    expect(res.body.id).toBeTypeOf('number')
+    expect(res.body.id).toBeTypeOf(idTypeName())
   })
 
   it('POST /posts with an array creates multiple records', async () => {
@@ -374,7 +367,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   })
 
   it('GET /posts/:id returns 404 for a missing id', async () => {
-    expect((await request(app).get('/api/posts/999999').set('x-api-key', API_KEY)).status).toBe(404)
+    expect(
+      (await request(app).get(`/api/posts/${missingId()}`).set('x-api-key', API_KEY)).status
+    ).toBe(404)
   })
 
   it('PATCH /posts/:id updates a record', async () => {
@@ -389,7 +384,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
 
   it('PATCH /posts/:id returns 404 for a missing id', async () => {
     const res = await request(app)
-      .patch('/api/posts/999999')
+      .patch(`/api/posts/${missingId()}`)
       .set('x-api-key', API_KEY)
       .send({ title: 'Ghost' })
     expect(res.status).toBe(404)
@@ -406,9 +401,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   })
 
   it('DELETE /posts/:id returns 404 for a missing id', async () => {
-    expect((await request(app).delete('/api/posts/999999').set('x-api-key', API_KEY)).status).toBe(
-      404
-    )
+    expect(
+      (await request(app).delete(`/api/posts/${missingId()}`).set('x-api-key', API_KEY)).status
+    ).toBe(404)
   })
 
   it('POST /posts/query-builder returns matching results', async () => {
@@ -474,7 +469,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
 
   it('PUT /posts/:id creates a record via upsert (returns 200)', async () => {
     const res = await request(app)
-      .put('/api/posts/888001')
+      .put(`/api/posts/${missingId()}`)
       .set('x-api-key', API_KEY)
       .send({ title: 'Upserted via HTTP', published: false })
     expect(res.status).toBe(200)
@@ -513,7 +508,6 @@ describe.skipIf(!hasDb)('JwtClaimsAuthStrategy — permission enforcement', () =
       name: 'Post',
       routePrefix: 'posts',
       fields: [{ name: 'id' }, { name: 'title', writable: true }],
-      permissions: { allowReadMany: true, allowCreate: true },
       requiredPermissions: { create: ['posts.write'] },
       repository: repo
     }
