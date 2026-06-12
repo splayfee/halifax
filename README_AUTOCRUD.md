@@ -141,6 +141,39 @@ always pulled all rows:
 { defaultLimit: 0, maxLimit: 0 } // no pagination — return everything
 ```
 
+## Response Envelope
+
+By default every success response is sent **bare** — a list is `{ count, results }`, a single
+record is the object itself, a delete is `{ deleted: true }`. To wrap every success body under a
+single key (handy when adopting Halifax behind a client that expects a legacy `{ data: ... }`
+shape), set `envelope` — API-wide or per resource:
+
+```ts
+// API-wide: every resource's success body is wrapped under "data"
+createExpressCrudRouter(resources, { authStrategy, envelope: 'data' })
+
+// Per resource (wins over the API-wide setting):
+{ routePrefix: 'posts', repository, envelope: 'data' }
+```
+
+The wrap is **uniform** — it nests the entire body, it does not reshape it:
+
+| Endpoint        | Bare (default)            | `envelope: 'data'`                    |
+| --------------- | ------------------------- | ------------------------------------- |
+| List / query    | `{ count, results }`      | `{ data: { count, results } }`        |
+| Read / create   | `{ id, ... }`             | `{ data: { id, ... } }`               |
+| Delete one      | `{ deleted: true }`       | `{ data: { deleted: true } }`         |
+
+Notes:
+
+- **Errors are never enveloped** — they always use the `{ errors: [...] }` shape (see below), so
+  clients have one stable error contract regardless of the success envelope.
+- **Precedence** — an explicit per-resource `envelope` always wins, including `null` or `''`,
+  which opts a single resource out of an API-wide envelope. Omit it to inherit the API default.
+- `null`, `undefined`, and `''` all mean "no envelope" (an empty key is rejected as meaningless).
+- The envelope is applied at the response boundary, after the read-through cache, so cached
+  payloads are envelope-agnostic.
+
 ## Query-String Filtering and Pagination
 
 ```
