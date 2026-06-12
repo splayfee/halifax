@@ -31,14 +31,12 @@ Repositories declare what they support through a `capabilities` property. Read i
 
 ```ts
 interface RepositoryCapabilities {
-  supportsIncludes: boolean // ORM relation loading
-  supportsTransactions: boolean // transaction wrapping
-  supportsCreateManyReturn: boolean // createMany returns the created records
-  supportsQueryAst: boolean // executes the query-builder AST
+  supportsIncludes: boolean // ORM relation loading; when false the router rejects ?include= with 422
+  supportsCreateManyReturn: boolean // createMany returns the created records (vs. an empty array)
 }
 ```
 
-`PrismaAdapter` implements `updateMany` / `deleteMany` / `executeQuery` for every database (they compile to portable Prisma Client calls) and reports `supportsQueryAst: true`.
+`PrismaAdapter` reports `supportsIncludes: true` and `supportsCreateManyReturn: <returnCreated>`. It implements `updateMany` / `deleteMany` / `executeQuery` for every database (they compile to portable Prisma Client calls).
 
 ## Prisma 7 Repository Adapter
 
@@ -156,6 +154,81 @@ new PrismaAdapter({
 
 `select` (field projection) and `include` (relation loading) are mutually exclusive in Prisma. The adapter enforces this automatically: when `fields` is specified, it builds a `select` and ignores `include`; when only `include` is specified, it builds an `include`.
 
+## Where does the field schema come from?
+
+A resource always needs a field schema — it's the allow-list that powers filtering, sorting, projection, and field-level write security. There is no schemaless resource; the router throws at registration if it can't find one. The schema can come from **two places**:
+
+1. **Derived from the model (preferred for Prisma).** When the `PrismaAdapter` knows the model, it exposes `fields`/`relations`/`idField`, and the resource can omit `fields` entirely — or list only the ones it wants to **change** (merged by name as sparse overrides). The zero-config way to get there is `createPrismaResources`, which builds a ready-to-serve resource for every model from Prisma's DMMF:
+
+   ```ts
+   import { Prisma, PrismaClient } from '@prisma/client'
+   import { PrismaPg } from '@prisma/adapter-pg'
+   import { createPrismaResources, createExpressCrudRouter } from '@edium/halifax'
+
+   const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL!) })
+
+   // One line → a resource per model, fields and relations derived. No `fields` arrays anywhere.
+   const resources = createPrismaResources(prisma, Prisma.dmmf.datamodel.models, {
+     // Optional per-model tweaks — the only place you write anything:
+     models: {
+       AuditLog: { permissions: { allowDeleteOne: false, allowDeleteMany: false } }
+     }
+   })
+
+   app.use('/api/v1', createExpressCrudRouter(resources, { authStrategy }))
+   ```
+
+2. **Declared on the resource (for custom repositories).** A "bare" adapter — `new PrismaAdapter({ delegate })` with no model, or any **non-Prisma** `Repository` (in-memory, an external API, a different ORM) — has no schema to introspect. There, the resource's `fields` array **is** the schema, and it is required. This is the only situation where you hand-write `fields`, and it's the price of Halifax not having a model to read.
+
+**Rule of thumb:** for Prisma, prefer `createPrismaResources` (or pass `model` to the adapter) and declare a field only to override it; reach for a hand-written `fields` array only when the repository genuinely has no schema to offer.
+
+## Prisma 6 (also supported)
+
+Halifax's `peerDependencies` allow `@prisma/client >=6.0.0`, so it runs on **Prisma 6 or Prisma 7**. `PrismaAdapter` is database- and version-agnostic: it imports nothing from `@prisma/client` and only calls standard model-delegate methods (`findMany`, `findUnique`, `findFirst`, `create`, `createMany`, `update`, `updateMany`, `delete`, `deleteMany`, `upsert`, `count`) that behave identically across both majors. **You** construct the client and pass `prisma.<model>` as the `delegate` — Halifax never touches the parts that differ between the versions.
+
+> **Caveats.** Halifax's CI matrix exercises **Prisma 7 only** — Prisma 6 is supported on the strength of that stable delegate surface, not a dedicated CI leg, so treat it as best-effort and pin/test your own app against it. Prisma 7 is the recommended path; the main reason to stay on (or drop to) Prisma 6 today is **MongoDB**, which Prisma 7 does not yet support. When Prisma 7 restores MongoDB, prefer upgrading over remaining on 6.
+
+What you implement differently on Prisma 6 (everything below is your project's Prisma setup — no Halifax code changes):
+
+| Concern            | Prisma 7 (shown above)                                           | Prisma 6                                                                                   |
+| ------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Datasource `url`   | Forbidden in `schema.prisma`; lives in `prisma.config.ts`        | `url = env("DATABASE_URL")` goes **back in the `datasource` block**                        |
+| `prisma.config.ts` | Required (CLI reads the url from it)                             | Not used — the CLI reads the url from the schema                                           |
+| Runtime client     | **Must** pass a driver adapter (`new PrismaClient({ adapter })`) | Plain `new PrismaClient()` works (built-in engine); driver adapters are opt-in (see below) |
+| Driver adapters    | Default, no flag                                                 | Behind `previewFeatures = ["driverAdapters"]` in the `generator` block, if you want them   |
+| MongoDB            | Not supported                                                    | **Supported** via the built-in connector — `new PrismaClient()`, `provider = "mongodb"`    |
+
+A minimal Prisma 6 setup (engine-based client, no adapter):
+
+```prisma
+// prisma/schema.prisma  (Prisma 6)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+```
+
+```ts
+// src/db.ts  (Prisma 6 — no driver adapter needed)
+import { PrismaClient } from '@prisma/client'
+
+export const prisma = new PrismaClient()
+```
+
+```ts
+// MongoDB on Prisma 6 — ObjectId keys; Halifax's :id validation already accepts them
+model Post {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  title String
+}
+```
+
+From there, the `PrismaAdapter` usage (`new PrismaAdapter({ delegate: prisma.post })`) and everything else in this guide is identical.
+
 ## Supported Databases
 
 The **same `PrismaAdapter`** works with every database Prisma supports — there is no adapter-per-database. All CRUD and the query builder compile to portable Prisma Client calls, so behaviour is identical across engines. To switch databases you change only the Prisma `provider` and driver adapter:
@@ -167,11 +240,10 @@ The **same `PrismaAdapter`** works with every database Prisma supports — there
 | MySQL / MariaDB | `mysql`           | `@prisma/adapter-mariadb`        |
 | SQL Server      | `sqlserver`       | `@prisma/adapter-mssql`          |
 | SQLite          | `sqlite`          | `@prisma/adapter-better-sqlite3` |
-| MongoDB         | `mongodb`         | _(built-in connector)_           |
 
-The integration suite runs unchanged against PostgreSQL, MySQL, and SQLite in CI to keep this honest; the others use the same harness (`HALIFAX_DB=<db>`).
+The integration suite runs unchanged against **all six** engines in CI — PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, and SQLite, one matrix leg each (`HALIFAX_DB=<db>`) — so the "behaviour is identical across engines" claim is enforced, not asserted.
 
-**MongoDB note.** Mongo keys are 24-character `ObjectId` strings (`@id @default(auto()) @map("_id") @db.ObjectId`). Halifax's `:id` route validation accepts integers, UUIDs, **and** ObjectIds, so id-based routes work on Mongo out of the box.
+**MongoDB note.** MongoDB is absent from the table above because **Prisma 7 dropped its MongoDB connector** (it's "coming soon" in v7) — and the table/CI matrix target Prisma 7. MongoDB still works **on Prisma 6**, which Halifax also supports (see the Prisma 6 section above) — Mongo keys are 24-character `ObjectId` strings (`@id @default(auto()) @map("_id") @db.ObjectId`), and Halifax's `:id` route validation already accepts integers, UUIDs, **and** ObjectIds, so id-based routes work on Mongo out of the box. The forward-ready `schema.mongodb.prisma` and an ObjectId-aware integration suite rejoin the CI matrix unchanged the moment Prisma 7 supports MongoDB again.
 
 ## Targeting database Views
 
@@ -183,9 +255,6 @@ const activeUsersResource: ResourceDefinition = {
   routePrefix: 'active-users',
   fields: [{ name: 'id' }, { name: 'email', filterable: true }],
   permissions: {
-    allowReadOne: true,
-    allowReadMany: true,
-    allowReadManyWithQueryBuilder: true,
     allowCreate: false,
     allowUpdateOne: false,
     allowUpdateMany: false,

@@ -8,31 +8,61 @@ Halifax generates REST endpoints automatically from a `ResourceDefinition`. Defi
 import type { ResourceDefinition } from '@edium/halifax'
 import { postRepository } from './repositories/post.js'
 
+// Permissive + minimal by default. Only `routePrefix`, `repository`, and `fields` are
+// required — and `fields` only when the repository can't supply its own schema (see below).
 export const postResource: ResourceDefinition = {
-  name: 'Post',
   routePrefix: 'posts',
-  defaultLimit: 50, // applied when the caller omits ?limit=
-  maxLimit: 200, // requests above this are silently capped
+  repository: postRepository,
   fields: [
-    { name: 'id', filterable: true, sortable: true },
-    { name: 'title', filterable: true, sortable: true, writable: true },
-    { name: 'content', writable: true },
+    { name: 'id' }, // primary key — non-writable automatically
+    { name: 'title' },
+    { name: 'content' },
+    { name: 'published' },
+    { name: 'authorId', writable: false }, // the only "exceptions" you need to spell out:
+    { name: 'createdAt', writable: false } // FK + server-managed timestamp are read-only
+  ]
+}
+```
+
+> **Why so few fields?** When the repository already knows the model schema — any
+> `PrismaAdapter` built with a `model`, and everything from `createPrismaResources` — you can
+> omit `fields` entirely; the repository's schema becomes the base and anything you list is
+> merged over it **by name** as a sparse override. So you declare a field only to _change_ it
+> (e.g. `{ name: 'content', writable: false }`). The bare adapter above (no model) is the path
+> for **custom, non-Prisma repositories**, where `fields` is how you declare the API surface.
+
+### Verbose mode — every option, defaults made explicit
+
+Nothing here is required; this is the same resource with every knob turned and annotated, so
+you can see exactly what the minimal form above is defaulting to.
+
+```ts
+export const postResource: ResourceDefinition = {
+  routePrefix: 'posts',
+  repository: postRepository,
+  name: 'Post', // default: title-cased routePrefix ('posts' → 'Posts')
+  fields: [
+    // Every flag defaults to `true`; the primary key is non-writable unless opted in.
+    { name: 'id', filterable: true, sortable: true, selectable: true, writable: false },
+    { name: 'title', filterable: true, sortable: true, selectable: true, writable: true },
+    { name: 'content', selectable: true, writable: true },
     { name: 'published', filterable: true, writable: true },
-    { name: 'authorId', filterable: true },
-    { name: 'createdAt', filterable: false, sortable: true, selectable: true }
+    { name: 'authorId', filterable: true, writable: false },
+    { name: 'createdAt', sortable: true, writable: false }
   ],
-  relations: [{ name: 'author', includable: true }],
+  relations: [{ name: 'author', includable: true }], // default: includable when listed
   permissions: {
+    // All nine actions default to `true` — list only the ones you DISABLE.
     allowDeleteMany: false
   },
   requiredPermissions: {
     readMany: ['posts.read'],
-    readOne: ['posts.read'],
     create: ['posts.create'],
-    updateOne: ['posts.update'],
     deleteOne: ['posts.delete']
   },
-  repository: postRepository
+  defaultLimit: 5000, // default: 5000   (0 = return all rows when ?limit= is omitted)
+  maxLimit: 5000, // default: 5000   (0 = no cap)
+  cache: { ttlSeconds: 30 } // default: caching off
 }
 ```
 
@@ -66,14 +96,14 @@ GET /api/v1/posts/507f1f77bcf86cd799439011
 
 ## Field Flags
 
-Each entry in `fields` accepts four optional boolean flags. All default to `true` — only set them explicitly to `false` to restrict access.
+Each entry in `fields` accepts four optional boolean flags. All default to `true` — only set them explicitly to `false` to restrict access. The lone exception: the **primary key** is non-writable by default (it comes from the URL / database); set `writable: true` on it if you really want clients to supply it.
 
 | Flag         | Effect when `false`                                                   |
 | ------------ | --------------------------------------------------------------------- |
 | `filterable` | Rejects the field as a query-string filter (`?fieldName=value`) → 400 |
 | `sortable`   | Rejects the field in `?order=` and query-builder `orderBy` → 400      |
 | `selectable` | Rejects the field in `?fields=` and query-builder `fields` → 400      |
-| `writable`   | Silently strips the field from POST / PATCH request bodies            |
+| `writable`   | Silently strips the field from POST / PATCH / PUT request bodies      |
 
 Example — `role` is fully locked down; `createdAt` can be read and sorted but never written or filtered:
 
@@ -88,16 +118,28 @@ fields: [
 
 ## Pagination
 
-Set `defaultLimit` and `maxLimit` on the resource:
+**By default a list endpoint returns at most 5000 records.** Page size is bounded by generous
+defaults — **`defaultLimit: 5000`** (used when the caller omits `?limit=`) and **`maxLimit: 5000`**
+(the hard ceiling) — a seatbelt against an accidental unbounded scan of a large table, nothing
+more. The response `count` is always the true total matching the query, so a capped page is never
+a _silent_ drop — a client can see when `count` exceeds the number of returned rows. Override
+either per resource:
 
 ```ts
 {
-  defaultLimit: 50,   // used when the caller omits ?limit=
-  maxLimit:     200,  // requests above this are silently capped to 200
+  defaultLimit: 25,   // smaller default page for this resource
+  maxLimit:     5000, // allow larger pages here
 }
 ```
 
-Neither is required. Without them, page size is unlimited and fully caller-controlled.
+**Disabling pagination.** Set a limit to `0` to remove that bound. `defaultLimit: 0` returns all
+rows when `?limit=` is omitted; `maxLimit: 0` removes the cap. Use both to turn pagination off
+entirely (every request returns the full result set) — handy when migrating an app that has
+always pulled all rows:
+
+```ts
+{ defaultLimit: 0, maxLimit: 0 } // no pagination — return everything
+```
 
 ## Query-String Filtering and Pagination
 
@@ -107,7 +149,7 @@ GET /api/v1/posts?limit=25&offset=0&order=-createdAt&published=true&fields=id,ti
 
 | Parameter       | Description                                                            |
 | --------------- | ---------------------------------------------------------------------- |
-| `limit`         | Page size. Capped by `maxLimit`; defaults to `defaultLimit` if set.    |
+| `limit`         | Page size. Capped by `maxLimit`; defaults to `defaultLimit` (5000).    |
 | `offset`        | Number of rows to skip.                                                |
 | `order`         | Comma-separated field names. Prefix `-` for descending.                |
 | `fields`        | Comma-separated field names to include in the response.                |

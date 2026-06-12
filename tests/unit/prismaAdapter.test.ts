@@ -36,9 +36,9 @@ function makeDelegate(overrides: Record<string, unknown> = {}) {
 }
 
 describe('PrismaAdapter — capabilities', () => {
-  it('reports supportsQueryAst=true (the AST runs on every provider)', () => {
+  it('reports supportsCreateManyReturn=false by default', () => {
     const a = new PrismaAdapter({ delegate: makeDelegate() })
-    expect(a.capabilities.supportsQueryAst).toBe(true)
+    expect(a.capabilities.supportsCreateManyReturn).toBe(false)
   })
 
   it('reports supportsCreateManyReturn=true when returnCreated=true', () => {

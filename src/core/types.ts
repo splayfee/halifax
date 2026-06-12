@@ -68,14 +68,13 @@ export interface HttpServer {
 
 /** Flags indicating which optional repository operations the adapter supports. */
 export interface RepositoryCapabilities {
-  /** True when the adapter supports `?include=` for eager-loading relations. */
+  /**
+   * True when the adapter can eager-load relations via `?include=`. When `false`, the router
+   * rejects any `?include=` request with 422 instead of silently ignoring it.
+   */
   supportsIncludes: boolean
-  /** True when the adapter can participate in database transactions. */
-  supportsTransactions: boolean
   /** True when `createMany` returns the created records rather than an empty array. */
   supportsCreateManyReturn: boolean
-  /** True when the adapter executes the query-builder AST (every Prisma provider does). */
-  supportsQueryAst: boolean
 }
 
 /** Options for paginated, filtered, and sorted list queries. */
@@ -151,6 +150,16 @@ export interface Repository<
 > {
   /** Optional capability flags used by Halifax to decide which routes to activate. */
   readonly capabilities?: Partial<RepositoryCapabilities>
+  /**
+   * Field schema the adapter knows about (e.g. derived from a Prisma model). When present,
+   * a {@link ResourceDefinition} may omit `fields` entirely (these are used as the base) or
+   * supply a sparse subset that is merged over these as per-field overrides.
+   */
+  readonly fields?: FieldDefinition[]
+  /** Relation schema the adapter knows about — used as the base for `?include=` access. */
+  readonly relations?: RelationDefinition[]
+  /** Primary-key field name (default `'id'`). The router protects this field from write bodies. */
+  readonly idField?: string
   /**
    * Fetch a single record by its primary key.
    * @param id - Primary key value (integer or UUID string).
@@ -310,17 +319,24 @@ export interface ModelResourceOptions {
   maxFilterDepth?: number
 }
 
-/** Describes a single column exposed through the Halifax API. */
+/**
+ * Describes a single column exposed through the Halifax API.
+ *
+ * Every flag is **permissive by default** — only set one to `false` to restrict a field.
+ * A field with just `{ name }` is filterable, sortable, selectable, and writable. The lone
+ * exception is the primary key, which is non-writable by default (it comes from the URL / DB);
+ * set `writable: true` on it explicitly if you really want clients to supply it.
+ */
 export interface FieldDefinition {
   /** Column / property name. */
   name: string
-  /** When `false`, the field cannot be used in `?field=` filters. */
+  /** When `false`, the field cannot be used in `?field=` filters. Defaults to `true`. */
   filterable?: boolean
-  /** When `false`, the field cannot be used in `?order=` sorts. */
+  /** When `false`, the field cannot be used in `?order=` sorts. Defaults to `true`. */
   sortable?: boolean
-  /** When `false`, the field is excluded from `?fields=` projections. */
+  /** When `false`, the field is excluded from `?fields=` projections. Defaults to `true`. */
   selectable?: boolean
-  /** When `false`, the field is stripped from POST/PATCH request bodies. */
+  /** When `false`, the field is stripped from POST/PATCH/PUT bodies. Defaults to `true` (except the primary key). */
   writable?: boolean
 }
 
@@ -348,13 +364,32 @@ export interface ResourceDefinition<
   TCreate = Partial<TRecord>,
   TUpdate = Partial<TRecord>
 > {
-  /** Human-readable resource name (usually the Prisma model name). */
-  name: string
-  /** URL path segment (e.g. `'users'`, `'blog-posts'`). */
+  /**
+   * URL path segment (e.g. `'users'`, `'blog-posts'`). The only required field — it defines
+   * the resource's public route, which has no safe default.
+   */
   routePrefix: string
-  /** Scalar field definitions — controls filtering, sorting, selection, and write access. */
-  fields: FieldDefinition[]
-  /** Relation definitions — controls `?include=` access. */
+  /** The data adapter that handles reads and writes for this resource. */
+  repository: Repository<TRecord, TCreate, TUpdate>
+  /**
+   * Human-readable resource name (used in error messages and the cache-key namespace).
+   * Optional — defaults to a title-cased form of {@link routePrefix} (`'blog-posts'` → `'Blog Posts'`).
+   */
+  name?: string
+  /**
+   * Scalar field definitions — control filtering, sorting, selection, and write access.
+   *
+   * Optional when the {@link repository} exposes its own field schema (e.g. a `PrismaAdapter`
+   * built with a `model`, or anything from `createPrismaResources`): in that case the
+   * repository's fields are the base, and any entries here are merged over them **by name** as
+   * sparse overrides — so you list only the fields you want to change. When the repository
+   * exposes no schema, this is the authoritative allow-list and is required.
+   */
+  fields?: FieldDefinition[]
+  /**
+   * Relation definitions — control `?include=` access. Merged over the repository's relation
+   * schema by name when the repository exposes one; otherwise the authoritative list.
+   */
   relations?: RelationDefinition[]
   /**
    * Tenant isolation for this resource. When set (and a tenant resolver is configured
@@ -364,15 +399,23 @@ export interface ResourceDefinition<
    * on this model (auto-detection); otherwise it is treated as global.
    */
   tenant?: TenantResourceConfig | false
-  /** CRUD operation toggles. Defaults to {@link defaultCrudPermissions}. */
+  /**
+   * CRUD operation toggles. Merged over {@link defaultCrudPermissions}, which enables every
+   * action — so you only list the actions you want to **disable** (e.g. `{ allowDeleteMany: false }`).
+   */
   permissions?: CrudPermissions
-  /** The data adapter that handles reads and writes for this resource. */
-  repository: Repository<TRecord, TCreate, TUpdate>
   /** Required permission strings per action (checked by the auth strategy). */
   requiredPermissions?: Partial<Record<CrudAction, string[]>>
-  /** Default page size when the caller omits `?limit=`. No limit applied when `undefined`. */
+  /**
+   * Default page size when the caller omits `?limit=`. Defaults to {@link DEFAULT_PAGE_LIMIT}
+   * (5000). Set to `0` to apply no default limit (return all rows when `?limit=` is omitted).
+   */
   defaultLimit?: number
-  /** Hard cap on page size. Requests over this are silently capped. No cap when `undefined`. */
+  /**
+   * Hard cap on page size; larger requests are silently capped (the response `count` still
+   * reflects the true total). Defaults to {@link MAX_PAGE_LIMIT} (5000). Set to `0` to remove
+   * the cap entirely — combine `defaultLimit: 0` and `maxLimit: 0` to disable pagination.
+   */
   maxLimit?: number
   /** Maximum nesting depth for WHERE clause children. Defaults to 3. */
   maxFilterDepth?: number
@@ -390,6 +433,21 @@ export interface ResourceCacheConfig {
   /** Time-to-live for cached reads, in seconds. `0` means **never expire** (cache forever). */
   ttlSeconds: number
 }
+
+/**
+ * Default page size applied when a resource sets no `defaultLimit` and the caller omits
+ * `?limit=`. Chosen as a generous safety ceiling — large enough for typical "show everything"
+ * UIs, small enough to prevent a runaway full-table scan. `getMany` always returns the true
+ * total `count`, so a page is never a silent drop; a resource can set `defaultLimit: 0` to
+ * return all rows by default.
+ */
+export const DEFAULT_PAGE_LIMIT = 5000
+
+/**
+ * Default hard cap on page size applied when a resource sets no `maxLimit`. A resource can set
+ * `maxLimit: 0` to remove the cap entirely (no pagination).
+ */
+export const MAX_PAGE_LIMIT = 5000
 
 /** Default permissions applied to every resource — all CRUD operations enabled. */
 export const defaultCrudPermissions: Required<CrudPermissions> = {

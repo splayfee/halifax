@@ -1,0 +1,48 @@
+// CockroachDB variant of the integration schema. Identical models to schema.prisma — only
+// the datasource provider and the id default differ.
+//
+// CockroachDB's `autoincrement()` is backed by `unique_rowid()`, which produces large
+// 64-bit values that overflow the suite's 32-bit id validation (and the `Int` column).
+// `sequence()` is CockroachDB's ordered, small-integer alternative — it yields 1, 2, 3 …
+// exactly like a Postgres/MySQL serial, so the same integer-keyed suite runs unchanged.
+// Connects through the pg driver adapter (CockroachDB speaks the Postgres wire protocol).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "cockroachdb"
+}
+
+model Author {
+  id    Int    @id @default(sequence())
+  name  String
+  email String @unique
+  posts Post[]
+
+  @@map("authors")
+}
+
+model Post {
+  id        Int      @id @default(sequence())
+  title     String
+  content   String?
+  published Boolean  @default(false)
+  authorId  Int?
+  author    Author?  @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("posts")
+}
+
+model Widget {
+  companyId Int
+  id        Int      @id @default(sequence())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("widgets")
+}

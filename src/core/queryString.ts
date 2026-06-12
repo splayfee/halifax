@@ -1,6 +1,11 @@
 import { SqlOrder } from '@/enums/SqlOrder.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
-import type { ListOptions, ResourceDefinition } from '@/core/types.js'
+import {
+  DEFAULT_PAGE_LIMIT,
+  MAX_PAGE_LIMIT,
+  type ListOptions,
+  type ResourceDefinition
+} from '@/core/types.js'
 import {
   isValidInt32,
   validateFields,
@@ -44,7 +49,8 @@ function parseCsv(value: unknown): string[] | undefined {
  * Parses and validates the raw query-string from a GET request into typed {@link ListOptions}.
  *
  * Validates field names, sort fields, includes, and filter keys against the resource schema.
- * Applies `defaultLimit` and `maxLimit` from the resource definition when set.
+ * Applies the resource's `defaultLimit`/`maxLimit`, falling back to the framework page
+ * defaults so the result set is always bounded.
  *
  * @param query - The raw query-string object from the HTTP request.
  * @param resource - The resource definition used for field and relation validation.
@@ -62,8 +68,16 @@ export function parseListOptions(
   const offset = parseInteger(query.offset, 'offset', 0)
   const order = parseCsv(query.order)
 
-  if (!limit && resource.defaultLimit) limit = resource.defaultLimit
-  if (limit && resource.maxLimit && limit > resource.maxLimit) limit = resource.maxLimit
+  // Page size is bounded by sensible defaults, but a resource can opt out with `0` (= no
+  // bound). `count` in the response always reflects the true total, so a capped page is never
+  // a silent drop. Precedence: an explicit `?limit=` wins; otherwise the resource/default
+  // `defaultLimit` applies; finally a non-zero `maxLimit` caps the result either way.
+  const cap = resource.maxLimit ?? MAX_PAGE_LIMIT
+  if (limit === undefined) {
+    const fallback = resource.defaultLimit ?? DEFAULT_PAGE_LIMIT
+    if (fallback !== 0) limit = fallback
+  }
+  if (cap !== 0 && (limit === undefined || limit > cap)) limit = cap
 
   if (fields) {
     validateFields(resource, fields)
@@ -83,7 +97,7 @@ export function parseListOptions(
   }
 
   const where: Record<string, unknown> = {}
-  const fieldNames = new Set(resource.fields.map((field) => field.name))
+  const fieldNames = new Set((resource.fields ?? []).map((field) => field.name))
 
   Object.entries(query).forEach(([key, value]) => {
     if (!fieldNames.has(key)) return

@@ -2,7 +2,7 @@
 
 The query builder exposes an advanced `POST /:resource/query` endpoint that accepts a structured JSON payload (an AST — abstract syntax tree) describing filters, sorting, pagination, and projection. It lets the front-end compose rich list queries "for free", without the back-end adding custom endpoints. (The path segment defaults to `query`; override it with the `queryBuilderPath` option.)
 
-**Database-agnostic by design.** The payload is fully validated against the resource — every field name, comparison, sort, and nesting depth — and invalid input returns a structured `400`/`422` _before_ any database call. The validated AST is then compiled to portable **Prisma Client** calls (never raw SQL), so the exact same request behaves identically on PostgreSQL, MySQL/MariaDB, SQLite, SQL Server, CockroachDB, and MongoDB. Switch databases by changing only the Prisma `provider` — your client code never changes.
+**Database-agnostic by design.** The payload is fully validated against the resource — every field name, comparison, sort, and nesting depth — and invalid input returns a structured `400`/`422` _before_ any database call. The validated AST is then compiled to portable **Prisma Client** calls (never raw SQL), so the exact same request behaves identically on PostgreSQL, MySQL/MariaDB, SQL Server, CockroachDB, and SQLite. Switch databases by changing only the Prisma `provider` — your client code never changes.
 
 It is enabled by default; disable it per-resource with the `allowReadManyWithQueryBuilder` permission:
 

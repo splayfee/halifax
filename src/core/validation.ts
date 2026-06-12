@@ -71,7 +71,7 @@ export function validateId(value: string | number | undefined): asserts value is
  * @returns Array of field name strings.
  */
 export function getFieldNames(resource: ResourceDefinition): string[] {
-  return resource.fields.map((field) => {
+  return (resource.fields ?? []).map((field) => {
     return field.name
   })
 }
@@ -99,7 +99,7 @@ export function validateFields(resource: ResourceDefinition, fields: string[] = 
  */
 export function validateSelectableFields(resource: ResourceDefinition, fields: string[]): void {
   const nonSelectable = fields.filter((name) => {
-    const field = resource.fields.find((f) => f.name === name)
+    const field = resource.fields?.find((f) => f.name === name)
     return field?.selectable === false
   })
   if (nonSelectable.length) {
@@ -114,7 +114,7 @@ export function validateSelectableFields(resource: ResourceDefinition, fields: s
  */
 export function validateSortableFields(resource: ResourceDefinition, fields: string[]): void {
   const nonSortable = fields.filter((name) => {
-    const field = resource.fields.find((f) => f.name === name)
+    const field = resource.fields?.find((f) => f.name === name)
     return field?.sortable === false
   })
   if (nonSortable.length) {
@@ -123,11 +123,16 @@ export function validateSortableFields(resource: ResourceDefinition, fields: str
 }
 
 /**
- * Throws {@link UnprocessableEntityError} when any of `includes` reference non-includable relations.
- * @param resource - The resource definition whose relations are checked.
+ * Throws {@link UnprocessableEntityError} when any of `includes` reference non-includable
+ * relations, or when the resource's repository reports it cannot eager-load relations at all.
+ * @param resource - The resource definition whose relations and repository are checked.
  * @param includes - Relation names to validate.
  */
 export function validateIncludes(resource: ResourceDefinition, includes: string[] = []): void {
+  if (includes.length && resource.repository?.capabilities?.supportsIncludes === false) {
+    throw new UnprocessableEntityError('This resource does not support relation includes.')
+  }
+
   const validIncludes = new Set(
     (resource.relations ?? [])
       .filter((relation) => {
@@ -157,7 +162,7 @@ export function validateQueryString(
   resource: ResourceDefinition,
   query: Record<string, unknown>
 ): void {
-  const filterableFieldNames = resource.fields
+  const filterableFieldNames = (resource.fields ?? [])
     .filter((f) => f.filterable !== false)
     .map((f) => f.name)
   const allFieldNames = new Set(getFieldNames(resource))

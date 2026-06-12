@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseListOptions } from '@/core/queryString.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
-import type { ResourceDefinition } from '@/core/types.js'
+import { DEFAULT_PAGE_LIMIT, type ResourceDefinition } from '@/core/types.js'
 
 const resource: ResourceDefinition = {
   name: 'Post',
@@ -16,11 +16,11 @@ const resource: ResourceDefinition = {
 }
 
 describe('parseListOptions — defaults', () => {
-  it('returns empty options for an empty query string', () => {
+  it('returns empty options for an empty query string (limit falls back to the page default)', () => {
     const opts = parseListOptions({}, resource)
     expect(opts.fields).toBeUndefined()
     expect(opts.include).toBeUndefined()
-    expect(opts.limit).toBeUndefined()
+    expect(opts.limit).toBe(DEFAULT_PAGE_LIMIT)
     expect(opts.offset).toBeUndefined()
     expect(opts.orderBy).toBeUndefined()
     expect(opts.where).toEqual({})
@@ -44,6 +44,22 @@ describe('parseListOptions — defaults', () => {
   it('does not cap limit when it is below maxLimit', () => {
     const opts = parseListOptions({ limit: '5' }, { ...resource, maxLimit: 100 })
     expect(opts.limit).toBe(5)
+  })
+
+  it('defaultLimit: 0 returns all rows when ?limit= is omitted (no default bound)', () => {
+    const opts = parseListOptions({}, { ...resource, defaultLimit: 0, maxLimit: 0 })
+    expect(opts.limit).toBeUndefined()
+  })
+
+  it('maxLimit: 0 removes the cap for an explicit ?limit=', () => {
+    const opts = parseListOptions({ limit: '100000' }, { ...resource, maxLimit: 0 })
+    expect(opts.limit).toBe(100000)
+  })
+
+  it('a finite maxLimit still bounds an unbounded default', () => {
+    // defaultLimit: 0 (no default) but maxLimit stays finite → the cap applies.
+    const opts = parseListOptions({}, { ...resource, defaultLimit: 0, maxLimit: 250 })
+    expect(opts.limit).toBe(250)
   })
 })
 

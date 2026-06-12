@@ -50,7 +50,6 @@ function buildApp() {
       { name: 'id', filterable: true },
       { name: 'name', writable: true }
     ],
-    permissions: { allowReadMany: true, allowCreate: true },
     cache: { ttlSeconds: 0 }, // 0 = never expire
     repository: repo
   }

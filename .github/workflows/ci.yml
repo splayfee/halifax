@@ -49,59 +49,23 @@ jobs:
         run: pnpm run test:unit
 
   # Full-stack integration tests against REAL databases, one matrix leg per engine. The same
-  # 143-test suite (every HTTP adapter × PrismaAdapter, query builder, tenant scoping) runs
+  # 147-test suite (every HTTP adapter × PrismaAdapter, query builder, tenant scoping) runs
   # unchanged on each — proof that compiling the query AST to portable Prisma Client calls is
   # genuinely database-agnostic. `HALIFAX_DB` selects the schema + driver adapter; globalSetup
   # runs `prisma generate` + `prisma db push` before any test executes.
   #
-  # PostgreSQL (pg-family SQL), MySQL (mysql-family SQL, different collation), and SQLite
-  # (embedded, no container) cover every axis that can actually differ. CockroachDB, MariaDB,
-  # MSSQL, and MongoDB are supported by the same harness (set HALIFAX_DB + DATABASE_URL); they
-  # are omitted here only because they re-exercise Prisma's dialect layer (Cockroach ≈ pg,
-  # MariaDB ≈ mysql) or need extra container setup (MSSQL SA password, MongoDB replica set).
+  # Every relational engine the library supports runs here against a real container, brought up
+  # from the same docker-compose.test.yml used locally (so CI and local runs stay identical —
+  # and so CockroachDB's custom start command, which GitHub `services:` can't express, works).
+  # scripts/integration-matrix.sh owns the per-engine DATABASE_URL. MongoDB is intentionally
+  # absent: Prisma 7 dropped MongoDB support (coming soon in v7) — the harness is forward-ready.
   integration:
     name: integration (${{ matrix.db }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        db: [postgres, mysql, sqlite]
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: halifax_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: halifax_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost -uroot -proot"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-      # Shared by every leg — the Redis-backed cache integration test runs regardless of the DB.
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        db: [postgres, mysql, mariadb, mssql, cockroachdb, sqlite]
     steps:
       - uses: actions/checkout@v4
 
@@ -115,15 +79,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Select database (${{ matrix.db }})
+      # Start this leg's database (plus Redis, shared by every leg's cache test) from the same
+      # compose file used locally. SQLite is embedded, so it only needs Redis. `--wait` blocks
+      # until each container reports healthy.
+      - name: Start test databases
         run: |
-          echo "HALIFAX_DB=${{ matrix.db }}" >> "$GITHUB_ENV"
-          echo "REDIS_URL=redis://localhost:6379" >> "$GITHUB_ENV"
-          case "${{ matrix.db }}" in
-            postgres) echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/halifax_test" >> "$GITHUB_ENV" ;;
-            mysql)    echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/halifax_test" >> "$GITHUB_ENV" ;;
-            sqlite)   mkdir -p tests/integration/.tmp && echo "DATABASE_URL=file:$GITHUB_WORKSPACE/tests/integration/.tmp/sqlite-test.db" >> "$GITHUB_ENV" ;;
-          esac
+          if [ "${{ matrix.db }}" = "sqlite" ]; then
+            docker compose -f docker-compose.test.yml up -d --wait redis
+          else
+            docker compose -f docker-compose.test.yml up -d --wait redis "${{ matrix.db }}"
+          fi
 
       # Type-check the runnable example against the generated client (keeps it from drifting).
       - name: Type-check examples
@@ -132,5 +97,5 @@ jobs:
           pnpm exec prisma generate --schema=tests/integration/prisma/schema.prisma
           pnpm exec tsc --noEmit -p examples/tsconfig.json
 
-      - name: Integration tests
-        run: pnpm exec vitest run --config vitest.integration.config.ts
+      - name: Integration tests (${{ matrix.db }})
+        run: bash scripts/integration-matrix.sh ${{ matrix.db }}

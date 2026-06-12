@@ -1,7 +1,7 @@
 {
   "name": "@edium/halifax",
-  "version": "1.0.0",
-  "description": "Auto-generate type-safe REST CRUD APIs from your data models. Adapter-driven: Express/Fastify/HyperExpress, Prisma (PostgreSQL, MySQL, SQLite, SQL Server, MongoDB, CockroachDB), JWT/API-key auth, multi-tenancy, a dynamic query builder, and pluggable Redis caching.",
+  "version": "2.0.0",
+  "description": "Auto-generate type-safe REST CRUD APIs from your data models. Adapter-driven: Express/Fastify/HyperExpress, Prisma (PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, SQLite), JWT/API-key auth, multi-tenancy, a dynamic query builder, and pluggable Redis caching.",
   "author": "David LaTour <david@edium.com>",
   "homepage": "https://github.com/splayfee/halifax#readme",
   "repository": {
@@ -60,10 +60,10 @@
     "access": "public"
   },
   "sideEffects": false,
-  "prepublishOnly": "npm run build",
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "rm -rf dist && tsc --build && tsc-alias",
-    "dev": "tsx watch ./examples/express-prisma.ts",
+    "dev": "tsx watch ./examples/http-express.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --check .",
@@ -71,14 +71,16 @@
     "test:unit": "vitest run tests/unit",
     "test:unit:coverage": "vitest run --coverage tests/unit",
     "test:integration": "dotenv -e .env.test -- vitest run --config vitest.integration.config.ts",
+    "test:integration:all": "bash scripts/integration-matrix.sh",
     "test:integration:generate": "prisma generate --schema=tests/integration/prisma/schema.prisma",
-    "type-check": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json"
+    "type-check": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+    "type-check:examples": "prisma generate --schema=tests/integration/prisma/schema.prisma && tsc --noEmit -p examples/tsconfig.json"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "peerDependencies": {
-    "@prisma/client": ">=7.0.0",
+    "@prisma/client": ">=6.0.0",
     "express": "^4.17.0 || ^5.0.0",
     "fastify": ">=4.0.0",
     "hyper-express": ">=6.0.0",
@@ -105,6 +107,7 @@
     "@eslint/js": "^10.0.1",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/adapter-mariadb": "^7.8.0",
+    "@prisma/adapter-mssql": "7.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@types/express": "^5.0.6",
@@ -145,7 +148,6 @@
     "fastify",
     "hyper-express",
     "jwt",
-    "mongodb",
     "multi-tenancy",
     "multi-tenant",
     "mysql",
@@ -162,7 +164,7 @@
     "typescript",
     "ultimate-express"
   ],
-  "packageManager": "pnpm@11.5.3",
+  "packageManager": "pnpm@11.6.0",
   "dependencies": {
     "uuid": "^14.0.0"
   }
