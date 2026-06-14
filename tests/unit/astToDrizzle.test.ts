@@ -145,6 +145,20 @@ describe('astToDrizzleWhere — comparison operators', () => {
     ])
   })
 
+  it('IsNull', () => {
+    // 'tag' is null for 'Bravo'
+    expect(query({ field: 'tag', comparison: SqlComparison.IsNull, value1: null })).toEqual([
+      'Bravo'
+    ])
+  })
+
+  it('IsNotNull', () => {
+    expect(query({ field: 'tag', comparison: SqlComparison.IsNotNull, value1: null })).toEqual([
+      'Alpha',
+      'Charlie'
+    ])
+  })
+
   it('Like (raw SQL LIKE pattern)', () => {
     expect(query({ field: 'name', comparison: SqlComparison.Like, value1: 'Al%' })).toEqual([
       'Alpha'
@@ -161,6 +175,18 @@ describe('astToDrizzleWhere — comparison operators', () => {
   it('StartsWith', () => {
     expect(query({ field: 'name', comparison: SqlComparison.StartsWith, value1: 'Br' })).toEqual([
       'Bravo'
+    ])
+  })
+
+  it('Contains maps to LIKE %value%', () => {
+    expect(query({ field: 'name', comparison: SqlComparison.Contains, value1: 'lph' })).toEqual([
+      'Alpha'
+    ])
+  })
+
+  it('StartsWith maps to LIKE value%', () => {
+    expect(query({ field: 'name', comparison: SqlComparison.StartsWith, value1: 'Ch' })).toEqual([
+      'Charlie'
     ])
   })
 
@@ -210,6 +236,29 @@ describe('astToDrizzleWhere — nesting', () => {
     })
     // childWhere is undefined → returns self only
     expect(result).toEqual(['Alpha'])
+  })
+
+  it('AND-joins multiple top-level filters (andify with 2+ items)', () => {
+    // Two sibling filters with no OR operator → both go into one AND group.
+    // andify([sql1, sql2]) hits the `return and(...valid)` branch (line 119 in source).
+    const result = query([
+      { field: 'score', comparison: SqlComparison.GreaterThan, value1: 5 },
+      { field: 'score', comparison: SqlComparison.LessThan, value1: 25 }
+    ])
+    expect(result).toEqual(['Alpha', 'Bravo'])
+  })
+
+  it('returns undefined when all OR-group filters reference unknown columns (orParts is empty)', () => {
+    // Two sibling nodes separated by OR, both referencing columns that do not exist.
+    // Each OR-group's andify() returns undefined, so orParts ends up empty → undefined overall.
+    const result = astToDrizzleWhere(
+      [
+        { field: 'UNKNOWN_A', comparison: SqlComparison.Equal, value1: 'x', operator: 'OR' },
+        { field: 'UNKNOWN_B', comparison: SqlComparison.Equal, value1: 'y' }
+      ],
+      cols
+    )
+    expect(result).toBeUndefined()
   })
 })
 

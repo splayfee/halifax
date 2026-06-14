@@ -7,7 +7,6 @@ import type { AuthContext, AuthStrategy } from '@/auth/AuthStrategy.js'
 import type { ResourceDefinition } from '@/core/types.js'
 
 type Row = { id: number; companyId: number; name: string }
-type PrismaQueryArg = { where: Record<string, unknown>; data?: Record<string, unknown> }
 
 /** A delegate whose write/read args we can assert against. */
 function makeDelegate(overrides: Record<string, unknown> = {}) {
@@ -198,8 +197,7 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
     })
 
     // The tenant predicate is AND-ed outside the caller's filters, every time.
-    const [findManyArg] = delegate.findMany.mock.calls[0]! as [PrismaQueryArg]
-    const where = findManyArg.where
+    const where = delegate.findMany.mock.calls[0]![0].where
     expect(where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
   })
 
@@ -218,8 +216,7 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
       ]
     })
 
-    const [findManyArg2] = delegate.findMany.mock.calls[0]! as [PrismaQueryArg]
-    const where = findManyArg2.where
+    const where = delegate.findMany.mock.calls[0]![0].where
     expect(where.AND[0]).toEqual({ companyId: { equals: 7 } })
     expect(where.AND[1]).toEqual({
       OR: [{ name: { equals: 'a' } }, { companyId: { equals: 999 } }]
@@ -238,9 +235,9 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
       companyId: 999
     } as Partial<Row>)
 
-    const [updateManyArg] = delegate.updateMany.mock.calls[0]! as [PrismaQueryArg]
-    expect(updateManyArg.where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
-    expect(updateManyArg.data).toEqual({ name: 'z' }) // tenant field stripped from the payload
+    const call = delegate.updateMany.mock.calls[0]![0]
+    expect(call.where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
+    expect(call.data).toEqual({ name: 'z' }) // tenant field stripped from the payload
   })
 })
 
@@ -369,5 +366,63 @@ describe('createExpressCrudRouter — tenant integration', () => {
 
     await request(app).get('/api/v3/widgets')
     expect(delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }))
+  })
+
+  it('falls through to auto-detection when resource.tenant has no field property', async () => {
+    // resource.tenant is truthy but .field is undefined → branch 3 of effectiveTenantField
+    // is NOT taken; falls through to auto-detect by matching field names.
+    // The resource has 'companyId' so auto-detection picks it up.
+    const delegate = makeDelegate()
+    const resource: ResourceDefinition = {
+      name: 'Widget',
+      routePrefix: 'widgets',
+      // tenant is truthy ({}) but .field is absent — exercises the false branch of
+      // `resource.tenant && resource.tenant.field` at crudRouter.ts line 126
+      tenant: {} as { field: string },
+      fields: [
+        { name: 'id' },
+        { name: 'companyId' },
+        { name: 'name' }
+      ],
+      repository: new PrismaAdapter<Row>({ delegate })
+    }
+
+    const app = express()
+    app.use(express.json())
+    app.use(
+      '/api/v3',
+      createExpressCrudRouter([resource], {
+        authStrategy: sessionStrategy({ id: 7 }),
+        tenant: { field: 'companyId', resolveId: () => 7 }
+      })
+    )
+
+    const res = await request(app).get('/api/v3/widgets')
+    expect(res.status).toBe(200)
+    // Auto-detection found 'companyId' so the repo is called with the tenant scope
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 7 } })
+    )
+  })
+
+  it('throws ServerError when the tenant field name contains unsafe characters', () => {
+    // Field name 'tenant-id' fails /^[a-zA-Z_][a-zA-Z0-9_]*$/ → crudRouter.ts line 254
+    const delegate = makeDelegate()
+    const resource: ResourceDefinition = {
+      name: 'Widget',
+      routePrefix: 'widgets',
+      fields: [
+        { name: 'id' },
+        { name: 'tenant-id' },
+        { name: 'name' }
+      ],
+      repository: new PrismaAdapter<Row>({ delegate })
+    }
+
+    expect(() =>
+      createExpressCrudRouter([resource], {
+        tenant: { field: 'tenant-id', resolveId: () => 7 }
+      })
+    ).toThrow(/unsafe tenant field name/)
   })
 })

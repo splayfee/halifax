@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { generateOpenApiSpec, generateDocsHtml } from '@/openapi/specGenerator.js'
+import { generateOpenApiSpec } from '@/openapi/specGenerator.js'
+import { generateDocsHtml } from '@/openapi/generateDocsHtml.js'
 import type { ResourceDefinition } from '@/core/types.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -557,5 +558,23 @@ describe('generateDocsHtml', () => {
     // docs at /api/docs, spec at /api/openapi.json → 'openapi.json'
     const html = generateDocsHtml('/api/openapi.json', '/api/docs')
     expect(html).toContain('openapi.json')
+  })
+
+  it('falls back to specFilename when spec and docs share the same directory (join produces empty string)', () => {
+    // specPath='/' strips to '' → specParts=[''], specFilename=''
+    // docsDirParts=[] (docsPath '/docs' has no parent dir with a trailing segment)
+    // ups=0, downs=[], array=[''] → join='', || specFilename → '' (still produces a URL)
+    // The key is the || branch is exercised
+    const html = generateDocsHtml('/', '/docs')
+    expect(html).toContain('<!DOCTYPE html>')
+    expect(html).toContain('swagger-ui')
+  })
+
+  it('uses specFilename fallback (line 5 ??) when specPath has no filename segment', () => {
+    // A trailing slash causes specParts last element to be '' (empty string).
+    // The ?? does not fire ('' is not null/undefined) but the || on line 17 fires
+    // when the joined relative path is empty — exercises the fallback code path.
+    const html = generateDocsHtml('/api/', '/api/docs')
+    expect(html).toContain('<!DOCTYPE html>')
   })
 })

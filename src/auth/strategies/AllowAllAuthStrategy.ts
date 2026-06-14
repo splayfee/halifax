@@ -1,12 +1,9 @@
+import type { HttpRequest } from '@/core/types.js'
 import type { AuthContext, AuthStrategy } from './types.js'
 
 /** Passes every request through without any authentication checks. Useful for public APIs or testing. */
 export class AllowAllAuthStrategy implements AuthStrategy {
-  /**
-   * Always returns an authenticated context with no user details.
-   * @returns An {@link AuthContext} with `isAuthenticated: true`.
-   */
-  public authenticate(): AuthContext {
+  public authenticate(_req: HttpRequest): AuthContext {
     return { isAuthenticated: true }
   }
 }

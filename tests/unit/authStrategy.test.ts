@@ -130,6 +130,12 @@ describe('JwtClaimsAuthStrategy', () => {
       ).toBe(false)
     })
   })
+
+  it('openApiScheme returns an HTTP bearer scheme', () => {
+    const scheme = strategy.openApiScheme()
+    expect(scheme.type).toBe('http')
+    expect((scheme as { scheme: string }).scheme).toBe('bearer')
+  })
 })
 
 describe('PassportAuthStrategy', () => {
@@ -154,6 +160,17 @@ describe('PassportJwtStrategy', () => {
       authenticate:
         (_strategy: string, _opts: unknown, cb: (err: unknown, user: unknown) => void) => () =>
           cb(err, user)
+    }
+  }
+
+  /** Calls the Express `next` function with an error instead of the Passport callback. */
+  function makePassportNextErr(nextErr: unknown) {
+    return {
+      authenticate:
+        (_strategy: string, _opts: unknown, _cb: (err: unknown, user: unknown) => void) =>
+        (_req: unknown, _res: unknown, next: (err?: unknown) => void) => {
+          next(nextErr)
+        }
     }
   }
 
@@ -193,6 +210,24 @@ describe('PassportJwtStrategy', () => {
     })
     const ctx = await strategy.authenticate(req())
     expect(ctx.userId).toBe('mapped')
+  })
+
+  it('rejects with AuthenticationError when next is called with a non-Error truthy value', async () => {
+    const passport = makePassportNextErr('something went wrong')
+    const strategy = new PassportJwtStrategy({ passport })
+    await expect(strategy.authenticate(req())).rejects.toMatchObject({ status: 401 })
+  })
+
+  it('rejects with the original Error when next is called with an Error instance', async () => {
+    const passport = makePassportNextErr(new Error('middleware failure'))
+    const strategy = new PassportJwtStrategy({ passport })
+    await expect(strategy.authenticate(req())).rejects.toThrow('middleware failure')
+  })
+
+  it('openApiScheme returns an HTTP bearer scheme', () => {
+    const scheme = new PassportJwtStrategy({ passport: makePassport({}) }).openApiScheme()
+    expect(scheme.type).toBe('http')
+    expect((scheme as { scheme: string }).scheme).toBe('bearer')
   })
 
   describe('authorize', () => {
@@ -319,5 +354,11 @@ describe('PassportSessionStrategy', () => {
         })
       ).toBe(false)
     })
+  })
+
+  it('returns an apiKey/cookie scheme from openApiScheme()', () => {
+    const scheme = new PassportSessionStrategy().openApiScheme()
+    expect(scheme.type).toBe('apiKey')
+    expect((scheme as { in: string }).in).toBe('cookie')
   })
 })

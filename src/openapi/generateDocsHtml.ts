@@ -13,9 +13,9 @@ export function generateDocsHtml(specPath: string, docsPath: string): string {
     common++
   const ups = docsDirParts.length - common
   const downs = specDirParts.slice(common)
+  const upSegments: string[] = new Array(ups).fill('..') as string[]
   const relSpecUrl =
-    [...Array.from<string>({ length: ups }, () => '..'), ...downs, specFilename].join('/') ||
-    specFilename
+    [...upSegments, ...downs, specFilename].join('/') || specFilename
 
   return `<!DOCTYPE html>
 <html lang="en">
