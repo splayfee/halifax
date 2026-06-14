@@ -1,5 +1,6 @@
 import { AllowAllAuthStrategy, type AuthContext, type AuthStrategy } from '@/auth/AuthStrategy.js'
 import { createCachingRepository, InMemoryCacheStore, type CacheStore } from '@/core/cache/index.js'
+import { generateOpenApiSpec, generateDocsHtml, type OpenApiOptions } from '@/openapi/index.js'
 import { HttpError } from '@/errors/HttpError.js'
 import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
 import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
@@ -7,7 +8,7 @@ import { NotFoundError } from '@/errors/NotFoundError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { UnsupportedMediaTypeError } from '@/errors/UnsupportedMediaTypeError.js'
-import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type { IQueryOptions } from '@edium/halifax-types'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
 import type {
   FieldDefinition,
@@ -44,15 +45,18 @@ function parseId(raw: string | undefined): string | number {
  * Strips non-writable fields from a request body and rejects unknown fields with a 422.
  * Operates on a {@link normalizeResource | normalized} resource, whose fields carry explicit
  * `writable` booleans (permissive by default; the primary key protected). Fields with
- * `writable: false` are silently dropped.
+ * `writable: false` are silently dropped. Fields with `writeRoles` the caller does not
+ * hold are also silently dropped (consistent with `writable: false` semantics).
  * @param resource - The normalized resource definition.
  * @param data - The raw request body key-value map.
- * @returns A new object containing only writable fields.
+ * @param auth - The resolved auth context for the current request (for role-based write filtering).
+ * @returns A new object containing only writable fields permitted for the caller.
  * @throws {@link UnprocessableEntityError} when the body contains keys not defined on the resource.
  */
 function filterWritableFields(
   resource: ResourceDefinition,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  auth?: AuthContext
 ): Record<string, unknown> {
   const fields = resource.fields ?? []
   const knownFields = new Set(fields.map((f) => f.name))
@@ -61,10 +65,42 @@ function filterWritableFields(
     throw new UnprocessableEntityError(`Unknown field(s): ${unknownFields.join(', ')}.`)
   }
 
+  const userRoles = auth ? new Set([...(auth.roles ?? []), ...(auth.permissions ?? [])]) : null
+
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => {
       const field = fields.find((f) => f.name === key)
-      return field?.writable !== false
+      if (field?.writable === false) return false
+      if (userRoles && field?.writeRoles?.length) {
+        return field.writeRoles.some((r) => userRoles.has(r))
+      }
+      return true
+    })
+  )
+}
+
+/**
+ * Strips fields the caller is not permitted to read based on per-field `readRoles`.
+ * A fast-path returns the record unchanged when no fields carry read restrictions.
+ * @param resource - The normalized resource definition.
+ * @param record - The raw record to filter.
+ * @param auth - The resolved auth context for the current request.
+ * @returns A new object with role-restricted fields removed.
+ */
+function filterReadableFields(
+  resource: ResourceDefinition,
+  record: Record<string, unknown>,
+  auth?: AuthContext
+): Record<string, unknown> {
+  const fields = resource.fields ?? []
+  if (!fields.some((f) => (f.readRoles?.length ?? 0) > 0)) return record
+
+  const userRoles = new Set([...(auth?.roles ?? []), ...(auth?.permissions ?? [])])
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => {
+      const field = fields.find((f) => f.name === key)
+      if (!field?.readRoles?.length) return true
+      return field.readRoles.some((r) => userRoles.has(r))
     })
   )
 }
@@ -120,7 +156,11 @@ function resolveFields(resource: ResourceDefinition, idField: string): FieldDefi
     sortable: field.sortable !== false,
     selectable: field.selectable !== false,
     // Permissive by default — but the primary key is protected: writable only when opted in.
-    writable: field.name === idField ? field.writable === true : field.writable !== false
+    writable: field.name === idField ? field.writable === true : field.writable !== false,
+    ...(field.type !== undefined ? { type: field.type } : {}),
+    ...(field.format !== undefined ? { format: field.format } : {}),
+    ...(field.readRoles?.length ? { readRoles: field.readRoles } : {}),
+    ...(field.writeRoles?.length ? { writeRoles: field.writeRoles } : {})
   }))
 }
 
@@ -209,6 +249,13 @@ export interface CrudApiOptions {
    * default, and backward compatible.
    */
   envelope?: string | null
+  /**
+   * Enable OpenAPI 3.1 spec generation and interactive docs. When set, Halifax registers two
+   * additional routes: `GET /openapi.json` (raw spec) and `GET /docs` (Swagger UI). The spec
+   * is built by introspecting the registered resources — no manual annotation required.
+   * Prisma-backed resources get full type information automatically from the DMMF schema.
+   */
+  openapi?: OpenApiOptions
   /**
    * API-wide read-through caching. Provide a `store` (defaults to an in-process
    * {@link InMemoryCacheStore}) and/or a default `ttlSeconds` applied to every resource that
@@ -560,15 +607,25 @@ export function registerCrudApi(
           const idempotencyKey = getHeaderValue(req, 'idempotency-key')
           const createOptions = idempotencyKey ? { idempotencyKey } : undefined
           const items = (Array.isArray(req.body) ? req.body : [req.body]).map(
-            (item: Record<string, unknown>) => filterWritableFields(resource, item)
+            (item: Record<string, unknown>) => filterWritableFields(resource, item, auth)
           )
           if (items.length === 1) {
             const result = await repo.createOne(items[0] as never, createOptions)
-            await writeSuccess(res, 201, result, envelope)
+            await writeSuccess(
+              res,
+              201,
+              filterReadableFields(resource, result as Record<string, unknown>, auth),
+              envelope
+            )
             return
           }
           const results = await repo.createMany(items as never[], createOptions)
-          await writeSuccess(res, 201, results, envelope)
+          await writeSuccess(
+            res,
+            201,
+            results.map((r) => filterReadableFields(resource, r as Record<string, unknown>, auth)),
+            envelope
+          )
         })
       )
     }
@@ -582,7 +639,17 @@ export function registerCrudApi(
           const repo = await resolveRepo(req, auth)
           const listOptions = parseListOptions(req.query, resource)
           const results = await repo.getMany(listOptions)
-          await writeSuccess(res, 200, results, envelope)
+          await writeSuccess(
+            res,
+            200,
+            {
+              ...results,
+              results: results.results.map((r) =>
+                filterReadableFields(resource, r as Record<string, unknown>, auth)
+              )
+            },
+            envelope
+          )
         })
       )
     }
@@ -605,7 +672,17 @@ export function registerCrudApi(
           const query = { ...body } as IQueryOptions
           validateAdvancedQuery(resource, query)
           const results = await repo.executeQuery(query)
-          await writeSuccess(res, 200, results, envelope)
+          await writeSuccess(
+            res,
+            200,
+            {
+              ...results,
+              results: results.results.map((r) =>
+                filterReadableFields(resource, r as Record<string, unknown>, auth)
+              )
+            },
+            envelope
+          )
         })
       )
     }
@@ -624,7 +701,12 @@ export function registerCrudApi(
             include: listOptions.include
           })
           if (!result) throw new NotFoundError()
-          await writeSuccess(res, 200, result, envelope)
+          await writeSuccess(
+            res,
+            200,
+            filterReadableFields(resource, result as Record<string, unknown>, auth),
+            envelope
+          )
         })
       )
     }
@@ -637,10 +719,15 @@ export function registerCrudApi(
           const auth = await authorizeRequest(req, resource, 'updateOne', authStrategy)
           const repo = await resolveRepo(req, auth)
           const id = parseId(req.params['id'])
-          const body = filterWritableFields(resource, req.body as Record<string, unknown>)
+          const body = filterWritableFields(resource, req.body as Record<string, unknown>, auth)
           const result = await repo.updateOne(id, body as never)
           if (!result) throw new NotFoundError()
-          await writeSuccess(res, 200, result, envelope)
+          await writeSuccess(
+            res,
+            200,
+            filterReadableFields(resource, result as Record<string, unknown>, auth),
+            envelope
+          )
         })
       )
     }
@@ -657,7 +744,8 @@ export function registerCrudApi(
           const { update, ...queryBody } = (req.body ?? {}) as Record<string, unknown>
           const filteredUpdate = filterWritableFields(
             resource,
-            (update ?? {}) as Record<string, unknown>
+            (update ?? {}) as Record<string, unknown>,
+            auth
           )
           if (!Object.keys(filteredUpdate).length)
             throw new UnprocessableEntityError(
@@ -670,7 +758,21 @@ export function registerCrudApi(
               'updateMany requires at least one WHERE filter to prevent unintended bulk updates.'
             )
           const result = await repo.updateMany(query, filteredUpdate as never)
-          await writeSuccess(res, 200, result, envelope)
+          await writeSuccess(
+            res,
+            200,
+            {
+              ...result,
+              ...(result.results
+                ? {
+                    results: result.results.map((r) =>
+                      filterReadableFields(resource, r as Record<string, unknown>, auth)
+                    )
+                  }
+                : {})
+            },
+            envelope
+          )
         })
       )
     }
@@ -685,9 +787,14 @@ export function registerCrudApi(
           if (!repo.upsertOne)
             throw new NotImplementedError('This resource does not support upsert.')
           const id = parseId(req.params['id'])
-          const body = filterWritableFields(resource, req.body as Record<string, unknown>)
+          const body = filterWritableFields(resource, req.body as Record<string, unknown>, auth)
           const result = await repo.upsertOne(id, body as never)
-          await writeSuccess(res, 200, result, envelope)
+          await writeSuccess(
+            res,
+            200,
+            filterReadableFields(resource, result as Record<string, unknown>, auth),
+            envelope
+          )
         })
       )
     }
@@ -763,4 +870,30 @@ export function registerCrudApi(
       })
     }
   })
+
+  if (options.openapi && options.openapi.enabled !== false) {
+    const specPath = options.openapi.specPath ?? '/openapi.json'
+    const docsPath = options.openapi.docsPath ?? '/docs'
+    // Thread the API-wide envelope and auth scheme into the spec options.
+    const resolvedEnvelope = options.openapi.envelope ?? options.envelope ?? null
+    const resolvedScheme = options.openapi.securityScheme ?? authStrategy.openApiScheme?.()
+    const openApiOpts = {
+      ...options.openapi,
+      envelope: resolvedEnvelope,
+      ...(resolvedScheme ? { securityScheme: resolvedScheme } : {})
+    }
+    const spec = generateOpenApiSpec(resources, openApiOpts)
+    const specJson = JSON.stringify(spec, null, 2)
+    const docsHtml = generateDocsHtml(specPath, docsPath)
+
+    server.registerRoute('GET', specPath, (_req, res) => {
+      res.setHeader?.('Content-Type', 'application/json')
+      res.send?.(specJson)
+    })
+
+    server.registerRoute('GET', docsPath, (_req, res) => {
+      res.setHeader?.('Content-Type', 'text/html; charset=utf-8')
+      res.send?.(docsHtml)
+    })
+  }
 }
