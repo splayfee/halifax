@@ -507,6 +507,31 @@ describe('beforeUpsertOne', () => {
     await invoke(routes, 'PUT', '/rows/:id', makeReq('PUT', { id: '1' }, { name: 'original' }), res)
     expect((dbInput as Record<string, unknown>)['name']).toBe('upsert-hooked')
   })
+
+  it('falls back to rawBody when hook returns undefined (?? rawBody branch, line 32)', async () => {
+    // upsertOne.ts line 32: (await hooks.beforeUpsertOne(...)) ?? rawBody
+    // When the hook returns undefined the original body is used.
+    let dbInput: unknown
+    const repo = makeRepo({
+      async upsertOne(id, data) {
+        dbInput = data
+        return { id: Number(id), ...(data as object) } as Row
+      }
+    })
+    const { server, routes } = makeServer()
+    registerCrudApi(server, [
+      {
+        ...makeResource({
+          beforeUpsertOne: async () => undefined
+        }),
+        repository: repo
+      }
+    ])
+    const { res } = makeRes()
+    await invoke(routes, 'PUT', '/rows/:id', makeReq('PUT', { id: '1' }, { name: 'original' }), res)
+    // Hook returned undefined → rawBody passes through
+    expect((dbInput as Record<string, unknown>)['name']).toBe('original')
+  })
 })
 
 // ─── afterUpsertOne ───────────────────────────────────────────────────────────

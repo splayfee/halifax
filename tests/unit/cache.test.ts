@@ -529,4 +529,74 @@ describe('createCachingRepository', () => {
     expect(cached.withScope).toBeUndefined()
     expect(cached.executeQuery).toBeUndefined()
   })
+
+  it('propagates capabilities from the underlying repository (line 89)', async () => {
+    // createCachingRepository.ts line 89: ...(repo.capabilities ? { capabilities: repo.capabilities } : {})
+    const repo: Repository<Row> = {
+      capabilities: { supportsIncludes: true, supportsCreateManyReturn: true },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async getOne() {
+        return null
+      },
+      async createOne(d) {
+        return d as Row
+      },
+      async createMany(d) {
+        return d as Row[]
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+    const cached = createCachingRepository(repo, {
+      store: new InMemoryCacheStore(),
+      ttlSeconds: 60,
+      namespace: 'ns'
+    })
+    expect(cached.capabilities).toEqual({ supportsIncludes: true, supportsCreateManyReturn: true })
+  })
+
+  it('caches getMany with array-valued options (stableStringify array branch, line 35)', async () => {
+    // createCachingRepository.ts line 35: stableStringify for arrays
+    // Passing fields (string[]) triggers the array branch in the recursive stableStringify call
+    const calls = { getMany: 0 }
+    const repo: Repository<Row> = {
+      async getMany() {
+        calls.getMany++
+        return { count: 1, results: [{ id: 1, name: 'a' }] }
+      },
+      async getOne() {
+        return null
+      },
+      async createOne(d) {
+        return d as Row
+      },
+      async createMany(d) {
+        return d as Row[]
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
+    }
+    const cached = createCachingRepository(repo, {
+      store: new InMemoryCacheStore(),
+      ttlSeconds: 60,
+      namespace: 'ns'
+    })
+    // First call: miss, second call with same array-valued options: hit
+    await cached.getMany({ fields: ['id', 'name'] })
+    await cached.getMany({ fields: ['id', 'name'] })
+    expect(calls.getMany).toBe(1) // second served from cache
+    // Different array → separate cache key
+    await cached.getMany({ fields: ['id'] })
+    expect(calls.getMany).toBe(2)
+  })
 })

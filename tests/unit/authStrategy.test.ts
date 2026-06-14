@@ -50,6 +50,19 @@ describe('ApiKeyAuthStrategy', () => {
     const ctx = custom.authenticate(req({ 'x-token': 'key' }))
     expect(ctx.isAuthenticated).toBe(true)
   })
+
+  it('openApiScheme returns an apiKey header scheme', () => {
+    // ApiKeyAuthStrategy.ts line 33: openApiScheme()
+    const scheme = new ApiKeyAuthStrategy('secret').openApiScheme()
+    expect(scheme.type).toBe('apiKey')
+    expect((scheme as { in: string }).in).toBe('header')
+    expect((scheme as { name: string }).name).toBe('x-api-key')
+  })
+
+  it('openApiScheme uses the custom header name', () => {
+    const scheme = new ApiKeyAuthStrategy('secret', 'X-Custom-Key').openApiScheme()
+    expect((scheme as { name: string }).name).toBe('X-Custom-Key')
+  })
 })
 
 describe('JwtClaimsAuthStrategy', () => {
@@ -69,6 +82,15 @@ describe('JwtClaimsAuthStrategy', () => {
   it('is case-insensitive on Bearer scheme', async () => {
     const ctx = await strategy.authenticate(req({ authorization: 'bearer my-token' }))
     expect(ctx.userId).toBe('my-token')
+  })
+
+  it('accepts Authorization as an array and uses the first element', async () => {
+    // JwtClaimsAuthStrategy.ts line 26: Array.isArray(header) ? header[0] : header
+    const r: Parameters<typeof req>[0] & { Authorization?: string | string[] } = {
+      authorization: ['Bearer array-token'] as unknown as string
+    }
+    const ctx = await strategy.authenticate(req(r as Record<string, string>))
+    expect(ctx.userId).toBe('array-token')
   })
 
   it('rejects a missing Authorization header with 401', async () => {
@@ -129,6 +151,19 @@ describe('JwtClaimsAuthStrategy', () => {
         })
       ).toBe(false)
     })
+
+    it('treats undefined permissions as empty (lines 44-45 ?? [] branch)', () => {
+      // JwtClaimsAuthStrategy.ts lines 44-45: auth.permissions ?? [] and auth.roles ?? []
+      expect(
+        strategy.authorize({
+          auth: { isAuthenticated: true }, // no permissions or roles keys
+          action: 'create',
+          resource,
+          requiredPermissions: ['posts.write'],
+          req: req()
+        })
+      ).toBe(false)
+    })
   })
 
   it('openApiScheme returns an HTTP bearer scheme', () => {
@@ -182,6 +217,32 @@ describe('PassportJwtStrategy', () => {
     expect(ctx.userId).toBe('user-42')
     expect(ctx.permissions).toContain('read')
     expect(ctx.roles).toContain('admin')
+  })
+
+  it('maps userId from p.id when p.sub is absent', async () => {
+    // PassportStrategies.ts line 38: typeof p.id === 'string' ? p.id : undefined
+    const passport = makePassport({ id: 'id-based-user', roles: [], permissions: [] })
+    const strategy = new PassportJwtStrategy({ passport })
+    const ctx = await strategy.authenticate(req())
+    expect(ctx.userId).toBe('id-based-user')
+  })
+
+  it('omits userId when neither p.sub nor p.id is a string', async () => {
+    // PassportStrategies.ts line 45: if (userId !== undefined) — false branch, ctx.userId not set
+    const passport = makePassport({ name: 'no-id-field', roles: [], permissions: [] })
+    const strategy = new PassportJwtStrategy({ passport })
+    const ctx = await strategy.authenticate(req())
+    expect(ctx.isAuthenticated).toBe(true)
+    expect(ctx.userId).toBeUndefined()
+  })
+
+  it('defaults roles and permissions to [] when they are not arrays', async () => {
+    // PassportStrategies.ts lines 41-42: Array.isArray fallback for non-array roles/permissions
+    const passport = makePassport({ sub: 'u1' }) // no roles or permissions keys
+    const strategy = new PassportJwtStrategy({ passport })
+    const ctx = await strategy.authenticate(req())
+    expect(ctx.roles).toEqual([])
+    expect(ctx.permissions).toEqual([])
   })
 
   it('rejects with AuthenticationError when user is falsy', async () => {

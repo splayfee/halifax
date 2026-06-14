@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  isValidInt32,
   validateId,
   validateWhere,
   validateAdvancedQuery,
@@ -293,6 +294,52 @@ describe('validateAdvancedQuery', () => {
         orderBy: [{ field: 'secret', order: SqlOrder.ASC }]
       })
     ).toThrow(UnprocessableEntityError)
+  })
+
+  it('validates distinct field names (lines 253-254)', () => {
+    // validation.ts lines 253-254: if (query.distinct) branch
+    expect(() =>
+      validateAdvancedQuery(resource, { distinct: ['id', 'title'] })
+    ).not.toThrow()
+  })
+
+  it('throws for an unknown field in distinct (lines 253-254)', () => {
+    expect(() =>
+      validateAdvancedQuery(resource, { distinct: ['nonexistent'] })
+    ).toThrow(UnprocessableEntityError)
+  })
+
+  it('throws for a non-selectable field in distinct (lines 253-254)', () => {
+    expect(() =>
+      validateAdvancedQuery(resource, { distinct: ['secret'] })
+    ).toThrow(UnprocessableEntityError)
+  })
+})
+
+describe('isValidInt32', () => {
+  it('returns false for null (line 17)', () => {
+    expect(isValidInt32(null)).toBe(false)
+  })
+
+  it('returns false for undefined passed as never (line 18 branch)', () => {
+    // validation.ts line 18: value === undefined check — unreachable via types but tested for coverage
+    expect(isValidInt32(undefined as never)).toBe(false)
+  })
+
+  it('returns false for a string that is not a number', () => {
+    expect(isValidInt32('abc')).toBe(false)
+  })
+
+  it('returns true for a valid positive integer string', () => {
+    expect(isValidInt32('42')).toBe(true)
+  })
+
+  it('returns false below min', () => {
+    expect(isValidInt32(0)).toBe(false)
+  })
+
+  it('returns true when value equals min=0', () => {
+    expect(isValidInt32(0, 0)).toBe(true)
   })
 })
 
