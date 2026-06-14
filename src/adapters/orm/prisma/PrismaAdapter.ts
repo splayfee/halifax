@@ -1,7 +1,7 @@
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import { ServerError } from '@/errors/ServerError.js'
-import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
+import type { IQueryFilter, QueryScalar } from '@edium/halifax-types'
 import { astToPrismaWhere, astToPrismaOrderBy } from './astToPrisma.js'
 
 /** Returns true for Prisma's P2025 "record not found" error. */
@@ -13,7 +13,7 @@ function isNotFoundError(error: unknown): boolean {
     (error as Record<string, unknown>).code === 'P2025'
   )
 }
-import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type { IQueryOptions } from '@edium/halifax-types'
 import type {
   Repository,
   RepositoryCapabilities,
@@ -24,9 +24,23 @@ import type {
   TenantScope,
   UpdateManyResult
 } from '@/core/types.js'
-import type { FieldDefinition, RelationDefinition, ModelSchema } from '@/core/types.js'
+import type { FieldDefinition, FieldType, RelationDefinition, ModelSchema } from '@/core/types.js'
 import type { PrismaDelegate, PrismaAdapterOptions } from './types.js'
 import { toSelect, toInclude, toOrderBy } from './helpers.js'
+
+function prismaTypeToOpenApi(prismaType?: string): { type?: FieldType; format?: string } {
+  switch (prismaType) {
+    case 'Int': return { type: 'integer', format: 'int32' }
+    case 'BigInt': return { type: 'integer', format: 'int64' }
+    case 'Float': return { type: 'number', format: 'float' }
+    case 'Decimal': return { type: 'number', format: 'double' }
+    case 'Boolean': return { type: 'boolean' }
+    case 'DateTime': return { type: 'string', format: 'date-time' }
+    case 'Json': return { type: 'object' }
+    case 'Bytes': return { type: 'string', format: 'binary' }
+    default: return {}
+  }
+}
 
 /**
  * PrismaAdapter is a generic repository implementation that uses Prisma delegates to perform
@@ -173,7 +187,8 @@ export class PrismaAdapter<
         name: f.name,
         filterable: true,
         sortable: true,
-        writable: !f.isId && !f.isReadOnly
+        writable: !f.isId && !f.isReadOnly,
+        ...prismaTypeToOpenApi(f.type)
       }))
   }
 

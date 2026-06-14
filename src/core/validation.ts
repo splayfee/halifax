@@ -1,11 +1,8 @@
 import { validate as uuidValidate } from 'uuid'
-import { SqlComparison } from '@/enums/SqlComparison.js'
-import { SqlOperator } from '@/enums/SqlOperator.js'
-import { SqlOrder } from '@/enums/SqlOrder.js'
+import { SqlComparison, SqlOperator, SqlOrder } from '@edium/halifax-types'
+import type { IQueryFilter, IQueryOptions } from '@edium/halifax-types'
 import { BadRequestError } from '@/errors/BadRequestError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
-import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
-import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
 import type { ResourceDefinition } from '@/core/types.js'
 
 const reservedQueryStringProperties = ['fields', 'limit', 'offset', 'order', 'include']

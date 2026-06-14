@@ -9,8 +9,7 @@ import {
   validateFields,
   getFieldNames
 } from '@/core/validation.js'
-import { SqlComparison } from '@/enums/SqlComparison.js'
-import { SqlOrder } from '@/enums/SqlOrder.js'
+import { SqlComparison, SqlOrder } from '@edium/halifax-types'
 import { ServerError } from '@/errors/ServerError.js'
 import { BadRequestError } from '@/errors/BadRequestError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
@@ -211,7 +210,7 @@ describe('validateWhere', () => {
 })
 
 describe('validateWhere — depth controls', () => {
-  function nestedFilter(depth: number): import('@/interfaces/IQueryFilter.js').IQueryFilter[] {
+  function nestedFilter(depth: number): import('@edium/halifax-types').IQueryFilter[] {
     if (depth === 0) return [{ field: 'id', comparison: SqlComparison.Equal, value1: 1 }]
     return [
       {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/prisma/index.js'
 import { toRoutePrefix } from '@/adapters/orm/prisma/helpers.js'
 import type { ModelSchema } from '@/core/types.js'
-import { SqlComparison } from '@/enums/SqlComparison.js'
+import { SqlComparison } from '@edium/halifax-types'
 
 type Row = { id: number; email: string }
 

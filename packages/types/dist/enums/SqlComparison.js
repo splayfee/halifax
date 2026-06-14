@@ -1,0 +1,20 @@
+export var SqlComparison;
+(function (SqlComparison) {
+    SqlComparison["Between"] = "BETWEEN";
+    SqlComparison["Contains"] = "CONTAINS";
+    SqlComparison["EndsWith"] = "ENDS WITH";
+    SqlComparison["Equal"] = "=";
+    SqlComparison["GreaterThan"] = ">";
+    SqlComparison["GreaterThanOrEqual"] = ">=";
+    SqlComparison["In"] = "IN";
+    SqlComparison["IsNotNull"] = "IS NOT NULL";
+    SqlComparison["IsNull"] = "IS NULL";
+    SqlComparison["LessThan"] = "<";
+    SqlComparison["LessThanOrEqual"] = "<=";
+    SqlComparison["Like"] = "LIKE";
+    SqlComparison["NotBetween"] = "NOT BETWEEN";
+    SqlComparison["NotEqual"] = "<>";
+    SqlComparison["NotIn"] = "NOT IN";
+    SqlComparison["NotLike"] = "NOT LIKE";
+    SqlComparison["StartsWith"] = "STARTS WITH";
+})(SqlComparison || (SqlComparison = {}));

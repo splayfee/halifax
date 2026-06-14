@@ -31,6 +31,16 @@ export interface AuthorizeParams {
   req: HttpRequest
 }
 
+/**
+ * An OpenAPI 3.1 security scheme descriptor returned by {@link AuthStrategy.openApiScheme}.
+ * The spec generator uses this to populate `components/securitySchemes` and the global
+ * `security` requirement — so the Swagger UI "Authorize" button works out of the box.
+ */
+export type SecurityScheme =
+  | { type: 'apiKey'; in: 'header' | 'query' | 'cookie'; name: string; description?: string }
+  | { type: 'http'; scheme: 'bearer'; bearerFormat?: string; description?: string }
+  | { type: 'http'; scheme: 'basic'; description?: string }
+
 /** Contract for pluggable authentication and authorisation strategies. */
 export interface AuthStrategy {
   /**
@@ -46,6 +56,13 @@ export interface AuthStrategy {
    * @returns `true` to allow, `false` to deny.
    */
   authorize?(params: AuthorizeParams): Promise<boolean> | boolean
+  /**
+   * Describes this strategy's security scheme for OpenAPI spec generation.
+   * When implemented, the spec generator automatically wires up `components/securitySchemes`
+   * and the global `security` requirement — no manual `OpenApiOptions.securityScheme` needed.
+   * Return `undefined` (or omit the method) for unauthenticated / custom strategies.
+   */
+  openApiScheme?(): SecurityScheme | undefined
 }
 
 /** Passes every request through without any authentication checks. Useful for public APIs or testing. */
@@ -83,6 +100,10 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
     if (!apiKey) throw new AuthenticationError('Missing API key')
     if (apiKey !== this.expectedApiKey) throw new AuthorizationError('Invalid API key')
     return { isAuthenticated: true }
+  }
+
+  public openApiScheme(): SecurityScheme {
+    return { type: 'apiKey', in: 'header', name: this.headerName }
   }
 }
 
@@ -130,6 +151,10 @@ export class JwtClaimsAuthStrategy implements AuthStrategy {
     return params.requiredPermissions.every((permission) => {
       return permissions.has(permission) || roles.has(permission)
     })
+  }
+
+  public openApiScheme(): SecurityScheme {
+    return { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
   }
 }
 
@@ -252,6 +277,10 @@ export class PassportJwtStrategy implements AuthStrategy {
     const roles = new Set(params.auth.roles ?? [])
     return params.requiredPermissions.every((p) => permissions.has(p) || roles.has(p))
   }
+
+  public openApiScheme(): SecurityScheme {
+    return { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
+  }
 }
 
 /** Authenticates via Auth0-issued JWTs. Alias of {@link JwtClaimsAuthStrategy}. */
@@ -304,5 +333,9 @@ export class PassportSessionStrategy implements AuthStrategy {
     const permissions = new Set(params.auth.permissions ?? [])
     const roles = new Set(params.auth.roles ?? [])
     return params.requiredPermissions.every((p) => permissions.has(p) || roles.has(p))
+  }
+
+  public openApiScheme(): SecurityScheme {
+    return { type: 'apiKey', in: 'cookie', name: 'connect.sid', description: 'Passport session cookie.' }
   }
 }
