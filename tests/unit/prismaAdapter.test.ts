@@ -633,3 +633,64 @@ describe('createPrismaResources', () => {
     expect(resources[0]!.routePrefix).toBe('members')
   })
 })
+
+// ─── prismaTypeToOpenApi — field type mapping ─────────────────────────────────
+
+describe('prismaTypeToOpenApi — Prisma scalar types map to OpenAPI types', () => {
+  const typeModel = (fields: { name: string; type: string }[]) => ({
+    name: 'Thing',
+    dbName: 'things',
+    fields: fields.map((f) => ({ ...f, kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false }))
+  })
+
+  function fieldType(prismaType: string): string | undefined {
+    const model = typeModel([{ name: 'val', type: prismaType }])
+    const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
+    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model as unknown as ModelSchema])
+    return resources[0]?.fields?.find((f) => f.name === 'val')?.type
+  }
+
+  function fieldFormat(prismaType: string): string | undefined {
+    const model = typeModel([{ name: 'val', type: prismaType }])
+    const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
+    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model as unknown as ModelSchema])
+    return resources[0]?.fields?.find((f) => f.name === 'val')?.format
+  }
+
+  it('BigInt → integer int64', () => {
+    expect(fieldType('BigInt')).toBe('integer')
+    expect(fieldFormat('BigInt')).toBe('int64')
+  })
+
+  it('Float → number float', () => {
+    expect(fieldType('Float')).toBe('number')
+    expect(fieldFormat('Float')).toBe('float')
+  })
+
+  it('Decimal → number double', () => {
+    expect(fieldType('Decimal')).toBe('number')
+    expect(fieldFormat('Decimal')).toBe('double')
+  })
+
+  it('Boolean → boolean', () => {
+    expect(fieldType('Boolean')).toBe('boolean')
+  })
+
+  it('DateTime → string date-time', () => {
+    expect(fieldType('DateTime')).toBe('string')
+    expect(fieldFormat('DateTime')).toBe('date-time')
+  })
+
+  it('Json → object', () => {
+    expect(fieldType('Json')).toBe('object')
+  })
+
+  it('Bytes → string binary', () => {
+    expect(fieldType('Bytes')).toBe('string')
+    expect(fieldFormat('Bytes')).toBe('binary')
+  })
+
+  it('unknown type → no type (default case)', () => {
+    expect(fieldType('UnknownType')).toBeUndefined()
+  })
+})

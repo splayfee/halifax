@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { integer, sqliteTable, text, real } from 'drizzle-orm/sqlite-core'
+import { integer, sqliteTable, text, real, blob } from 'drizzle-orm/sqlite-core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DrizzleAdapter } from '@/adapters/orm/drizzle/DrizzleAdapter.js'
 import { SqlOrder } from '@edium/halifax-types'
@@ -641,5 +641,36 @@ describe('DrizzleAdapter — scoped operations', () => {
     }) as DrizzleAdapter<Product>
     const result = await badScopedAdapter.getMany()
     expect(result.count).toBe(3)
+  })
+})
+
+// ─── drizzleTypeToOpenApi — column type mapping ───────────────────────────────
+
+const richTable = sqliteTable('rich', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ts: integer('ts', { mode: 'timestamp' }),
+  data: blob('data'),
+  meta: text('meta', { mode: 'json' })
+})
+
+describe('DrizzleAdapter — drizzleTypeToOpenApi column types', () => {
+  it('maps timestamp integer to { type: string, format: date-time }', () => {
+    const fields = DrizzleAdapter.fieldsFromTable(richTable)
+    const tsField = fields.find((f) => f.name === 'ts')
+    expect(tsField?.type).toBe('string')
+    expect(tsField?.format).toBe('date-time')
+  })
+
+  it('maps blob to { type: string, format: binary }', () => {
+    const fields = DrizzleAdapter.fieldsFromTable(richTable)
+    const dataField = fields.find((f) => f.name === 'data')
+    expect(dataField?.type).toBe('string')
+    expect(dataField?.format).toBe('binary')
+  })
+
+  it('maps json text to { type: object }', () => {
+    const fields = DrizzleAdapter.fieldsFromTable(richTable)
+    const metaField = fields.find((f) => f.name === 'meta')
+    expect(metaField?.type).toBe('object')
   })
 })
