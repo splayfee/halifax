@@ -48,6 +48,8 @@ type Post = {
   tenantId: string | null
 }
 
+type ListBody = { count: number; results: Post[] }
+
 // ─── DB factory ──────────────────────────────────────────────────────────────
 
 function createInMemoryDb() {
@@ -110,12 +112,15 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       name: 'Post',
       routePrefix: 'posts',
       fields: POST_FIELDS,
-      repository: repo as any
+      repository: repo as unknown as ResourceDefinition['repository']
     }
 
     app = express()
     app.use(express.json())
-    app.use('/api', createExpressCrudRouter([resource], { authStrategy: new ApiKeyAuthStrategy(API_KEY) }))
+    app.use(
+      '/api',
+      createExpressCrudRouter([resource], { authStrategy: new ApiKeyAuthStrategy(API_KEY) })
+    )
 
     agent = supertestAgent(app).set('x-api-key', API_KEY)
   })
@@ -151,8 +156,9 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       await seedPost({ title: 'Bravo' })
       const res = await agent.get('/api/posts')
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(2)
-      const titles = res.body.results.map((r: Post) => r.title)
+      const b1 = res.body as ListBody
+      expect(b1.count).toBe(2)
+      const titles = b1.results.map((r) => r.title)
       expect(titles).toContain('Alpha')
       expect(titles).toContain('Bravo')
     })
@@ -162,8 +168,9 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       await seedPost({ title: 'Draft', published: false })
       const res = await agent.get('/api/posts?published=true')
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(1)
-      expect(res.body.results[0].title).toBe('Published')
+      const b2 = res.body as ListBody
+      expect(b2.count).toBe(1)
+      expect(b2.results[0].title).toBe('Published')
     })
 
     it('respects limit and offset', async () => {
@@ -172,8 +179,9 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       }
       const res = await agent.get('/api/posts?limit=2&offset=2')
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(5) // total
-      expect(res.body.results).toHaveLength(2) // page
+      const b3 = res.body as ListBody
+      expect(b3.count).toBe(5) // total
+      expect(b3.results).toHaveLength(2) // page
     })
 
     it('sorts by field ascending', async () => {
@@ -181,7 +189,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       await seedPost({ title: 'Alpha' })
       const res = await agent.get('/api/posts?order=title')
       expect(res.status).toBe(200)
-      expect(res.body.results[0].title).toBe('Alpha')
+      expect((res.body as ListBody).results[0].title).toBe('Alpha')
     })
 
     it('sorts by field descending', async () => {
@@ -189,7 +197,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       await seedPost({ title: 'Zebra' })
       const res = await agent.get('/api/posts?order=-title')
       expect(res.status).toBe(200)
-      expect(res.body.results[0].title).toBe('Zebra')
+      expect((res.body as ListBody).results[0].title).toBe('Zebra')
     })
   })
 
@@ -200,7 +208,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       const created = await seedPost({ title: 'Found' })
       const res = await agent.get(`/api/posts/${created.id}`)
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('Found')
+      expect((res.body as Post).title).toBe('Found')
     })
 
     it('returns 404 for a missing id', async () => {
@@ -213,11 +221,14 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
 
   describe('POST /posts', () => {
     it('creates a post and returns 201 with the new record', async () => {
-      const res = await agent.post('/api/posts').send({ title: 'New Post', published: true, content: 'hello' })
+      const res = await agent
+        .post('/api/posts')
+        .send({ title: 'New Post', published: true, content: 'hello' })
       expect(res.status).toBe(201)
-      expect(res.body.id).toBeTruthy()
-      expect(res.body.title).toBe('New Post')
-      expect(res.body.content).toBe('hello')
+      const nb = res.body as Post
+      expect(nb.id).toBeTruthy()
+      expect(nb.title).toBe('New Post')
+      expect(nb.content).toBe('hello')
     })
 
     it('returns 422 for an unknown field in the request body', async () => {
@@ -238,7 +249,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       const created = await seedPost({ title: 'Old title' })
       const res = await agent.patch(`/api/posts/${created.id}`).send({ title: 'New title' })
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('New title')
+      expect((res.body as Post).title).toBe('New title')
     })
 
     it('returns 404 when patching a non-existent id', async () => {
@@ -250,7 +261,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       const created = await seedPost({ title: 'Keep', published: true })
       await agent.patch(`/api/posts/${created.id}`).send({ title: 'Changed' })
       const res = await agent.get(`/api/posts/${created.id}`)
-      expect(res.body.published).toBe(true) // unchanged
+      expect((res.body as Post).published).toBe(true) // unchanged
     })
   })
 
@@ -262,7 +273,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
         .put('/api/posts/999998')
         .send({ title: 'Upserted', published: false, content: null, tenantId: null })
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('Upserted')
+      expect((res.body as Post).title).toBe('Upserted')
     })
 
     it('updates the record when the id exists', async () => {
@@ -271,7 +282,7 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
         .put(`/api/posts/${created.id}`)
         .send({ title: 'Replaced', published: true, content: null, tenantId: null })
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('Replaced')
+      expect((res.body as Post).title).toBe('Replaced')
     })
   })
 
@@ -311,97 +322,97 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
         .post('/api/posts/query')
         .send({ fields: ['id', 'title', 'published'] })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(3)
+      expect((res.body as ListBody).count).toBe(3)
     })
 
     it('filters with Equal comparison', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title', 'published'],
-          where: [{ field: 'published', comparison: SqlComparison.Equal, value1: false }]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title', 'published'],
+        where: [{ field: 'published', comparison: SqlComparison.Equal, value1: false }]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(1)
-      expect(res.body.results[0].title).toBe('Bravo')
+      const qb1 = res.body as ListBody
+      expect(qb1.count).toBe(1)
+      expect(qb1.results[0].title).toBe('Bravo')
     })
 
     it('filters with Contains comparison', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title'],
-          where: [{ field: 'title', comparison: SqlComparison.Contains, value1: 'harl' }]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title'],
+        where: [{ field: 'title', comparison: SqlComparison.Contains, value1: 'harl' }]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(1)
-      expect(res.body.results[0].title).toBe('Charlie')
+      const qb2 = res.body as ListBody
+      expect(qb2.count).toBe(1)
+      expect(qb2.results[0].title).toBe('Charlie')
     })
 
     it('filters with IsNull comparison', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title', 'content'],
-          where: [{ field: 'content', comparison: SqlComparison.IsNull }]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title', 'content'],
+        where: [{ field: 'content', comparison: SqlComparison.IsNull }]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(2)
+      expect((res.body as ListBody).count).toBe(2)
     })
 
     it('combines conditions with AND', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title', 'published'],
-          where: [
-            { field: 'published', comparison: SqlComparison.Equal, value1: true, operator: SqlOperator.And },
-            { field: 'title', comparison: SqlComparison.Equal, value1: 'Charlie' }
-          ]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title', 'published'],
+        where: [
+          {
+            field: 'published',
+            comparison: SqlComparison.Equal,
+            value1: true,
+            operator: SqlOperator.And
+          },
+          { field: 'title', comparison: SqlComparison.Equal, value1: 'Charlie' }
+        ]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(1)
-      expect(res.body.results[0].title).toBe('Charlie')
+      const qb3 = res.body as ListBody
+      expect(qb3.count).toBe(1)
+      expect(qb3.results[0].title).toBe('Charlie')
     })
 
     it('combines conditions with OR', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title'],
-          where: [
-            { field: 'title', comparison: SqlComparison.Equal, value1: 'Alpha', operator: SqlOperator.Or },
-            { field: 'title', comparison: SqlComparison.Equal, value1: 'Bravo' }
-          ]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title'],
+        where: [
+          {
+            field: 'title',
+            comparison: SqlComparison.Equal,
+            value1: 'Alpha',
+            operator: SqlOperator.Or
+          },
+          { field: 'title', comparison: SqlComparison.Equal, value1: 'Bravo' }
+        ]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(2)
+      expect((res.body as ListBody).count).toBe(2)
     })
 
     it('applies orderBy through the HTTP API', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title'],
-          orderBy: [{ field: 'title', order: 'DESC' }]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title'],
+        orderBy: [{ field: 'title', order: 'DESC' }]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.results[0].title).toBe('Charlie')
+      expect((res.body as ListBody).results[0].title).toBe('Charlie')
     })
 
     it('applies limit and offset through the HTTP API', async () => {
-      const res = await agent
-        .post('/api/posts/query')
-        .send({
-          fields: ['id', 'title'],
-          limit: 2,
-          offset: 0,
-          orderBy: [{ field: 'title', order: 'ASC' }]
-        })
+      const res = await agent.post('/api/posts/query').send({
+        fields: ['id', 'title'],
+        limit: 2,
+        offset: 0,
+        orderBy: [{ field: 'title', order: 'ASC' }]
+      })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(3) // total
-      expect(res.body.results).toHaveLength(2) // page
-      expect(res.body.results[0].title).toBe('Alpha')
+      const qb4 = res.body as ListBody
+      expect(qb4.count).toBe(3) // total
+      expect(qb4.results).toHaveLength(2) // page
+      expect(qb4.results[0].title).toBe('Alpha')
     })
   })
 })

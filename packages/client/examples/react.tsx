@@ -5,9 +5,21 @@
  *   pnpm add @edium/halifax-client @tanstack/react-query
  */
 
-import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  QueryClient,
+  QueryClientProvider
+} from '@tanstack/react-query'
 import React, { useState } from 'react'
-import { HalifaxClient, QueryBuilder, SqlComparison, SqlOrder, HalifaxError } from '@edium/halifax-client'
+import {
+  HalifaxClient,
+  QueryBuilder,
+  SqlComparison,
+  SqlOrder,
+  HalifaxError
+} from '@edium/halifax-client'
 import type { ListResult, QueryResult } from '@edium/halifax-client'
 
 // ─── 1. Types ─────────────────────────────────────────────────────────────────
@@ -33,7 +45,7 @@ const client = new HalifaxClient({
   headers: () => {
     const token = localStorage.getItem('token')
     return token ? { Authorization: `Bearer ${token}` } : {}
-  },
+  }
 
   // Uncomment if your server uses `CrudApiOptions.envelope: 'data'`
   // envelope: 'data',
@@ -71,11 +83,13 @@ function useUser(id: number) {
  * The server validates the AST against the resource's field definitions, so
  * only filterable fields can be used in WHERE clauses.
  */
-function useUserSearch(search: string, role?: User['role']): ReturnType<typeof useQuery<QueryResult<User>>> {
-  const query = new QueryBuilder()
-    .orGroup('name', SqlComparison.Contains, search, (b) =>
-      b.or('email', SqlComparison.Contains, search)
-    )
+function useUserSearch(
+  search: string,
+  role?: User['role']
+): ReturnType<typeof useQuery<QueryResult<User>>> {
+  const query = new QueryBuilder().orGroup('name', SqlComparison.Contains, search, (b) =>
+    b.or('email', SqlComparison.Contains, search)
+  )
 
   if (role) query.and('role', SqlComparison.Equal, role)
 
@@ -164,10 +178,7 @@ function UserList() {
       <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
         Prev
       </button>
-      <button
-        disabled={result.count <= (page + 1) * 20}
-        onClick={() => setPage((p) => p + 1)}
-      >
+      <button disabled={result.count <= (page + 1) * 20} onClick={() => setPage((p) => p + 1)}>
         Next
       </button>
     </div>
@@ -190,7 +201,9 @@ function UserSearch() {
       {isFetching && <span> Searching…</span>}
       <ul>
         {result?.results.map((u) => (
-          <li key={u.id}>{u.name} — {u.email}</li>
+          <li key={u.id}>
+            {u.name} — {u.email}
+          </li>
         ))}
       </ul>
     </div>

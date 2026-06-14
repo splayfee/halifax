@@ -8,6 +8,8 @@ import type { HttpRequest } from '@/core/types.js'
 import type { FieldDefinition, ListResult, Repository, ResourceDefinition } from '@/core/types.js'
 
 type Article = { id: number; title: string; draft: boolean; internalNotes: string }
+type ArticleBody = Article
+type ArticleListBody = { count: number; results: Article[] }
 
 const SEED: Article[] = [{ id: 1, title: 'Hello', draft: true, internalNotes: 'secret' }]
 
@@ -109,10 +111,7 @@ function createDynamicApp() {
     fields: RESOURCE_FIELDS,
     repository: makeRepo()
   }
-  app.use(
-    '/api',
-    createExpressCrudRouter([resource], { authStrategy: new HeaderRoleStrategy() })
-  )
+  app.use('/api', createExpressCrudRouter([resource], { authStrategy: new HeaderRoleStrategy() }))
   return app
 }
 
@@ -137,14 +136,14 @@ describe('per-field read authorization', () => {
       const app = createApp([])
       const res = await request(app).get('/api/articles')
       expect(res.status).toBe(200)
-      expect(res.body.results[0]).not.toHaveProperty('internalNotes')
+      expect((res.body as ArticleListBody).results[0]).not.toHaveProperty('internalNotes')
     })
 
     it('includes internalNotes in getMany results for admin', async () => {
       const app = createApp(['admin'])
       const res = await request(app).get('/api/articles')
       expect(res.status).toBe(200)
-      expect(res.body.results[0]).toHaveProperty('internalNotes', 'secret')
+      expect((res.body as ArticleListBody).results[0]).toHaveProperty('internalNotes', 'secret')
     })
 
     it('strips internalNotes from createOne response for unprivileged caller', async () => {
@@ -198,22 +197,22 @@ describe('per-field write authorization', () => {
       // Attempt to write draft=false; should be silently dropped (stays true from seed)
       const res = await request(app).patch('/api/articles/1').send({ title: 'T', draft: false })
       expect(res.status).toBe(200)
-      expect(res.body.draft).toBe(true) // draft unchanged — was stripped
-      expect(res.body.title).toBe('T') // title updated normally
+      expect((res.body as ArticleBody).draft).toBe(true) // draft unchanged — was stripped
+      expect((res.body as ArticleBody).title).toBe('T') // title updated normally
     })
 
     it('allows draft to be written when caller has editor role', async () => {
       const app = createApp(['editor'])
       const res = await request(app).patch('/api/articles/1').send({ title: 'T', draft: false })
       expect(res.status).toBe(200)
-      expect(res.body.draft).toBe(false)
+      expect((res.body as ArticleBody).draft).toBe(false)
     })
 
     it('allows draft to be written when caller has admin role', async () => {
       const app = createApp(['admin'])
       const res = await request(app).patch('/api/articles/1').send({ draft: false })
       expect(res.status).toBe(200)
-      expect(res.body.draft).toBe(false)
+      expect((res.body as ArticleBody).draft).toBe(false)
     })
 
     it('strips internalNotes from write body when caller has no admin role', async () => {
@@ -237,9 +236,7 @@ describe('per-field write authorization', () => {
 
     it('still rejects truly unknown fields with 422', async () => {
       const app = createApp(['admin'])
-      const res = await request(app)
-        .patch('/api/articles/1')
-        .send({ nonExistentField: 'x' })
+      const res = await request(app).patch('/api/articles/1').send({ nonExistentField: 'x' })
       expect(res.status).toBe(422)
     })
 
@@ -263,7 +260,7 @@ describe('per-field write authorization', () => {
       )
       const res = await request(app).patch('/api/articles/1').send({ draft: false })
       expect(res.status).toBe(200)
-      expect(res.body.draft).toBe(false)
+      expect((res.body as ArticleBody).draft).toBe(false)
     })
   })
 
@@ -274,7 +271,7 @@ describe('per-field write authorization', () => {
         .patch('/api/articles/1')
         .send({ internalNotes: 'updated secret' })
       expect(res.status).toBe(200)
-      expect(res.body.internalNotes).toBe('updated secret')
+      expect((res.body as ArticleBody).internalNotes).toBe('updated secret')
     })
 
     it('non-admin cannot write or see internalNotes', async () => {
@@ -288,7 +285,7 @@ describe('per-field write authorization', () => {
       // Confirm the field was not changed by reading with an admin
       const adminApp = createApp(['admin'])
       const getRes = await request(adminApp).get('/api/articles/1')
-      expect(getRes.body.internalNotes).toBe('secret') // unchanged
+      expect((getRes.body as ArticleBody).internalNotes).toBe('secret') // unchanged
     })
   })
 })
@@ -305,6 +302,6 @@ describe('fieldDefinition defaults', () => {
     const app = createApp([])
     const res = await request(app).patch('/api/articles/1').send({ title: 'Updated title' })
     expect(res.status).toBe(200)
-    expect(res.body.title).toBe('Updated title')
+    expect((res.body as ArticleBody).title).toBe('Updated title')
   })
 })

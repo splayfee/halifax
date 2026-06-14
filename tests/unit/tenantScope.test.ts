@@ -7,6 +7,7 @@ import type { AuthContext, AuthStrategy } from '@/auth/AuthStrategy.js'
 import type { ResourceDefinition } from '@/core/types.js'
 
 type Row = { id: number; companyId: number; name: string }
+type PrismaQueryArg = { where: Record<string, unknown>; data?: Record<string, unknown> }
 
 /** A delegate whose write/read args we can assert against. */
 function makeDelegate(overrides: Record<string, unknown> = {}) {
@@ -197,7 +198,8 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
     })
 
     // The tenant predicate is AND-ed outside the caller's filters, every time.
-    const where = delegate.findMany.mock.calls[0]![0].where
+    const [findManyArg] = delegate.findMany.mock.calls[0]! as [PrismaQueryArg]
+    const where = findManyArg.where
     expect(where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
   })
 
@@ -216,7 +218,8 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
       ]
     })
 
-    const where = delegate.findMany.mock.calls[0]![0].where
+    const [findManyArg2] = delegate.findMany.mock.calls[0]! as [PrismaQueryArg]
+    const where = findManyArg2.where
     expect(where.AND[0]).toEqual({ companyId: { equals: 7 } })
     expect(where.AND[1]).toEqual({
       OR: [{ name: { equals: 'a' } }, { companyId: { equals: 999 } }]
@@ -235,9 +238,9 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
       companyId: 999
     } as Partial<Row>)
 
-    const call = delegate.updateMany.mock.calls[0]![0]
-    expect(call.where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
-    expect(call.data).toEqual({ name: 'z' }) // tenant field stripped from the payload
+    const [updateManyArg] = delegate.updateMany.mock.calls[0]! as [PrismaQueryArg]
+    expect(updateManyArg.where).toEqual({ AND: [{ companyId: { equals: 7 } }, { name: { equals: 'a' } }] })
+    expect(updateManyArg.data).toEqual({ name: 'z' }) // tenant field stripped from the payload
   })
 })
 

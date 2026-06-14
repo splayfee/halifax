@@ -23,15 +23,24 @@ const API_KEY = 'test-secret'
 const hasDb = !!process.env.DATABASE_URL
 const hasRedis = !!process.env.REDIS_URL
 
-type AnyPrisma = any
+type ListBody = { count: number; results: unknown[] }
+
+/** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
+type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
+  post: {
+    deleteMany(args?: unknown): Promise<unknown>
+    createMany(args: { data: unknown[] }): Promise<unknown>
+    create(args: { data: unknown }): Promise<unknown>
+  }
+}
 
 describe.skipIf(!hasDb || !hasRedis)('Read-through caching via Redis (lookup table)', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let redis: ReturnType<typeof createClient>
   let app: ReturnType<typeof express>
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     redis = createClient({ url: process.env.REDIS_URL! })
     await redis.connect()
 
@@ -77,12 +86,12 @@ describe.skipIf(!hasDb || !hasRedis)('Read-through caching via Redis (lookup tab
     await prisma.post.createMany({ data: [{ title: 'A' }, { title: 'B' }] })
 
     const first = await get('/api/posts')
-    expect(first.body.count).toBe(2)
+    expect((first.body as ListBody).count).toBe(2)
 
     // Delete the rows directly in the DB — a cache hit must still return the old data.
     await prisma.post.deleteMany()
     const cached = await get('/api/posts')
-    expect(cached.body.count).toBe(2) // served from Redis, not the (now empty) DB
+    expect((cached.body as ListBody).count).toBe(2) // served from Redis, not the (now empty) DB
   })
 
   it('writes the cache key into Redis', async () => {
@@ -98,18 +107,18 @@ describe.skipIf(!hasDb || !hasRedis)('Read-through caching via Redis (lookup tab
     await prisma.post.deleteMany() // empty the DB behind the cache
 
     const busted = await get('/api/posts').set('Cache-Control', 'no-cache')
-    expect(busted.body.count).toBe(0) // bypassed Redis, read the empty DB
+    expect((busted.body as ListBody).count).toBe(0) // bypassed Redis, read the empty DB
 
     // The bust refreshed the cache, so the next normal read also sees 0.
     const after = await get('/api/posts')
-    expect(after.body.count).toBe(0)
+    expect((after.body as ListBody).count).toBe(0)
   })
 
   it('a write invalidates the Redis cache', async () => {
     await prisma.post.create({ data: { title: 'A' } })
-    expect((await get('/api/posts')).body.count).toBe(1)
+    expect(((await get('/api/posts')).body as ListBody).count).toBe(1)
 
     await request(app).post('/api/posts').set('x-api-key', API_KEY).send({ title: 'B' })
-    expect((await get('/api/posts')).body.count).toBe(2) // invalidated → fresh count
+    expect(((await get('/api/posts')).body as ListBody).count).toBe(2) // invalidated → fresh count
   })
 })

@@ -17,11 +17,13 @@ const posts: ResourceDefinition = {
   repository: new PrismaAdapter({ delegate: prisma.post }),
   hooks: {
     // Stamp createdBy / updatedBy from the authenticated user
-    beforeCreate:    (data, { auth }) => ({ ...data, createdBy: auth.userId }),
+    beforeCreate: (data, { auth }) => ({ ...data, createdBy: auth.userId }),
     beforeUpdateOne: (id, data, { auth }) => ({ ...data, updatedBy: auth.userId }),
 
     // Emit a domain event after every new post is saved
-    afterCreate: async (result) => { await events.emit('post.created', result) },
+    afterCreate: async (result) => {
+      await events.emit('post.created', result)
+    },
 
     // Block callers from reading soft-deleted posts (belt-and-suspenders on top of auth)
     afterReadOne: (result) => {
@@ -40,21 +42,21 @@ const posts: ResourceDefinition = {
 
 Called **before the database operation**. They receive the incoming data and can:
 
-| Return | Effect |
-|---|---|
-| A **modified copy** of the data | The modified value is used instead of the original. |
-| `void` / `undefined` | The original value is used unchanged. |
-| **Throw any `Error`** | The operation is aborted and Halifax sends the appropriate HTTP error response. Use Halifax error classes (`BadRequestError`, `AuthorizationError`, `UnprocessableEntityError`, …) for precise status codes. |
+| Return                          | Effect                                                                                                                                                                                                       |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A **modified copy** of the data | The modified value is used instead of the original.                                                                                                                                                          |
+| `void` / `undefined`            | The original value is used unchanged.                                                                                                                                                                        |
+| **Throw any `Error`**           | The operation is aborted and Halifax sends the appropriate HTTP error response. Use Halifax error classes (`BadRequestError`, `AuthorizationError`, `UnprocessableEntityError`, …) for precise status codes. |
 
 ### After hooks
 
 Called **after the database operation, before the HTTP response is sent**. They receive the raw DB result (before `readRoles`/`selectable` field-filtering) and can:
 
-| Return | Effect |
-|---|---|
-| A **modified copy** of the result | The modified value is sent to the client (field-filtering is applied afterwards). |
-| `void` / `undefined` | The original result is used unchanged. |
-| **Throw any `Error`** | A successful DB write is replaced with an error response (useful for post-write validation). |
+| Return                            | Effect                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------- |
+| A **modified copy** of the result | The modified value is sent to the client (field-filtering is applied afterwards).            |
+| `void` / `undefined`              | The original result is used unchanged.                                                       |
+| **Throw any `Error`**             | A successful DB write is replaced with an error response (useful for post-write validation). |
 
 ### Hook context
 
@@ -62,9 +64,9 @@ Every hook receives a context object as its last argument:
 
 ```ts
 interface HookContext {
-  auth: AuthContext      // resolved caller identity (userId, roles, permissions, claims)
-  resource: ResourceDefinition  // the normalized resource being accessed
-  req: HttpRequest       // raw HTTP request — headers, raw framework request, etc.
+  auth: AuthContext // resolved caller identity (userId, roles, permissions, claims)
+  resource: ResourceDefinition // the normalized resource being accessed
+  req: HttpRequest // raw HTTP request — headers, raw framework request, etc.
 }
 ```
 
@@ -74,66 +76,66 @@ interface HookContext {
 
 ### Create — `POST /resource`
 
-| Hook | Signature | Notes |
-|---|---|---|
-| `beforeCreate` | `(data, ctx) => data \| void` | Fires **once per record** — both for single-object and array POST bodies. |
+| Hook           | Signature                         | Notes                                                                            |
+| -------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `beforeCreate` | `(data, ctx) => data \| void`     | Fires **once per record** — both for single-object and array POST bodies.        |
 | `afterCreate`  | `(result, ctx) => result \| void` | Fires **once per record**. Sees the full DB record before `readRoles` filtering. |
 
 ### Read — `GET /resource`
 
-| Hook | Signature | Notes |
-|---|---|---|
+| Hook             | Signature                               | Notes                                                          |
+| ---------------- | --------------------------------------- | -------------------------------------------------------------- |
 | `beforeReadMany` | `(options, ctx) => ListOptions \| void` | Modify pagination, inject extra `where` filters, force a sort. |
-| `afterReadMany`  | `(result, ctx) => ListResult \| void` | Transform the full `{ count, results }` envelope. |
+| `afterReadMany`  | `(result, ctx) => ListResult \| void`   | Transform the full `{ count, results }` envelope.              |
 
 ### Read — `GET /resource/:id`
 
-| Hook | Signature | Notes |
-|---|---|---|
-| `beforeReadOne` | `(id, ctx) => void` | Throw to block; cannot modify the ID. |
-| `afterReadOne`  | `(result, ctx) => result \| void` | Attach computed / virtual fields. |
+| Hook            | Signature                         | Notes                                 |
+| --------------- | --------------------------------- | ------------------------------------- |
+| `beforeReadOne` | `(id, ctx) => void`               | Throw to block; cannot modify the ID. |
+| `afterReadOne`  | `(result, ctx) => result \| void` | Attach computed / virtual fields.     |
 
 ### Update — `PATCH /resource/:id`
 
-| Hook | Signature | Notes |
-|---|---|---|
+| Hook              | Signature                         | Notes                                                |
+| ----------------- | --------------------------------- | ---------------------------------------------------- |
 | `beforeUpdateOne` | `(id, data, ctx) => data \| void` | Modify the update payload (e.g. stamp audit fields). |
-| `afterUpdateOne`  | `(result, ctx) => result \| void` | Transform the updated record. |
+| `afterUpdateOne`  | `(result, ctx) => result \| void` | Transform the updated record.                        |
 
 ### Bulk update — `PATCH /resource`
 
-| Hook | Signature | Notes |
-|---|---|---|
-| `beforeUpdateMany` | `(query, data, ctx) => void` | Throw to block; cannot modify the query or data. |
-| `afterUpdateMany`  | `(result, ctx) => UpdateManyResult \| void` | Transform the `{ updated, results? }` response. |
+| Hook               | Signature                                   | Notes                                            |
+| ------------------ | ------------------------------------------- | ------------------------------------------------ |
+| `beforeUpdateMany` | `(query, data, ctx) => void`                | Throw to block; cannot modify the query or data. |
+| `afterUpdateMany`  | `(result, ctx) => UpdateManyResult \| void` | Transform the `{ updated, results? }` response.  |
 
 ### Upsert — `PUT /resource/:id`
 
-| Hook | Signature | Notes |
-|---|---|---|
-| `beforeUpsertOne` | `(id, data, ctx) => data \| void` | Modify the upsert payload. |
+| Hook              | Signature                         | Notes                           |
+| ----------------- | --------------------------------- | ------------------------------- |
+| `beforeUpsertOne` | `(id, data, ctx) => data \| void` | Modify the upsert payload.      |
 | `afterUpsertOne`  | `(result, ctx) => result \| void` | Transform the resulting record. |
 
 ### Delete — `DELETE /resource/:id`
 
-| Hook | Signature | Notes |
-|---|---|---|
-| `beforeDeleteOne` | `(id, ctx) => void` | The record still exists when this fires. Throw to abort. |
+| Hook              | Signature           | Notes                                                                            |
+| ----------------- | ------------------- | -------------------------------------------------------------------------------- |
+| `beforeDeleteOne` | `(id, ctx) => void` | The record still exists when this fires. Throw to abort.                         |
 | `afterDeleteOne`  | `(id, ctx) => void` | The record is gone. Use for cleanup or event emission. Does **not** fire on 404. |
 
 ### Bulk delete — `DELETE /resource`
 
-| Hook | Signature | Notes |
-|---|---|---|
-| `beforeDeleteMany` | `(query, ctx) => void` | Throw to block. |
+| Hook               | Signature                                   | Notes                                 |
+| ------------------ | ------------------------------------------- | ------------------------------------- |
+| `beforeDeleteMany` | `(query, ctx) => void`                      | Throw to block.                       |
 | `afterDeleteMany`  | `(result, ctx) => DeleteManyResult \| void` | Transform the `{ deleted }` response. |
 
 ### Query builder — `POST /resource/query`
 
-| Hook | Signature | Notes |
-|---|---|---|
+| Hook          | Signature                               | Notes                                                                                    |
+| ------------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `beforeQuery` | `(query, ctx) => IQueryOptions \| void` | Augment or restrict the query (e.g. inject a mandatory filter the client cannot remove). |
-| `afterQuery`  | `(result, ctx) => QueryResult \| void` | Transform the `{ count, results }` response. |
+| `afterQuery`  | `(result, ctx) => QueryResult \| void`  | Transform the `{ count, results }` response.                                             |
 
 ---
 
@@ -223,7 +225,12 @@ hooks: {
 Hook callbacks are fully typed when you pass generics to `ResourceDefinition`:
 
 ```ts
-interface Post { id: number; title: string; body: string; createdBy?: string }
+interface Post {
+  id: number
+  title: string
+  body: string
+  createdBy?: string
+}
 
 const posts: ResourceDefinition<Post, Omit<Post, 'id' | 'createdBy'>, Partial<Post>> = {
   routePrefix: 'posts',
@@ -260,9 +267,9 @@ Hooks run **inside** the existing error-catching wrapper, so any `Error` thrown 
 
 ## Relation to other extension points
 
-| Extension point | When to use |
-|---|---|
-| **Hooks** | Per-resource logic that runs inside the Halifax pipeline (stamping, eventing, ownership checks, data transformation). |
-| **AuthStrategy** | Cross-resource authentication and coarse-grained authorization applied to every route. |
-| **Repository wrapper** | Low-level data-access customization (query rewriting, custom SQL, alternative storage). |
-| **Framework middleware** | Transport-level concerns: CORS, rate limiting, request ID injection, body parsing. |
+| Extension point          | When to use                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **Hooks**                | Per-resource logic that runs inside the Halifax pipeline (stamping, eventing, ownership checks, data transformation). |
+| **AuthStrategy**         | Cross-resource authentication and coarse-grained authorization applied to every route.                                |
+| **Repository wrapper**   | Low-level data-access customization (query rewriting, custom SQL, alternative storage).                               |
+| **Framework middleware** | Transport-level concerns: CORS, rate limiting, request ID injection, body parsing.                                    |

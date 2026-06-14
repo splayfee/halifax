@@ -9,9 +9,17 @@ export const PRISMA_API_KEY = 'test-secret'
 
 const hasDb = !!process.env.DATABASE_URL
 
-// Prisma types come from the generated test client. We use `any` here so these files
-// compile before `pnpm test:integration:generate` has been run.
-type AnyPrisma = any
+// Prisma types come from the generated test client. We use a structural interface here
+// so these files compile before `pnpm test:integration:generate` has been run.
+type PrismaDelegate = {
+  deleteMany(opts?: Record<string, unknown>): Promise<unknown>
+  create(opts: Record<string, unknown>): Promise<Record<string, unknown>>
+  createMany(opts: Record<string, unknown>): Promise<unknown>
+}
+type AnyPrisma = {
+  $disconnect(): Promise<void>
+  post: PrismaDelegate
+}
 
 /**
  * The `Post` resource shared by every framework's Prisma integration test. Mirrors the
@@ -90,8 +98,9 @@ export function runPrismaHttpContract(
         published: false
       })
       expect(res.status).toBe(201)
-      expect(res.body.title).toBe('Via HTTP')
-      expect(res.body.id).toBeTypeOf(idTypeName())
+      const postBody = res.body as { title: string; id: number | string }
+      expect(postBody.title).toBe('Via HTTP')
+      expect(postBody.id).toBeTypeOf(idTypeName())
     })
 
     it('POST /posts with an array creates multiple records (201)', async () => {
@@ -106,15 +115,17 @@ export function runPrismaHttpContract(
       await prisma.post.createMany({ data: [{ title: 'X' }, { title: 'Y' }] })
       const res = await key(agent().get('/api/posts'))
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(2)
-      expect(res.body.results).toHaveLength(2)
+      const listBody = res.body as { count: number; results: unknown[] }
+      expect(listBody.count).toBe(2)
+      expect(listBody.results).toHaveLength(2)
     })
 
     it('GET /posts/:id returns one record', async () => {
       const post = await prisma.post.create({ data: { title: 'Single' } })
       const res = await key(agent().get(`/api/posts/${post.id}`))
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('Single')
+      const singleBody = res.body as { title: string }
+      expect(singleBody.title).toBe('Single')
     })
 
     it('GET /posts/:id returns 404 for a missing id', async () => {
@@ -124,14 +135,16 @@ export function runPrismaHttpContract(
     it('GET /posts/:id returns 400 for a non-integer id', async () => {
       const res = await key(agent().get('/api/posts/abc'))
       expect(res.status).toBe(400)
-      expect(res.body.errors[0].code).toBe('BAD_REQUEST')
+      const err400Body = res.body as { errors: Array<{ code: string }> }
+      expect(err400Body.errors[0].code).toBe('BAD_REQUEST')
     })
 
     it('PATCH /posts/:id updates a record', async () => {
       const post = await prisma.post.create({ data: { title: 'Before' } })
       const res = await key(agent().patch(`/api/posts/${post.id}`)).send({ title: 'After' })
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('After')
+      const patchBody = res.body as { title: string }
+      expect(patchBody.title).toBe('After')
     })
 
     it('PATCH /posts/:id returns 404 for a missing id', async () => {
@@ -145,13 +158,15 @@ export function runPrismaHttpContract(
         published: false
       })
       expect(res.status).toBe(200)
-      expect(res.body.title).toBe('Upserted via HTTP')
+      const putBody = res.body as { title: string }
+      expect(putBody.title).toBe('Upserted via HTTP')
     })
 
     it('DELETE /posts/:id removes the record', async () => {
       const post = await prisma.post.create({ data: { title: 'Bye' } })
       const res = await key(agent().delete(`/api/posts/${post.id}`))
-      expect(res.body.deleted).toBe(true)
+      const deleteBody = res.body as { deleted: boolean }
+      expect(deleteBody.deleted).toBe(true)
       expect((await key(agent().get(`/api/posts/${post.id}`))).status).toBe(404)
     })
 
@@ -163,16 +178,18 @@ export function runPrismaHttpContract(
       for (let i = 1; i <= 5; i++) await prisma.post.create({ data: { title: `P${i}` } })
       const res = await key(agent().get('/api/posts?limit=2&offset=2'))
       expect(res.status).toBe(200)
-      expect(res.body.results).toHaveLength(2)
-      expect(res.body.count).toBe(5)
+      const pageBody = res.body as { count: number; results: unknown[] }
+      expect(pageBody.results).toHaveLength(2)
+      expect(pageBody.count).toBe(5)
     })
 
     it('GET /posts with ?title= filters by title', async () => {
       await prisma.post.createMany({ data: [{ title: 'FindMe' }, { title: 'Skip' }] })
       const res = await key(agent().get('/api/posts?title=FindMe'))
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(1)
-      expect(res.body.results[0].title).toBe('FindMe')
+      const filterBody = res.body as { count: number; results: Array<{ title: string }> }
+      expect(filterBody.count).toBe(1)
+      expect(filterBody.results[0].title).toBe('FindMe')
     })
 
     it('POST /posts/query-builder returns matching results', async () => {
@@ -191,8 +208,9 @@ export function runPrismaHttpContract(
         offset: 0
       })
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(2)
-      expect(res.body.results).toHaveLength(2)
+      const qbBody = res.body as { count: number; results: unknown[] }
+      expect(qbBody.count).toBe(2)
+      expect(qbBody.results).toHaveLength(2)
     })
 
     it('returns 405 with an Allow header for an unsupported method', async () => {

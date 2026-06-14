@@ -138,11 +138,11 @@ const postResource: ResourceDefinition = {
     { name: 'title' },
     { name: 'content' },
     // Only users with role 'editor' or 'admin' can read or write the `status` field.
-    { name: 'status',     readRoles: ['editor', 'admin'], writeRoles: ['editor', 'admin'] },
+    { name: 'status', readRoles: ['editor', 'admin'], writeRoles: ['editor', 'admin'] },
     // Any authenticated user can read `authorId`, but only admins can set it.
-    { name: 'authorId',   writeRoles: ['admin'] },
+    { name: 'authorId', writeRoles: ['admin'] },
     // `internalNote` is invisible to everyone except admins.
-    { name: 'internalNote', readRoles: ['admin'], writeRoles: ['admin'] },
+    { name: 'internalNote', readRoles: ['admin'], writeRoles: ['admin'] }
   ]
 }
 ```

@@ -25,7 +25,7 @@ type Post = {
   published: boolean
   tenantId?: string | null
 }
-type AnyPost = any
+type AnyPost = Post
 
 export interface RepoContractSetup {
   /** The repository under test (unscoped). */
@@ -82,9 +82,24 @@ export function runRepositoryContract(
      */
     beforeEach(async () => {
       await cleanup()
-      const p1 = await repo.createOne({ title: 'Alpha', published: true, content: 'body', tenantId: null })
-      const p2 = await repo.createOne({ title: 'Bravo', published: false, content: null, tenantId: null })
-      const p3 = await repo.createOne({ title: 'Charlie', published: true, content: null, tenantId: null })
+      const p1 = await repo.createOne({
+        title: 'Alpha',
+        published: true,
+        content: 'body',
+        tenantId: null
+      })
+      const p2 = await repo.createOne({
+        title: 'Bravo',
+        published: false,
+        content: null,
+        tenantId: null
+      })
+      const p3 = await repo.createOne({
+        title: 'Charlie',
+        published: true,
+        content: null,
+        tenantId: null
+      })
       id1 = (p1 as AnyPost).id
       id2 = (p2 as AnyPost).id
       id3 = (p3 as AnyPost).id
@@ -94,7 +109,12 @@ export function runRepositoryContract(
 
     describe('CRUD', () => {
       it('createOne returns the created record with a generated id', async () => {
-        const post = (await repo.createOne({ title: 'New', published: false, content: null, tenantId: null })) as AnyPost
+        const post = (await repo.createOne({
+          title: 'New',
+          published: false,
+          content: null,
+          tenantId: null
+        })) as AnyPost
         expect(post.id).toBeTruthy()
         expect(post.title).toBe('New')
       })
@@ -146,7 +166,12 @@ export function runRepositoryContract(
 
       it('getMany respects limit and offset — page size and total count stay consistent', async () => {
         for (let i = 4; i <= 6; i++) {
-          await repo.createOne({ title: `Post ${i}`, published: true, content: null, tenantId: null })
+          await repo.createOne({
+            title: `Post ${i}`,
+            published: true,
+            content: null,
+            tenantId: null
+          })
         }
         const page = await repo.getMany({ limit: 2, offset: 2 })
         expect(page.results).toHaveLength(2)
@@ -170,7 +195,9 @@ export function runRepositoryContract(
       })
 
       it('updateOne returns the updated record', async () => {
-        const updated = (await repo.updateOne(id1, { title: 'Updated' } as Partial<Post>)) as AnyPost
+        const updated = (await repo.updateOne(id1, {
+          title: 'Updated'
+        } as Partial<Post>)) as AnyPost
         expect(updated?.title).toBe('Updated')
       })
 
@@ -285,7 +312,9 @@ export function runRepositoryContract(
       it('Between: inclusive range returns all rows within', async () => {
         const { count } = await repo.executeQuery!({
           fields: FIELDS,
-          where: [{ field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id3 as any }]
+          where: [
+            { field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id3 }
+          ]
         })
         expect(count).toBe(3)
       })
@@ -293,7 +322,9 @@ export function runRepositoryContract(
       it('NotBetween: rows outside the range', async () => {
         const { count, results } = await repo.executeQuery!({
           fields: FIELDS,
-          where: [{ field: 'id', comparison: SqlComparison.NotBetween, value1: id1, value2: id2 as any }]
+          where: [
+            { field: 'id', comparison: SqlComparison.NotBetween, value1: id1, value2: id2 }
+          ]
         })
         expect(count).toBe(1)
         expect((results[0] as AnyPost).id).toBe(id3)
@@ -412,7 +443,12 @@ export function runRepositoryContract(
         const { count, results } = await repo.executeQuery!({
           fields: FIELDS,
           where: [
-            { field: 'published', comparison: SqlComparison.Equal, value1: true, operator: SqlOperator.And },
+            {
+              field: 'published',
+              comparison: SqlComparison.Equal,
+              value1: true,
+              operator: SqlOperator.And
+            },
             { field: 'title', comparison: SqlComparison.Equal, value1: 'Alpha' }
           ]
         })
@@ -424,8 +460,18 @@ export function runRepositoryContract(
         const { count } = await repo.executeQuery!({
           fields: FIELDS,
           where: [
-            { field: 'id', comparison: SqlComparison.GreaterThanOrEqual, value1: id1, operator: SqlOperator.And },
-            { field: 'id', comparison: SqlComparison.LessThanOrEqual, value1: id3, operator: SqlOperator.And },
+            {
+              field: 'id',
+              comparison: SqlComparison.GreaterThanOrEqual,
+              value1: id1,
+              operator: SqlOperator.And
+            },
+            {
+              field: 'id',
+              comparison: SqlComparison.LessThanOrEqual,
+              value1: id3,
+              operator: SqlOperator.And
+            },
             { field: 'published', comparison: SqlComparison.Equal, value1: true }
           ]
         })
@@ -436,7 +482,12 @@ export function runRepositoryContract(
         const { count } = await repo.executeQuery!({
           fields: FIELDS,
           where: [
-            { field: 'title', comparison: SqlComparison.Equal, value1: 'Alpha', operator: SqlOperator.Or },
+            {
+              field: 'title',
+              comparison: SqlComparison.Equal,
+              value1: 'Alpha',
+              operator: SqlOperator.Or
+            },
             { field: 'title', comparison: SqlComparison.Equal, value1: 'Bravo' }
           ]
         })
@@ -503,7 +554,9 @@ export function runRepositoryContract(
               comparison: SqlComparison.Equal,
               value1: true,
               operator: SqlOperator.And,
-              children: [{ field: 'title', comparison: SqlComparison.In, value1: ['Alpha', 'Charlie'] }]
+              children: [
+                { field: 'title', comparison: SqlComparison.In, value1: ['Alpha', 'Charlie'] }
+              ]
             }
           ]
         })
@@ -520,7 +573,9 @@ export function runRepositoryContract(
               comparison: SqlComparison.Equal,
               value1: 'Bravo',
               operator: SqlOperator.Or,
-              children: [{ field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id1 as any }]
+              children: [
+                { field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id1 }
+              ]
             }
           ]
         })
@@ -580,7 +635,11 @@ export function runRepositoryContract(
 
       it('createOne stamps the tenant field automatically', async () => {
         const repoA = repo.withScope!({ field: 'tenantId', value: 'tenant-a' })
-        const created = (await repoA.createOne({ title: 'New', published: false, content: null } as Post)) as AnyPost
+        const created = (await repoA.createOne({
+          title: 'New',
+          published: false,
+          content: null
+        } as Post)) as AnyPost
         expect(created.tenantId).toBe('tenant-a')
       })
 
@@ -597,7 +656,9 @@ export function runRepositoryContract(
 
       it('deleteMany only deletes within the tenant scope', async () => {
         const repoA = repo.withScope!({ field: 'tenantId', value: 'tenant-a' })
-        await repoA.deleteMany!({ where: [{ field: 'published', comparison: SqlComparison.Equal, value1: false }] })
+        await repoA.deleteMany!({
+          where: [{ field: 'published', comparison: SqlComparison.Equal, value1: false }]
+        })
         const remaining = await repo.getMany()
         expect(remaining.count).toBe(2) // A1 + B1 still exist
         const titles = (remaining.results as AnyPost[]).map((r) => r.title)
@@ -620,7 +681,12 @@ export function runRepositoryContract(
         const repoA = repo.withScope!({ field: 'tenantId', value: 'tenant-a' })
         const result = await repoA.executeQuery!({
           where: [
-            { field: 'title', comparison: SqlComparison.Equal, value1: 'A1', operator: SqlOperator.Or },
+            {
+              field: 'title',
+              comparison: SqlComparison.Equal,
+              value1: 'A1',
+              operator: SqlOperator.Or
+            },
             { field: 'tenantId', comparison: SqlComparison.Equal, value1: 'tenant-b' }
           ]
         })

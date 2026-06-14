@@ -14,6 +14,11 @@ import type { ResourceDefinition } from '@/core/types.js'
 import type { Repository, ListResult, CreateOptions } from '@/core/types.js'
 
 type User = { id: number; email: string }
+type UserBody = { id: number; email: string; role?: string }
+type ListBody = { count: number; results: UserBody[] }
+type ErrorBody = { errors: Array<{ code: string; message: string }> }
+type DeletedBody = { deleted: boolean }
+type OpenAPIBody = { openapi: string; paths: Record<string, unknown> }
 
 function makeUserRepo(seed: User[] = []): Repository<User, Partial<User>, Partial<User>> {
   const records = [...seed]
@@ -207,8 +212,9 @@ describe('createExpressCrudRouter — read many', () => {
   it('returns all records with count', async () => {
     const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret')
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(2)
-    expect(res.body.results).toHaveLength(2)
+    const body = res.body as ListBody
+    expect(body.count).toBe(2)
+    expect(body.results).toHaveLength(2)
   })
 })
 
@@ -216,7 +222,7 @@ describe('createExpressCrudRouter — read one', () => {
   it('returns the record by id', async () => {
     const res = await request(createApp()).get('/api/v1/users/1').set('x-api-key', 'secret')
     expect(res.status).toBe(200)
-    expect(res.body.email).toBe('one@example.com')
+    expect((res.body as UserBody).email).toBe('one@example.com')
   })
 
   it('returns 404 for a missing id', async () => {
@@ -227,7 +233,7 @@ describe('createExpressCrudRouter — read one', () => {
   it('returns 400 for a non-integer id', async () => {
     const res = await request(createApp()).get('/api/v1/users/abc').set('x-api-key', 'secret')
     expect(res.status).toBe(400)
-    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('BAD_REQUEST')
   })
 
   it('returns 400 for id zero', async () => {
@@ -243,7 +249,7 @@ describe('createExpressCrudRouter — create', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'new@example.com' })
     expect(res.status).toBe(201)
-    expect(res.body.email).toBe('new@example.com')
+    expect((res.body as UserBody).email).toBe('new@example.com')
   })
 
   it('creates multiple records when body is an array and returns 201', async () => {
@@ -262,7 +268,7 @@ describe('createExpressCrudRouter — update', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'updated@example.com' })
     expect(res.status).toBe(200)
-    expect(res.body.email).toBe('updated@example.com')
+    expect((res.body as UserBody).email).toBe('updated@example.com')
   })
 
   it('returns 404 when record does not exist', async () => {
@@ -278,7 +284,7 @@ describe('createExpressCrudRouter — delete', () => {
   it('deletes a record and returns { deleted: true }', async () => {
     const res = await request(createApp()).delete('/api/v1/users/1').set('x-api-key', 'secret')
     expect(res.status).toBe(200)
-    expect(res.body.deleted).toBe(true)
+    expect((res.body as DeletedBody).deleted).toBe(true)
   })
 
   it('returns 404 when record does not exist', async () => {
@@ -291,7 +297,7 @@ describe('createExpressCrudRouter — query string validation', () => {
   it('returns 422 for an unknown query parameter', async () => {
     const res = await request(createApp()).get('/api/v1/users?bogus=x').set('x-api-key', 'secret')
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('UNPROCESSABLE_ENTITY')
   })
 
   it('returns 422 for an unknown fields selection', async () => {
@@ -305,18 +311,19 @@ describe('createExpressCrudRouter — query string validation', () => {
 describe('createExpressCrudRouter — error response format', () => {
   it('error body has { errors: [{ code, message }] } shape', async () => {
     const res = await request(createApp()).get('/api/v1/users/abc').set('x-api-key', 'secret')
-    expect(res.body).toHaveProperty('errors')
-    expect(Array.isArray(res.body.errors)).toBe(true)
-    expect(res.body.errors[0]).toHaveProperty('code')
-    expect(res.body.errors[0]).toHaveProperty('message')
-    expect(typeof res.body.errors[0].code).toBe('string')
-    expect(typeof res.body.errors[0].message).toBe('string')
+    const errBody = res.body as ErrorBody
+    expect(errBody).toHaveProperty('errors')
+    expect(Array.isArray(errBody.errors)).toBe(true)
+    expect(errBody.errors[0]).toHaveProperty('code')
+    expect(errBody.errors[0]).toHaveProperty('message')
+    expect(typeof errBody.errors[0]!.code).toBe('string')
+    expect(typeof errBody.errors[0]!.message).toBe('string')
   })
 
   it('404 body has { errors: [{ code: "NOT_FOUND", message: "Not found" }] }', async () => {
     const res = await request(createApp()).get('/api/v1/users/999').set('x-api-key', 'secret')
-    expect(res.body.errors[0].code).toBe('NOT_FOUND')
-    expect(res.body.errors[0].message).toBe('Not Found')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('NOT_FOUND')
+    expect((res.body as ErrorBody).errors[0]!.message).toBe('Not Found')
   })
 })
 
@@ -332,7 +339,7 @@ describe('createExpressCrudRouter — UUID id support', () => {
       .get('/api/v1/users/not-a-uuid')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(400)
-    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('BAD_REQUEST')
   })
 
   it('still accepts integer ids', async () => {
@@ -419,7 +426,7 @@ describe('createExpressCrudRouter — field security', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'upserted@example.com', role: 'superadmin' })
     expect(res.status).toBe(200)
-    expect(res.body.role).not.toBe('superadmin')
+    expect((res.body as UserBody).role).not.toBe('superadmin')
   })
 
   it('returns 422 when upsert body contains an unknown field', async () => {
@@ -428,7 +435,7 @@ describe('createExpressCrudRouter — field security', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'x@example.com', injected: 'malicious' })
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].message).toMatch(/unknown field/i)
+    expect((res.body as ErrorBody).errors[0]!.message).toMatch(/unknown field/i)
   })
 
   it('returns 422 when filtering on a non-filterable field', async () => {
@@ -436,7 +443,7 @@ describe('createExpressCrudRouter — field security', () => {
       .get('/api/v1/users?role=admin')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('UNPROCESSABLE_ENTITY')
   })
 
   it('returns 422 when selecting a non-selectable field via ?fields=', async () => {
@@ -444,7 +451,7 @@ describe('createExpressCrudRouter — field security', () => {
       .get('/api/v1/users?fields=role')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('UNPROCESSABLE_ENTITY')
   })
 
   it('returns 422 when sorting on a non-sortable field via ?order=', async () => {
@@ -452,7 +459,7 @@ describe('createExpressCrudRouter — field security', () => {
       .get('/api/v1/users?order=role')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('UNPROCESSABLE_ENTITY')
   })
 
   it('strips non-writable fields from create body', async () => {
@@ -461,7 +468,7 @@ describe('createExpressCrudRouter — field security', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'new@example.com', role: 'superadmin' })
     expect(res.status).toBe(201)
-    expect(res.body.role).not.toBe('superadmin')
+    expect((res.body as UserBody).role).not.toBe('superadmin')
   })
 
   it('strips non-writable fields from update body', async () => {
@@ -470,7 +477,7 @@ describe('createExpressCrudRouter — field security', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'updated@example.com', role: 'superadmin' })
     expect(res.status).toBe(200)
-    expect(res.body.role).not.toBe('superadmin')
+    expect((res.body as UserBody).role).not.toBe('superadmin')
   })
 
   it('returns 422 when create body contains an unknown field', async () => {
@@ -479,7 +486,7 @@ describe('createExpressCrudRouter — field security', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'new@example.com', injected: 'malicious' })
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].message).toMatch(/unknown field/i)
+    expect((res.body as ErrorBody).errors[0]!.message).toMatch(/unknown field/i)
   })
 
   it('returns 422 when update body contains an unknown field', async () => {
@@ -488,7 +495,7 @@ describe('createExpressCrudRouter — field security', () => {
       .set('x-api-key', 'secret')
       .send({ email: 'x@example.com', unknownField: 'bad' })
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].message).toMatch(/unknown field/i)
+    expect((res.body as ErrorBody).errors[0]!.message).toMatch(/unknown field/i)
   })
 })
 
@@ -496,7 +503,7 @@ describe('createExpressCrudRouter — limit constraints', () => {
   it('applies defaultLimit when no limit is specified', async () => {
     const res = await request(createLimitedApp()).get('/api/v1/users').set('x-api-key', 'secret')
     expect(res.status).toBe(200)
-    expect(res.body.results).toHaveLength(5)
+    expect((res.body as ListBody).results).toHaveLength(5)
   })
 
   it('caps requests over maxLimit', async () => {
@@ -504,7 +511,7 @@ describe('createExpressCrudRouter — limit constraints', () => {
       .get('/api/v1/users?limit=50')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(200)
-    expect(res.body.results).toHaveLength(10)
+    expect((res.body as ListBody).results).toHaveLength(10)
   })
 
   it('respects a limit below maxLimit', async () => {
@@ -512,7 +519,7 @@ describe('createExpressCrudRouter — limit constraints', () => {
       .get('/api/v1/users?limit=3')
       .set('x-api-key', 'secret')
     expect(res.status).toBe(200)
-    expect(res.body.results).toHaveLength(3)
+    expect((res.body as ListBody).results).toHaveLength(3)
   })
 })
 
@@ -574,7 +581,7 @@ describe('createExpressCrudRouter — HTTP 415', () => {
       .set('Content-Type', 'text/plain')
       .send('not json')
     expect(res.status).toBe(415)
-    expect(res.body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('UNSUPPORTED_MEDIA_TYPE')
   })
 
   it('returns 415 when PATCH body has Content-Type: application/x-www-form-urlencoded', async () => {
@@ -607,7 +614,7 @@ describe('createExpressCrudRouter — HTTP 405', () => {
     expect(res.status).toBe(405)
     expect(res.headers['allow']).toContain('GET')
     expect(res.headers['allow']).toContain('POST')
-    expect(res.body.errors[0].code).toBe('METHOD_NOT_ALLOWED')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('METHOD_NOT_ALLOWED')
   })
 
   it('returns 405 with Allow header for unsupported method on id path', async () => {
@@ -615,7 +622,7 @@ describe('createExpressCrudRouter — HTTP 405', () => {
     expect(res.status).toBe(405)
     expect(res.headers['allow']).toContain('GET')
     expect(res.headers['allow']).toContain('PATCH')
-    expect(res.body.errors[0].code).toBe('METHOD_NOT_ALLOWED')
+    expect((res.body as ErrorBody).errors[0]!.code).toBe('METHOD_NOT_ALLOWED')
   })
 })
 
@@ -809,7 +816,7 @@ describe('createExpressCrudRouter — updateMany', () => {
       .set('Accept', 'application/json')
       .send({ update: { email: 'bulk@x.com' } })
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].message).toMatch(/WHERE filter/)
+    expect((res.body as ErrorBody).errors[0]!.message).toMatch(/WHERE filter/)
   })
 })
 
@@ -873,7 +880,7 @@ describe('createExpressCrudRouter — deleteMany', () => {
       .set('Accept', 'application/json')
       .send({})
     expect(res.status).toBe(422)
-    expect(res.body.errors[0].message).toMatch(/WHERE filter/)
+    expect((res.body as ErrorBody).errors[0]!.message).toMatch(/WHERE filter/)
   })
 })
 
@@ -1196,7 +1203,7 @@ describe('createExpressCrudRouter — OpenAPI routes', () => {
     const res = await request(createOpenApiApp()).get('/api/openapi.json')
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toMatch(/application\/json/)
-    expect(res.body.openapi).toMatch(/^3\./)
+    expect((res.body as OpenAPIBody).openapi).toMatch(/^3\./)
   })
 
   it('GET /docs returns 200 with HTML content-type', async () => {
@@ -1209,8 +1216,8 @@ describe('createExpressCrudRouter — OpenAPI routes', () => {
   it('GET /openapi.json includes paths for the resource', async () => {
     const res = await request(createOpenApiApp()).get('/api/openapi.json')
     expect(res.status).toBe(200)
-    expect(res.body.paths).toHaveProperty('/users')
-    expect(res.body.paths).toHaveProperty('/users/{id}')
+    expect((res.body as OpenAPIBody).paths).toHaveProperty('/users')
+    expect((res.body as OpenAPIBody).paths).toHaveProperty('/users/{id}')
   })
 })
 

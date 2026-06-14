@@ -20,7 +20,12 @@ vi.mock('ultimate-express', () => {
       all: vi.fn()
     }
   }
-  return { default: Object.assign(vi.fn(() => ({})), { Router }) }
+  return {
+    default: Object.assign(
+      vi.fn(() => ({})),
+      { Router }
+    )
+  }
 })
 
 import { UltimateExpressHttpServer } from '@/adapters/http/UltimateExpressAdapter.js'
@@ -106,9 +111,11 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
 
   it('adapts the UE request into a Halifax HttpRequest', async () => {
     let capturedReq: HttpRequest | null = null
-    server.registerRoute('GET', '/things', async (req) => { capturedReq = req })
+    server.registerRoute('GET', '/things', async (req) => {
+      capturedReq = req
+    })
 
-    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]!
+    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, (req: unknown, res: unknown) => Promise<void>]
     const ueReq = makeUERequest()
     const ueRes = makeUEResponse()
     await cb(ueReq, ueRes)
@@ -123,9 +130,11 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
 
   it('adapts the UE response into a Halifax HttpResponse', async () => {
     let capturedRes: HttpResponse | null = null
-    server.registerRoute('GET', '/things', async (_req, res) => { capturedRes = res })
+    server.registerRoute('GET', '/things', async (_req, res) => {
+      capturedRes = res
+    })
 
-    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]!
+    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, (req: unknown, res: unknown) => Promise<void>]
     const ueRes = makeUEResponse()
     await cb(makeUERequest(), ueRes)
 
@@ -146,9 +155,11 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
 
   it('status() returns the response for chaining', async () => {
     let capturedRes: HttpResponse | null = null
-    server.registerRoute('GET', '/things', async (_req, res) => { capturedRes = res })
+    server.registerRoute('GET', '/things', async (_req, res) => {
+      capturedRes = res
+    })
 
-    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]!
+    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, (req: unknown, res: unknown) => Promise<void>]
     await cb(makeUERequest(), makeUEResponse())
 
     expect(capturedRes!.status(200)).toBe(capturedRes)

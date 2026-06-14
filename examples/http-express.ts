@@ -61,7 +61,9 @@ app.use(
     openapi: {
       title: 'Halifax Example API',
       version: '1.0.0',
-      servers: [{ url: `http://localhost:${process.env.PORT ?? 3000}/api/v1`, description: 'Local dev' }]
+      servers: [
+        { url: `http://localhost:${process.env.PORT ?? 3000}/api/v1`, description: 'Local dev' }
+      ]
     }
   })
 )

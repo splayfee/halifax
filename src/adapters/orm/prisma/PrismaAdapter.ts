@@ -30,15 +30,24 @@ import { toSelect, toInclude, toOrderBy } from './helpers.js'
 
 function prismaTypeToOpenApi(prismaType?: string): { type?: FieldType; format?: string } {
   switch (prismaType) {
-    case 'Int': return { type: 'integer', format: 'int32' }
-    case 'BigInt': return { type: 'integer', format: 'int64' }
-    case 'Float': return { type: 'number', format: 'float' }
-    case 'Decimal': return { type: 'number', format: 'double' }
-    case 'Boolean': return { type: 'boolean' }
-    case 'DateTime': return { type: 'string', format: 'date-time' }
-    case 'Json': return { type: 'object' }
-    case 'Bytes': return { type: 'string', format: 'binary' }
-    default: return {}
+    case 'Int':
+      return { type: 'integer', format: 'int32' }
+    case 'BigInt':
+      return { type: 'integer', format: 'int64' }
+    case 'Float':
+      return { type: 'number', format: 'float' }
+    case 'Decimal':
+      return { type: 'number', format: 'double' }
+    case 'Boolean':
+      return { type: 'boolean' }
+    case 'DateTime':
+      return { type: 'string', format: 'date-time' }
+    case 'Json':
+      return { type: 'object' }
+    case 'Bytes':
+      return { type: 'string', format: 'binary' }
+    default:
+      return {}
   }
 }
 

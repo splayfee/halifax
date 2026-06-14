@@ -23,21 +23,35 @@ function makeRepo(fields: FieldDefinition[]): Repository {
     fields,
     idField: 'id',
     capabilities: { supportsIncludes: false, supportsCreateManyReturn: true },
-    async getOne(id) { return store.find((r) => (r as any).id == id) ?? null },
-    async getMany(): Promise<ListResult<unknown>> { return { count: store.length, results: store } },
-    async createOne(data) { const r = { id: nextId++, ...(data as object) }; store.push(r); return r },
-    async createMany(data) { return Promise.all(data.map((d) => this.createOne!(d))) },
+    async getOne(id) {
+      return store.find((r) => (r as any).id == id) ?? null
+    },
+    async getMany(): Promise<ListResult<unknown>> {
+      return { count: store.length, results: store }
+    },
+    async createOne(data) {
+      const r = { id: nextId++, ...(data as object) }
+      store.push(r)
+      return r
+    },
+    async createMany(data) {
+      return Promise.all(data.map((d) => this.createOne!(d)))
+    },
     async updateOne(id, data) {
       const r = store.find((r) => (r as any).id == id)
       if (!r) return null
       Object.assign(r, data)
       return r
     },
-    async updateMany() { return { updated: [], results: [] } },
+    async updateMany() {
+      return { updated: [], results: [] }
+    },
     async upsertOne(id, data) {
       const existing = await this.getOne!(id)
       if (existing) return this.updateOne!(id, data)
-      const r = { id, ...(data as object) }; store.push(r); return r
+      const r = { id, ...(data as object) }
+      store.push(r)
+      return r
     },
     async deleteOne(id) {
       const idx = store.findIndex((r) => (r as any).id == id)
@@ -45,8 +59,12 @@ function makeRepo(fields: FieldDefinition[]): Repository {
       const [removed] = store.splice(idx, 1)
       return removed ?? null
     },
-    async deleteMany() { return { deleted: [] } },
-    async executeQuery() { return { count: store.length, results: store } }
+    async deleteMany() {
+      return { deleted: [] }
+    },
+    async executeQuery() {
+      return { count: store.length, results: store }
+    }
   } as Repository
 }
 

@@ -44,9 +44,7 @@ export class HalifaxClient {
   private readonly transport: HttpTransport
 
   constructor(options: HalifaxClientOptions) {
-    this.baseUrl = options.baseUrl.endsWith('/')
-      ? options.baseUrl.slice(0, -1)
-      : options.baseUrl
+    this.baseUrl = options.baseUrl.endsWith('/') ? options.baseUrl.slice(0, -1) : options.baseUrl
     this.headers = options.headers
     this.envelope = options.envelope
     this.queryBuilderPath = options.queryBuilderPath ?? 'query'

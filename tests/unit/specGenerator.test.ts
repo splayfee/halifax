@@ -15,12 +15,24 @@ function makeResource(overrides: Partial<ResourceDefinition> = {}): ResourceDefi
     ],
     repository: {
       fields: [],
-      async getOne() { return null },
-      async getMany() { return { count: 0, results: [] } },
-      async createOne(d) { return d as never },
-      async createMany() { return [] },
-      async updateOne() { return null },
-      async deleteOne() { return false }
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne(d) {
+        return d as never
+      },
+      async createMany() {
+        return []
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
     },
     ...overrides
   }
@@ -112,49 +124,67 @@ describe('generateOpenApiSpec — route generation by permission', () => {
   }
 
   it('allowReadMany → GET /{resource}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowReadMany: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowReadMany: true } })
+    ])
     expect(spec.paths['/posts']?.get).toBeDefined()
     expect(spec.paths['/posts']?.post).toBeUndefined()
   })
 
   it('allowCreate → POST /{resource}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowCreate: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowCreate: true } })
+    ])
     expect(spec.paths['/posts']?.post).toBeDefined()
     expect(spec.paths['/posts']?.get).toBeUndefined()
   })
 
   it('allowUpdateMany → PATCH /{resource}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowUpdateMany: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowUpdateMany: true } })
+    ])
     expect(spec.paths['/posts']?.patch).toBeDefined()
   })
 
   it('allowDeleteMany → DELETE /{resource}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowDeleteMany: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowDeleteMany: true } })
+    ])
     expect(spec.paths['/posts']?.delete).toBeDefined()
   })
 
   it('allowReadManyWithQueryBuilder → POST /{resource}/query', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowReadManyWithQueryBuilder: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowReadManyWithQueryBuilder: true } })
+    ])
     expect(spec.paths['/posts/query']?.post).toBeDefined()
   })
 
   it('allowReadOne → GET /{resource}/{id}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowReadOne: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowReadOne: true } })
+    ])
     expect(spec.paths['/posts/{id}']?.get).toBeDefined()
   })
 
   it('allowUpdateOne → PATCH /{resource}/{id}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowUpdateOne: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowUpdateOne: true } })
+    ])
     expect(spec.paths['/posts/{id}']?.patch).toBeDefined()
   })
 
   it('allowUpsertOne → PUT /{resource}/{id}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowUpsertOne: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowUpsertOne: true } })
+    ])
     expect(spec.paths['/posts/{id}']?.put).toBeDefined()
   })
 
   it('allowDeleteOne → DELETE /{resource}/{id}', () => {
-    const spec = generateOpenApiSpec([makeResource({ permissions: { ...allOff, allowDeleteOne: true } })])
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowDeleteOne: true } })
+    ])
     expect(spec.paths['/posts/{id}']?.delete).toBeDefined()
   })
 
@@ -191,83 +221,109 @@ describe('generateOpenApiSpec — field type mapping (fieldToSchema)', () => {
   }
 
   it('maps integer type', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'count', type: 'integer' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'count', type: 'integer' }]
+      })
+    ])
     expect(schemaProps('items', spec)['count']).toMatchObject({ type: 'integer' })
   })
 
   it('maps integer with format', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'bigNum', type: 'integer', format: 'int64' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'bigNum', type: 'integer', format: 'int64' }]
+      })
+    ])
     expect(schemaProps('items', spec)['bigNum']).toMatchObject({ type: 'integer', format: 'int64' })
   })
 
   it('maps number type', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'price', type: 'number' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'price', type: 'number' }]
+      })
+    ])
     expect(schemaProps('items', spec)['price']).toMatchObject({ type: 'number' })
   })
 
   it('maps number with format (float)', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'score', type: 'number', format: 'float' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'score', type: 'number', format: 'float' }]
+      })
+    ])
     expect(schemaProps('items', spec)['score']).toMatchObject({ type: 'number', format: 'float' })
   })
 
   it('maps boolean type', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'active', type: 'boolean' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'active', type: 'boolean' }]
+      })
+    ])
     expect(schemaProps('items', spec)['active']).toMatchObject({ type: 'boolean' })
   })
 
   it('maps object type', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'meta', type: 'object' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'meta', type: 'object' }]
+      })
+    ])
     expect(schemaProps('items', spec)['meta']).toMatchObject({ type: 'object' })
   })
 
   it('defaults to string when type is undefined', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'title' }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'title' }]
+      })
+    ])
     expect(schemaProps('items', spec)['title']).toMatchObject({ type: 'string' })
   })
 
   it('maps string with format (e.g. date-time)', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'createdAt', format: 'date-time' }]
-    })])
-    expect(schemaProps('items', spec)['createdAt']).toMatchObject({ type: 'string', format: 'date-time' })
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'createdAt', format: 'date-time' }]
+      })
+    ])
+    expect(schemaProps('items', spec)['createdAt']).toMatchObject({
+      type: 'string',
+      format: 'date-time'
+    })
   })
 
   it('marks non-writable fields as readOnly in read schema', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'id', writable: false }, { name: 'title', writable: true }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [
+          { name: 'id', writable: false },
+          { name: 'title', writable: true }
+        ]
+      })
+    ])
     expect(schemaProps('items', spec)['id']).toMatchObject({ readOnly: true })
     expect(schemaProps('items', spec)['title']?.readOnly).toBeUndefined()
   })
 
   it('excludes non-selectable fields from read schema', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      routePrefix: 'items',
-      fields: [{ name: 'id' }, { name: 'secret', selectable: false }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        routePrefix: 'items',
+        fields: [{ name: 'id' }, { name: 'secret', selectable: false }]
+      })
+    ])
     const props = schemaProps('items', spec)
     expect(props).toHaveProperty('id')
     expect(props).not.toHaveProperty('secret')
@@ -292,10 +348,7 @@ describe('generateOpenApiSpec — envelope wrapping', () => {
   })
 
   it('per-resource envelope overrides the global envelope', () => {
-    const spec = generateOpenApiSpec(
-      [makeResource({ envelope: 'payload' })],
-      { envelope: 'data' }
-    )
+    const spec = generateOpenApiSpec([makeResource({ envelope: 'payload' })], { envelope: 'data' })
     const listSchema = spec.components.schemas['PostsList']
     // 'payload' (per-resource) should win over 'data' (global)
     expect(listSchema?.properties).toHaveProperty('payload')
@@ -303,10 +356,7 @@ describe('generateOpenApiSpec — envelope wrapping', () => {
   })
 
   it('per-resource envelope: null suppresses the global envelope', () => {
-    const spec = generateOpenApiSpec(
-      [makeResource({ envelope: null })],
-      { envelope: 'data' }
-    )
+    const spec = generateOpenApiSpec([makeResource({ envelope: null })], { envelope: 'data' })
     const listSchema = spec.components.schemas['PostsList']
     expect(listSchema?.properties).toHaveProperty('count')
     expect(listSchema?.properties).not.toHaveProperty('data')
@@ -357,7 +407,12 @@ describe('generateOpenApiSpec — security schemes', () => {
 
   it('includes scheme description when provided', () => {
     const spec = generateOpenApiSpec([makeResource()], {
-      securityScheme: { type: 'apiKey', in: 'header', name: 'X-Api-Key', description: 'Pass your key' }
+      securityScheme: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Api-Key',
+        description: 'Pass your key'
+      }
     })
     const scheme = spec.components.securitySchemes!['ApiKeyAuth'] as { description?: string }
     expect(scheme.description).toBe('Pass your key')
@@ -374,9 +429,11 @@ describe('generateOpenApiSpec — security schemes', () => {
 
 describe('generateOpenApiSpec — relations', () => {
   it('adds ?include query param when resource has includable relations', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      relations: [{ name: 'author', includable: true }]
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        relations: [{ name: 'author', includable: true }]
+      })
+    ])
     const params = spec.paths['/posts']?.get?.parameters ?? []
     const includeParam = params.find((p: { name: string }) => p.name === 'include')
     expect(includeParam).toBeDefined()
@@ -394,35 +451,63 @@ describe('generateOpenApiSpec — relations', () => {
 
 describe('generateOpenApiSpec — mergeFields', () => {
   it('inherits fields from repository.fields', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      repository: {
-        fields: [{ name: 'id', writable: false }, { name: 'title' }],
-        async getOne() { return null },
-        async getMany() { return { count: 0, results: [] } },
-        async createOne(d) { return d as never },
-        async createMany() { return [] },
-        async updateOne() { return null },
-        async deleteOne() { return false }
-      }
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        repository: {
+          fields: [{ name: 'id', writable: false }, { name: 'title' }],
+          async getOne() {
+            return null
+          },
+          async getMany() {
+            return { count: 0, results: [] }
+          },
+          async createOne(d) {
+            return d as never
+          },
+          async createMany() {
+            return []
+          },
+          async updateOne() {
+            return null
+          },
+          async deleteOne() {
+            return false
+          }
+        }
+      })
+    ])
     const props = spec.components.schemas['Posts']?.properties ?? {}
     expect(props).toHaveProperty('id')
     expect(props).toHaveProperty('title')
   })
 
   it('resource.fields override repository.fields for the same field name', () => {
-    const spec = generateOpenApiSpec([makeResource({
-      fields: [{ name: 'title', type: 'integer' }],
-      repository: {
-        fields: [{ name: 'title', type: 'string' }],
-        async getOne() { return null },
-        async getMany() { return { count: 0, results: [] } },
-        async createOne(d) { return d as never },
-        async createMany() { return [] },
-        async updateOne() { return null },
-        async deleteOne() { return false }
-      }
-    })])
+    const spec = generateOpenApiSpec([
+      makeResource({
+        fields: [{ name: 'title', type: 'integer' }],
+        repository: {
+          fields: [{ name: 'title', type: 'string' }],
+          async getOne() {
+            return null
+          },
+          async getMany() {
+            return { count: 0, results: [] }
+          },
+          async createOne(d) {
+            return d as never
+          },
+          async createMany() {
+            return []
+          },
+          async updateOne() {
+            return null
+          },
+          async deleteOne() {
+            return false
+          }
+        }
+      })
+    ])
     const props = spec.components.schemas['Posts']?.properties ?? {}
     expect(props['title']).toMatchObject({ type: 'integer' })
   })

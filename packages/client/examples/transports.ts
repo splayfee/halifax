@@ -226,9 +226,13 @@ async function demo() {
   // All clients expose exactly the same typed API.
   const users = axiosClient.resource<User>('users')
 
-  const list   = await users.getMany({ limit: 10, status: 'active' })
+  const list = await users.getMany({ limit: 10, status: 'active' })
   const single = await users.getOne(1)
-  const created = await users.createOne({ name: 'Alice', email: 'alice@example.com', status: 'active' })
+  const created = await users.createOne({
+    name: 'Alice',
+    email: 'alice@example.com',
+    status: 'active'
+  })
   await users.updateOne(1, { status: 'inactive' })
   await users.deleteOne(1)
 
@@ -247,12 +251,15 @@ async function demo() {
 async function testWithMock() {
   const mock = new MockTransport()
     .mock('GET', 'https://api.test/users/42', 200, {
-      id: 42, name: 'Bob', email: 'bob@test.com', status: 'active'
+      id: 42,
+      name: 'Bob',
+      email: 'bob@test.com',
+      status: 'active'
     })
     .mock('DELETE', 'https://api.test/users/42', 200, { deleted: true })
 
   const testClient = new HalifaxClient({ baseUrl: 'https://api.test', transport: mock })
-  const testUsers  = testClient.resource<User>('users')
+  const testUsers = testClient.resource<User>('users')
 
   const user = await testUsers.getOne(42)
   console.assert(user.name === 'Bob')
@@ -265,4 +272,6 @@ void demo()
 void testWithMock()
 
 // Stub — replace with real implementation
-function refreshToken() { return Promise.resolve() }
+function refreshToken() {
+  return Promise.resolve()
+}

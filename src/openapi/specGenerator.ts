@@ -1,4 +1,9 @@
-import { defaultCrudPermissions, type FieldDefinition, type RelationDefinition, type ResourceDefinition } from '@/core/types.js'
+import {
+  defaultCrudPermissions,
+  type FieldDefinition,
+  type RelationDefinition,
+  type ResourceDefinition
+} from '@/core/types.js'
 import type { SecurityScheme } from '@/auth/AuthStrategy.js'
 
 /** Options for OpenAPI spec generation and the built-in docs UI. */
@@ -100,7 +105,10 @@ type OpenApiOperation = {
     required: boolean
     content: { 'application/json': { schema: JsonSchema } }
   }
-  responses: Record<string, { description: string; content?: { 'application/json': { schema: JsonSchema } } }>
+  responses: Record<
+    string,
+    { description: string; content?: { 'application/json': { schema: JsonSchema } } }
+  >
 }
 
 type OpenApiSecuritySchemeObject =
@@ -112,19 +120,30 @@ type OpenApiSpec = {
   info: { title: string; version: string; description?: string }
   servers?: Array<{ url: string; description?: string }>
   security?: Array<Record<string, []>>
-  paths: Record<string, Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete', OpenApiOperation>>>
-  components: { schemas: Record<string, JsonSchema>; securitySchemes?: Record<string, OpenApiSecuritySchemeObject> }
+  paths: Record<
+    string,
+    Partial<Record<'get' | 'post' | 'put' | 'patch' | 'delete', OpenApiOperation>>
+  >
+  components: {
+    schemas: Record<string, JsonSchema>
+    securitySchemes?: Record<string, OpenApiSecuritySchemeObject>
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fieldToSchema(field: Pick<FieldDefinition, 'type' | 'format'>): JsonSchema {
   switch (field.type) {
-    case 'integer': return field.format ? { type: 'integer', format: field.format } : { type: 'integer' }
-    case 'number': return field.format ? { type: 'number', format: field.format } : { type: 'number' }
-    case 'boolean': return { type: 'boolean' }
-    case 'object': return { type: 'object' }
-    default: return field.format ? { type: 'string', format: field.format } : { type: 'string' }
+    case 'integer':
+      return field.format ? { type: 'integer', format: field.format } : { type: 'integer' }
+    case 'number':
+      return field.format ? { type: 'number', format: field.format } : { type: 'number' }
+    case 'boolean':
+      return { type: 'boolean' }
+    case 'object':
+      return { type: 'object' }
+    default:
+      return field.format ? { type: 'string', format: field.format } : { type: 'string' }
   }
 }
 
@@ -166,9 +185,25 @@ function withEnvelope(schema: JsonSchema, envelope: string | null): JsonSchema {
 }
 
 function schemeToObject(scheme: SecurityScheme): OpenApiSecuritySchemeObject {
-  if (scheme.type === 'apiKey') return { type: 'apiKey', in: scheme.in, name: scheme.name, ...(scheme.description ? { description: scheme.description } : {}) }
-  if (scheme.scheme === 'bearer') return { type: 'http', scheme: 'bearer', ...(scheme.bearerFormat ? { bearerFormat: scheme.bearerFormat } : {}), ...(scheme.description ? { description: scheme.description } : {}) }
-  return { type: 'http', scheme: scheme.scheme, ...(scheme.description ? { description: scheme.description } : {}) }
+  if (scheme.type === 'apiKey')
+    return {
+      type: 'apiKey',
+      in: scheme.in,
+      name: scheme.name,
+      ...(scheme.description ? { description: scheme.description } : {})
+    }
+  if (scheme.scheme === 'bearer')
+    return {
+      type: 'http',
+      scheme: 'bearer',
+      ...(scheme.bearerFormat ? { bearerFormat: scheme.bearerFormat } : {}),
+      ...(scheme.description ? { description: scheme.description } : {})
+    }
+  return {
+    type: 'http',
+    scheme: scheme.scheme,
+    ...(scheme.description ? { description: scheme.description } : {})
+  }
 }
 
 function schemeName(scheme: SecurityScheme): string {
@@ -193,8 +228,16 @@ const sharedSchemas: Record<string, JsonSchema> = {
     type: 'object',
     required: ['code', 'message'],
     properties: {
-      code: { type: 'string', description: 'Machine-readable error code (e.g. `NOT_FOUND`, `UNAUTHORIZED`).', example: 'NOT_FOUND' },
-      message: { type: 'string', description: 'Human-readable error description.', example: 'Not found.' },
+      code: {
+        type: 'string',
+        description: 'Machine-readable error code (e.g. `NOT_FOUND`, `UNAUTHORIZED`).',
+        example: 'NOT_FOUND'
+      },
+      message: {
+        type: 'string',
+        description: 'Human-readable error description.',
+        example: 'Not found.'
+      },
       details: { description: 'Additional structured detail when available.' }
     }
   },
@@ -241,10 +284,29 @@ const sharedSchemas: Record<string, JsonSchema> = {
       comparison: {
         type: 'string',
         description: 'Comparison operator.',
-        enum: ['=', '<>', '<', '>', '<=', '>=', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'LIKE', 'NOT LIKE', 'IS NULL', 'IS NOT NULL', 'CONTAINS', 'STARTS WITH', 'ENDS WITH']
+        enum: [
+          '=',
+          '<>',
+          '<',
+          '>',
+          '<=',
+          '>=',
+          'IN',
+          'NOT IN',
+          'BETWEEN',
+          'NOT BETWEEN',
+          'LIKE',
+          'NOT LIKE',
+          'IS NULL',
+          'IS NOT NULL',
+          'CONTAINS',
+          'STARTS WITH',
+          'ENDS WITH'
+        ]
       },
       value: {
-        description: 'Scalar value, or array of values for `IN`/`NOT IN`/`BETWEEN`/`NOT BETWEEN`. Omit for `IS NULL` / `IS NOT NULL`.',
+        description:
+          'Scalar value, or array of values for `IN`/`NOT IN`/`BETWEEN`/`NOT BETWEEN`. Omit for `IS NULL` / `IS NOT NULL`.',
         anyOf: [
           { type: 'string' },
           { type: 'number' },
@@ -252,7 +314,11 @@ const sharedSchemas: Record<string, JsonSchema> = {
           { type: 'array', items: {} }
         ]
       },
-      operator: { type: 'string', enum: ['AND', 'OR'], description: 'Logical combinator used when `children` is present. Defaults to `AND`.' },
+      operator: {
+        type: 'string',
+        enum: ['AND', 'OR'],
+        description: 'Logical combinator used when `children` is present. Defaults to `AND`.'
+      },
       children: {
         type: 'array',
         items: { $ref: '#/components/schemas/QueryFilter' },
@@ -291,7 +357,11 @@ const sharedSchemas: Record<string, JsonSchema> = {
       },
       limit: { type: 'integer', minimum: 0, description: 'Maximum records to return.' },
       offset: { type: 'integer', minimum: 0, default: 0, description: 'Records to skip.' },
-      fields: { type: 'array', items: { type: 'string' }, description: 'Field names to include in each record. Omit to return all selectable fields.' },
+      fields: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Field names to include in each record. Omit to return all selectable fields.'
+      },
       orderBy: {
         type: 'array',
         description: 'Sort order. Multiple entries produce multi-column sorting.',
@@ -304,7 +374,11 @@ const sharedSchemas: Record<string, JsonSchema> = {
           }
         }
       },
-      include: { type: 'array', items: { type: 'string' }, description: 'Relation names to eagerly load (if the resource supports includes).' },
+      include: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Relation names to eagerly load (if the resource supports includes).'
+      },
       distinct: { type: 'boolean', description: 'When `true`, de-duplicates results.' }
     }
   }
@@ -312,7 +386,9 @@ const sharedSchemas: Record<string, JsonSchema> = {
 
 // ─── Shared error responses ───────────────────────────────────────────────────
 
-const errorRef = (description: string): { description: string; content: { 'application/json': { schema: JsonSchema } } } => ({
+const errorRef = (
+  description: string
+): { description: string; content: { 'application/json': { schema: JsonSchema } } } => ({
   description,
   content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
 })
@@ -328,14 +404,23 @@ const writeErrors = {
   '415': errorRef('Unsupported Media Type — body must be `application/json`.')
 }
 
-const badRequestError = errorRef('Bad Request — malformed query string, invalid ID, or invalid request body.')
+const badRequestError = errorRef(
+  'Bad Request — malformed query string, invalid ID, or invalid request body.'
+)
 const notFoundError = errorRef('Not Found — the record with the given ID does not exist.')
-const unprocessableError = errorRef('Unprocessable Entity — request body contains unknown or non-writable fields.')
-const notImplementedError = errorRef('Not Implemented — the underlying repository does not support this operation.')
+const unprocessableError = errorRef(
+  'Unprocessable Entity — request body contains unknown or non-writable fields.'
+)
+const notImplementedError = errorRef(
+  'Not Implemented — the underlying repository does not support this operation.'
+)
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function generateOpenApiSpec(resources: ResourceDefinition[], options: OpenApiOptions = {}): OpenApiSpec {
+export function generateOpenApiSpec(
+  resources: ResourceDefinition[],
+  options: OpenApiOptions = {}
+): OpenApiSpec {
   const globalEnvelope = normalizeEnvelope(options.envelope)
 
   const scheme = options.securityScheme
@@ -353,7 +438,9 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
     paths: {},
     components: {
       schemas: { ...sharedSchemas },
-      ...(scheme && securityName ? { securitySchemes: { [securityName]: schemeToObject(scheme) } } : {})
+      ...(scheme && securityName
+        ? { securitySchemes: { [securityName]: schemeToObject(scheme) } }
+        : {})
     }
   }
 
@@ -367,9 +454,8 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
     const basePath = `/${resource.routePrefix}`
 
     // Resolve envelope: per-resource wins over API-wide default.
-    const envelope = resource.envelope !== undefined
-      ? normalizeEnvelope(resource.envelope)
-      : globalEnvelope
+    const envelope =
+      resource.envelope !== undefined ? normalizeEnvelope(resource.envelope) : globalEnvelope
 
     // ─── Component schemas ───────────────────────────────────────────────────
 
@@ -404,14 +490,15 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
     // ─── Shared parameters ───────────────────────────────────────────────────
 
     const includableRelations = relations.filter((r) => r.includable !== false)
-    const includeParam: OpenApiParameter | undefined = includableRelations.length > 0
-      ? {
-          name: 'include',
-          in: 'query',
-          description: `Comma-separated relation names to eagerly load. Available: \`${includableRelations.map((r) => r.name).join('`, `')}\`.`,
-          schema: { type: 'string', enum: includableRelations.map((r) => r.name) }
-        }
-      : undefined
+    const includeParam: OpenApiParameter | undefined =
+      includableRelations.length > 0
+        ? {
+            name: 'include',
+            in: 'query',
+            description: `Comma-separated relation names to eagerly load. Available: \`${includableRelations.map((r) => r.name).join('`, `')}\`.`,
+            schema: { type: 'string', enum: includableRelations.map((r) => r.name) }
+          }
+        : undefined
 
     const sortableFieldNames = fields.filter((f) => f.sortable !== false).map((f) => f.name)
     const selectableFieldNames = selectableFields.map((f) => f.name)
@@ -428,7 +515,10 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
       name: 'order',
       in: 'query',
       description: `Sort expression. Format: \`field:asc\` or \`field:desc\`, comma-separated for multiple columns. Sortable fields: \`${sortableFieldNames.join('`, `')}\`.`,
-      schema: { type: 'string', example: sortableFieldNames[0] ? `${sortableFieldNames[0]}:desc` : 'id:desc' }
+      schema: {
+        type: 'string',
+        example: sortableFieldNames[0] ? `${sortableFieldNames[0]}:desc` : 'id:desc'
+      }
     }
 
     const filterParams: OpenApiParameter[] = filterableFields.map((f) => ({
@@ -439,8 +529,18 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
     }))
 
     const listQueryParams: OpenApiParameter[] = [
-      { name: 'limit', in: 'query', description: 'Maximum records to return. Defaults to resource limit (up to 5000).', schema: { type: 'integer', minimum: 0 } },
-      { name: 'offset', in: 'query', description: 'Records to skip for pagination. Defaults to `0`.', schema: { type: 'integer', minimum: 0, default: 0 } },
+      {
+        name: 'limit',
+        in: 'query',
+        description: 'Maximum records to return. Defaults to resource limit (up to 5000).',
+        schema: { type: 'integer', minimum: 0 }
+      },
+      {
+        name: 'offset',
+        in: 'query',
+        description: 'Records to skip for pagination. Defaults to `0`.',
+        schema: { type: 'integer', minimum: 0, default: 0 }
+      },
       fieldsParam,
       orderParam,
       ...(includeParam ? [includeParam] : []),
@@ -482,7 +582,9 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         responses: {
           '200': {
             description: 'OK',
-            content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } } }
+            content: {
+              'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } }
+            }
           },
           '400': badRequestError,
           ...commonErrors
@@ -495,7 +597,10 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
     if (permissions.allowCreate) {
       spec.paths[basePath] ??= {}
       const singleResponse = withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope)
-      const arrayResponse = withEnvelope({ type: 'array', items: { $ref: `#/components/schemas/${schemaBase}` } }, envelope)
+      const arrayResponse = withEnvelope(
+        { type: 'array', items: { $ref: `#/components/schemas/${schemaBase}` } },
+        envelope
+      )
       spec.paths[basePath]!.post = {
         operationId: `create${schemaBase}`,
         summary: `Create ${tag}`,
@@ -510,12 +615,16 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
           'are de-duplicated by the repository when it implements idempotency.'
         ].join('\n'),
         tags: [tag],
-        parameters: [correlationIdHeader, {
-          name: 'Idempotency-Key',
-          in: 'header',
-          description: 'Optional idempotency key. Duplicate requests with the same key return the original response.',
-          schema: { type: 'string' }
-        }],
+        parameters: [
+          correlationIdHeader,
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            description:
+              'Optional idempotency key. Duplicate requests with the same key return the original response.',
+            schema: { type: 'string' }
+          }
+        ],
         requestBody: {
           required: true,
           content: {
@@ -566,12 +675,14 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         properties: {
           update: {
             $ref: `#/components/schemas/${schemaBase}Update`,
-            description: 'Fields to apply to every matched record. At least one writable field required.'
+            description:
+              'Fields to apply to every matched record. At least one writable field required.'
           } as JsonSchema,
           where: {
             type: 'array',
             items: { $ref: '#/components/schemas/QueryFilter' },
-            description: '**Required.** At least one filter is mandatory to prevent unintended full-table updates.'
+            description:
+              '**Required.** At least one filter is mandatory to prevent unintended full-table updates.'
           },
           limit: { type: 'integer', minimum: 0, description: 'Maximum records to update.' },
           offset: { type: 'integer', minimum: 0, description: 'Records to skip before updating.' },
@@ -580,7 +691,10 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
             items: {
               type: 'object',
               required: ['field', 'direction'],
-              properties: { field: { type: 'string' }, direction: { type: 'string', enum: ['asc', 'desc'] } }
+              properties: {
+                field: { type: 'string' },
+                direction: { type: 'string', enum: ['asc', 'desc'] }
+              }
             }
           }
         }
@@ -590,7 +704,11 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         required: ['updated'],
         properties: {
           updated: { type: 'array', items: {}, description: 'IDs of updated records.' },
-          results: { type: 'array', items: { $ref: `#/components/schemas/${schemaBase}` }, description: 'Updated records (when the repository supports returning them).' }
+          results: {
+            type: 'array',
+            items: { $ref: `#/components/schemas/${schemaBase}` },
+            description: 'Updated records (when the repository supports returning them).'
+          }
         }
       }
       spec.paths[basePath]!.patch = {
@@ -605,7 +723,9 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         responses: {
           '200': {
             description: 'OK',
-            content: { 'application/json': { schema: withEnvelope(updateManyResponseBody, envelope) } }
+            content: {
+              'application/json': { schema: withEnvelope(updateManyResponseBody, envelope) }
+            }
           },
           '400': badRequestError,
           '422': unprocessableError,
@@ -653,7 +773,9 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         responses: {
           '200': {
             description: 'OK',
-            content: { 'application/json': { schema: withEnvelope(deleteManyResponseBody, envelope) } }
+            content: {
+              'application/json': { schema: withEnvelope(deleteManyResponseBody, envelope) }
+            }
           },
           '400': badRequestError,
           '422': unprocessableError,
@@ -708,7 +830,9 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         responses: {
           '200': {
             description: 'OK',
-            content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } } }
+            content: {
+              'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } }
+            }
           },
           '400': badRequestError,
           '501': notImplementedError,
@@ -731,7 +855,11 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         responses: {
           '200': {
             description: 'OK',
-            content: { 'application/json': { schema: withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope) } }
+            content: {
+              'application/json': {
+                schema: withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope)
+              }
+            }
           },
           '400': badRequestError,
           '404': notFoundError,
@@ -752,12 +880,18 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         parameters: [idParam, correlationIdHeader],
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Update` } } }
+          content: {
+            'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Update` } }
+          }
         },
         responses: {
           '200': {
             description: 'OK',
-            content: { 'application/json': { schema: withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope) } }
+            content: {
+              'application/json': {
+                schema: withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope)
+              }
+            }
           },
           '400': badRequestError,
           '404': notFoundError,
@@ -785,12 +919,18 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
         parameters: [idParam, correlationIdHeader],
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Create` } } }
+          content: {
+            'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Create` } }
+          }
         },
         responses: {
           '200': {
             description: 'OK — record created or replaced.',
-            content: { 'application/json': { schema: withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope) } }
+            content: {
+              'application/json': {
+                schema: withEnvelope({ $ref: `#/components/schemas/${schemaBase}` }, envelope)
+              }
+            }
           },
           '400': badRequestError,
           '422': unprocessableError,
@@ -806,7 +946,11 @@ export function generateOpenApiSpec(resources: ResourceDefinition[], options: Op
     if (permissions.allowDeleteOne) {
       spec.paths[itemPath] ??= {}
       const deleteOneResponse: JsonSchema = withEnvelope(
-        { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean', example: true } } },
+        {
+          type: 'object',
+          required: ['deleted'],
+          properties: { deleted: { type: 'boolean', example: true } }
+        },
         envelope
       )
       spec.paths[itemPath]!.delete = {
@@ -838,10 +982,15 @@ export function generateDocsHtml(specPath: string, docsPath: string): string {
   const specFilename = specParts[specParts.length - 1] ?? 'openapi.json'
   const specDirParts = specParts.slice(0, -1)
   let common = 0
-  while (common < specDirParts.length && common < docsDirParts.length && specDirParts[common] === docsDirParts[common]) common++
+  while (
+    common < specDirParts.length &&
+    common < docsDirParts.length &&
+    specDirParts[common] === docsDirParts[common]
+  )
+    common++
   const ups = docsDirParts.length - common
   const downs = specDirParts.slice(common)
-  const relSpecUrl = [...Array(ups).fill('..'), ...downs, specFilename].join('/') || specFilename
+  const relSpecUrl = [...Array.from<string>({ length: ups }, () => '..'), ...downs, specFilename].join('/') || specFilename
 
   return `<!DOCTYPE html>
 <html lang="en">

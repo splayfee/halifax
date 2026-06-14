@@ -272,26 +272,26 @@ const usersResource: ResourceDefinition = {
 
 `DrizzleAdapter` works with any driver Drizzle supports. The commonly used ones:
 
-| Database      | Drizzle driver import               |
-|---------------|-------------------------------------|
-| PostgreSQL    | `drizzle-orm/postgres-js`           |
-| MySQL         | `drizzle-orm/mysql2`                |
-| SQLite        | `drizzle-orm/better-sqlite3`        |
-| LibSQL / Turso | `drizzle-orm/libsql`               |
+| Database       | Drizzle driver import        |
+| -------------- | ---------------------------- |
+| PostgreSQL     | `drizzle-orm/postgres-js`    |
+| MySQL          | `drizzle-orm/mysql2`         |
+| SQLite         | `drizzle-orm/better-sqlite3` |
+| LibSQL / Turso | `drizzle-orm/libsql`         |
 
 ### Type introspection
 
 `DrizzleAdapter` calls `getTableColumns()` on your table and derives the Halifax field schema automatically — types, primary key, and `writable` flags are all inferred. For OpenAPI generation, Drizzle column types are mapped to their OpenAPI equivalents:
 
-| Drizzle `dataType` | OpenAPI type | Format |
-|--------------------|--------------|--------|
-| `string`           | `string`     | —      |
-| `number`           | `number`     | —      |
-| `boolean`          | `boolean`    | —      |
-| `bigint`           | `integer`    | `int64` |
+| Drizzle `dataType` | OpenAPI type | Format      |
+| ------------------ | ------------ | ----------- |
+| `string`           | `string`     | —           |
+| `number`           | `number`     | —           |
+| `boolean`          | `boolean`    | —           |
+| `bigint`           | `integer`    | `int64`     |
 | `date`             | `string`     | `date-time` |
-| `json`             | `object`     | —      |
-| `buffer`           | `string`     | `binary` |
+| `json`             | `object`     | —           |
+| `buffer`           | `string`     | `binary`    |
 
 ### Constructor options
 
@@ -299,12 +299,12 @@ const usersResource: ResourceDefinition = {
 new DrizzleAdapter(db, table, config?, scope?)
 ```
 
-| Parameter | Type | Description |
-|---|---|---|
-| `db` | Drizzle DB instance | Any Drizzle-compatible database connection. |
-| `table` | Drizzle `Table` | Your table schema (e.g. `usersTable`). |
-| `config.idField` | `string` (optional) | Primary key field name. Defaults to auto-detecting the first column marked `.primaryKey()`. Set explicitly for composite PKs or non-standard names. |
-| `scope` | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly. |
+| Parameter        | Type                  | Description                                                                                                                                         |
+| ---------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db`             | Drizzle DB instance   | Any Drizzle-compatible database connection.                                                                                                         |
+| `table`          | Drizzle `Table`       | Your table schema (e.g. `usersTable`).                                                                                                              |
+| `config.idField` | `string` (optional)   | Primary key field name. Defaults to auto-detecting the first column marked `.primaryKey()`. Set explicitly for composite PKs or non-standard names. |
+| `scope`          | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly.                                                                               |
 
 ### Multi-tenancy
 

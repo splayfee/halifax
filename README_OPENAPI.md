@@ -4,10 +4,10 @@ Halifax can automatically generate a complete [OpenAPI 3.1](https://spec.openapi
 
 Two routes are added automatically at your mount point:
 
-| Route | Description |
-|---|---|
-| `GET /openapi.json` | Raw OpenAPI 3.1 spec (JSON) |
-| `GET /docs` | Swagger UI — interactive browser-based docs |
+| Route               | Description                                 |
+| ------------------- | ------------------------------------------- |
+| `GET /openapi.json` | Raw OpenAPI 3.1 spec (JSON)                 |
+| `GET /docs`         | Swagger UI — interactive browser-based docs |
 
 ---
 
@@ -29,6 +29,7 @@ app.use(
 ```
 
 Then visit:
+
 - **http://localhost:3000/api/v1/docs** — Swagger UI
 - **http://localhost:3000/api/v1/openapi.json** — raw spec
 
@@ -51,17 +52,21 @@ When `enabled` is `false` (or the `openapi` key is omitted entirely), no extra r
 ### Recommended environment pattern
 
 ```ts
-const openApiConfig = process.env.ENABLE_DOCS === 'true'
-  ? {
-      title: 'My API',
-      version: '1.0.0',
-      servers: [{ url: `${process.env.BASE_URL}/api/v1` }]
-    }
-  : undefined
+const openApiConfig =
+  process.env.ENABLE_DOCS === 'true'
+    ? {
+        title: 'My API',
+        version: '1.0.0',
+        servers: [{ url: `${process.env.BASE_URL}/api/v1` }]
+      }
+    : undefined
 
-app.use('/api/v1', createExpressCrudRouter(resources, {
-  openapi: openApiConfig
-}))
+app.use(
+  '/api/v1',
+  createExpressCrudRouter(resources, {
+    openapi: openApiConfig
+  })
+)
 ```
 
 Set `ENABLE_DOCS=true` in `.env.development`, `.env.test`, and `.env.staging`. Leave it unset (or `false`) in production.
@@ -72,14 +77,14 @@ Set `ENABLE_DOCS=true` in `.env.development`, `.env.test`, and `.env.staging`. L
 
 ```ts
 interface OpenApiOptions {
-  enabled?: boolean        // default: true when object is present
-  title?: string           // default: 'Halifax API'
-  version?: string         // default: '1.0.0'
-  description?: string     // markdown supported
+  enabled?: boolean // default: true when object is present
+  title?: string // default: 'Halifax API'
+  version?: string // default: '1.0.0'
+  description?: string // markdown supported
   servers?: Array<{ url: string; description?: string }>
   envelope?: string | null // mirrors CrudApiOptions.envelope — auto-propagated
-  specPath?: string        // default: '/openapi.json'
-  docsPath?: string        // default: '/docs'
+  specPath?: string // default: '/openapi.json'
+  docsPath?: string // default: '/docs'
 }
 ```
 
@@ -102,17 +107,17 @@ openapi: {
 
 When you use `PrismaAdapter` or `createPrismaResources`, Halifax reads the Prisma DMMF and maps types automatically:
 
-| Prisma type | OpenAPI type | Format |
-|---|---|---|
-| `String` | `string` | — |
-| `Int` | `integer` | `int32` |
-| `BigInt` | `integer` | `int64` |
-| `Float` | `number` | `float` |
-| `Decimal` | `number` | `double` |
-| `Boolean` | `boolean` | — |
-| `DateTime` | `string` | `date-time` |
-| `Json` | `object` | — |
-| `Bytes` | `string` | `binary` |
+| Prisma type | OpenAPI type | Format      |
+| ----------- | ------------ | ----------- |
+| `String`    | `string`     | —           |
+| `Int`       | `integer`    | `int32`     |
+| `BigInt`    | `integer`    | `int64`     |
+| `Float`     | `number`     | `float`     |
+| `Decimal`   | `number`     | `double`    |
+| `Boolean`   | `boolean`    | —           |
+| `DateTime`  | `string`     | `date-time` |
+| `Json`      | `object`     | —           |
+| `Bytes`     | `string`     | `binary`    |
 
 No configuration needed. Types flow through automatically.
 
@@ -125,11 +130,11 @@ const orders: ResourceDefinition = {
   routePrefix: 'orders',
   repository: myCustomRepo,
   fields: [
-    { name: 'id',        type: 'integer',  writable: false },
-    { name: 'total',     type: 'number',   format: 'double' },
-    { name: 'status',    type: 'string' },
-    { name: 'paid',      type: 'boolean' },
-    { name: 'createdAt', type: 'string',   format: 'date-time', writable: false }
+    { name: 'id', type: 'integer', writable: false },
+    { name: 'total', type: 'number', format: 'double' },
+    { name: 'status', type: 'string' },
+    { name: 'paid', type: 'boolean' },
+    { name: 'createdAt', type: 'string', format: 'date-time', writable: false }
   ]
 }
 ```
@@ -144,26 +149,26 @@ The spec documents exactly the operations your `permissions` allow. Disabled ope
 
 ### Collection routes — `/{resource}`
 
-| Method | Permission flag | Summary |
-|---|---|---|
-| `GET` | `allowReadMany` | List records (paginated, filtered, sorted) |
-| `POST` | `allowCreate` | Create one or many records |
-| `PATCH` | `allowUpdateMany` | Bulk-update matching records |
-| `DELETE` | `allowDeleteMany` | Bulk-delete matching records |
+| Method   | Permission flag   | Summary                                    |
+| -------- | ----------------- | ------------------------------------------ |
+| `GET`    | `allowReadMany`   | List records (paginated, filtered, sorted) |
+| `POST`   | `allowCreate`     | Create one or many records                 |
+| `PATCH`  | `allowUpdateMany` | Bulk-update matching records               |
+| `DELETE` | `allowDeleteMany` | Bulk-delete matching records               |
 
 ### Item routes — `/{resource}/{id}`
 
-| Method | Permission flag | Summary |
-|---|---|---|
-| `GET` | `allowReadOne` | Get one record by ID |
-| `PATCH` | `allowUpdateOne` | Partially update a record |
-| `PUT` | `allowUpsertOne` | Create or replace a record |
-| `DELETE` | `allowDeleteOne` | Delete a record |
+| Method   | Permission flag  | Summary                    |
+| -------- | ---------------- | -------------------------- |
+| `GET`    | `allowReadOne`   | Get one record by ID       |
+| `PATCH`  | `allowUpdateOne` | Partially update a record  |
+| `PUT`    | `allowUpsertOne` | Create or replace a record |
+| `DELETE` | `allowDeleteOne` | Delete a record            |
 
 ### Query route — `/{resource}/query`
 
-| Method | Permission flag | Summary |
-|---|---|---|
+| Method | Permission flag                 | Summary                |
+| ------ | ------------------------------- | ---------------------- |
 | `POST` | `allowReadManyWithQueryBuilder` | Advanced query builder |
 
 ---
@@ -172,15 +177,15 @@ The spec documents exactly the operations your `permissions` allow. Disabled ope
 
 Every list endpoint (`GET /{resource}`) documents the following parameters:
 
-| Parameter | Type | Description |
-|---|---|---|
-| `limit` | integer | Maximum records to return (capped by `maxLimit`). |
-| `offset` | integer | Records to skip for pagination. |
-| `fields` | string | Comma-separated field names to include. Enum of available names is shown. |
-| `order` | string | Sort expression: `field:asc` or `field:desc`, comma-separated. Sortable fields listed. |
-| `include` | string | Comma-separated relation names to eager-load. Enum of available names is shown. |
-| _filterable fields_ | varies | One query param per filterable field for simple equality filters. |
-| `X-Correlation-ID` | string (header) | Optional. Echoed back in the response header for tracing. |
+| Parameter           | Type            | Description                                                                            |
+| ------------------- | --------------- | -------------------------------------------------------------------------------------- |
+| `limit`             | integer         | Maximum records to return (capped by `maxLimit`).                                      |
+| `offset`            | integer         | Records to skip for pagination.                                                        |
+| `fields`            | string          | Comma-separated field names to include. Enum of available names is shown.              |
+| `order`             | string          | Sort expression: `field:asc` or `field:desc`, comma-separated. Sortable fields listed. |
+| `include`           | string          | Comma-separated relation names to eager-load. Enum of available names is shown.        |
+| _filterable fields_ | varies          | One query param per filterable field for simple equality filters.                      |
+| `X-Correlation-ID`  | string (header) | Optional. Echoed back in the response header for tracing.                              |
 
 **Example:** `GET /posts?limit=20&offset=0&published=true&order=createdAt:desc&fields=id,title,createdAt`
 
@@ -208,6 +213,7 @@ Send a single object or an array:
 ```json
 { "title": "Hello", "published": false }
 ```
+
 ```json
 [{ "title": "Hello" }, { "title": "World" }]
 ```
@@ -288,22 +294,22 @@ The query builder endpoint accepts a `QueryOptions` body for full-featured filte
 
 ### Supported comparison operators
 
-| Operator | Description | Value format |
-|---|---|---|
-| `=` | Equals | scalar |
-| `<>` | Not equals | scalar |
-| `<` `>` `<=` `>=` | Numeric / date comparison | scalar |
-| `IN` | In list | `[val1, val2, ...]` |
-| `NOT IN` | Not in list | `[val1, val2, ...]` |
-| `BETWEEN` | Inclusive range | `[min, max]` |
-| `NOT BETWEEN` | Outside range | `[min, max]` |
-| `LIKE` | SQL LIKE (`%` wildcard) | string |
-| `NOT LIKE` | SQL NOT LIKE | string |
-| `CONTAINS` | Substring match | string |
-| `STARTS WITH` | Prefix match | string |
-| `ENDS WITH` | Suffix match | string |
-| `IS NULL` | Null check | _(omit value)_ |
-| `IS NOT NULL` | Not null check | _(omit value)_ |
+| Operator          | Description               | Value format        |
+| ----------------- | ------------------------- | ------------------- |
+| `=`               | Equals                    | scalar              |
+| `<>`              | Not equals                | scalar              |
+| `<` `>` `<=` `>=` | Numeric / date comparison | scalar              |
+| `IN`              | In list                   | `[val1, val2, ...]` |
+| `NOT IN`          | Not in list               | `[val1, val2, ...]` |
+| `BETWEEN`         | Inclusive range           | `[min, max]`        |
+| `NOT BETWEEN`     | Outside range             | `[min, max]`        |
+| `LIKE`            | SQL LIKE (`%` wildcard)   | string              |
+| `NOT LIKE`        | SQL NOT LIKE              | string              |
+| `CONTAINS`        | Substring match           | string              |
+| `STARTS WITH`     | Prefix match              | string              |
+| `ENDS WITH`       | Suffix match              | string              |
+| `IS NULL`         | Null check                | _(omit value)_      |
+| `IS NOT NULL`     | Not null check            | _(omit value)_      |
 
 ### AND / OR precedence
 
@@ -355,26 +361,24 @@ All error responses share a consistent shape:
 
 ```json
 {
-  "errors": [
-    { "code": "NOT_FOUND", "message": "Not found." }
-  ]
+  "errors": [{ "code": "NOT_FOUND", "message": "Not found." }]
 }
 ```
 
 ### HTTP status codes
 
-| Code | Meaning | When raised |
-|---|---|---|
-| `400` | Bad Request | Invalid ID format, malformed query params or body, invalid filter expressions |
-| `401` | Unauthorized | Missing or invalid auth credentials |
-| `403` | Forbidden | Valid credentials but insufficient permissions |
-| `404` | Not Found | Record with the given ID does not exist |
-| `405` | Method Not Allowed | HTTP method not enabled for this resource |
-| `406` | Not Acceptable | Client's `Accept` header excludes `application/json` |
-| `415` | Unsupported Media Type | Body-carrying request with non-JSON `Content-Type` |
-| `422` | Unprocessable Entity | Unknown fields in body, missing required filter, empty update payload |
-| `500` | Internal Server Error | Unexpected repository or framework error |
-| `501` | Not Implemented | Repository does not support this operation (e.g. upsert, updateMany, deleteMany) |
+| Code  | Meaning                | When raised                                                                      |
+| ----- | ---------------------- | -------------------------------------------------------------------------------- |
+| `400` | Bad Request            | Invalid ID format, malformed query params or body, invalid filter expressions    |
+| `401` | Unauthorized           | Missing or invalid auth credentials                                              |
+| `403` | Forbidden              | Valid credentials but insufficient permissions                                   |
+| `404` | Not Found              | Record with the given ID does not exist                                          |
+| `405` | Method Not Allowed     | HTTP method not enabled for this resource                                        |
+| `406` | Not Acceptable         | Client's `Accept` header excludes `application/json`                             |
+| `415` | Unsupported Media Type | Body-carrying request with non-JSON `Content-Type`                               |
+| `422` | Unprocessable Entity   | Unknown fields in body, missing required filter, empty update payload            |
+| `500` | Internal Server Error  | Unexpected repository or framework error                                         |
+| `501` | Not Implemented        | Repository does not support this operation (e.g. upsert, updateMany, deleteMany) |
 
 ---
 
@@ -382,14 +386,14 @@ All error responses share a consistent shape:
 
 Halifax automatically reads the security scheme from your `authStrategy` and wires it into the spec. The Swagger UI "Authorize" button appears pre-configured — no extra setup needed.
 
-| Strategy | Scheme documented |
-|---|---|
-| `ApiKeyAuthStrategy` | `apiKey` in header (uses the configured header name) |
-| `JwtClaimsAuthStrategy` | `http` bearer JWT |
-| `PassportJwtStrategy` | `http` bearer JWT |
-| `Auth0JwtStrategy` / `FirebaseJwtStrategy` | `http` bearer JWT |
-| `PassportSessionStrategy` | `apiKey` in cookie (`connect.sid`) |
-| `AllowAllAuthStrategy` / custom | No security requirement |
+| Strategy                                   | Scheme documented                                    |
+| ------------------------------------------ | ---------------------------------------------------- |
+| `ApiKeyAuthStrategy`                       | `apiKey` in header (uses the configured header name) |
+| `JwtClaimsAuthStrategy`                    | `http` bearer JWT                                    |
+| `PassportJwtStrategy`                      | `http` bearer JWT                                    |
+| `Auth0JwtStrategy` / `FirebaseJwtStrategy` | `http` bearer JWT                                    |
+| `PassportSessionStrategy`                  | `apiKey` in cookie (`connect.sid`)                   |
+| `AllowAllAuthStrategy` / custom            | No security requirement                              |
 
 ### Custom strategy
 
@@ -397,7 +401,9 @@ Implement `openApiScheme()` on your custom strategy and it's picked up automatic
 
 ```ts
 class MyHmacStrategy implements AuthStrategy {
-  async authenticate(req) { /* ... */ }
+  async authenticate(req) {
+    /* ... */
+  }
 
   openApiScheme(): SecurityScheme {
     return { type: 'apiKey', in: 'header', name: 'X-Signature' }
@@ -440,6 +446,7 @@ await validate({ document: spec })
 ```
 
 This is useful for:
+
 - **CI spec validation** — catch breaking changes before deploy
 - **Code generation** — pipe into `openapi-typescript`, `@hey-api/openapi-ts`, or `@edium/halifax-codegen`
 - **Static hosting** — publish the spec alongside your deployed API

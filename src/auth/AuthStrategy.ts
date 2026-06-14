@@ -336,6 +336,11 @@ export class PassportSessionStrategy implements AuthStrategy {
   }
 
   public openApiScheme(): SecurityScheme {
-    return { type: 'apiKey', in: 'cookie', name: 'connect.sid', description: 'Passport session cookie.' }
+    return {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'connect.sid',
+      description: 'Passport session cookie.'
+    }
   }
 }

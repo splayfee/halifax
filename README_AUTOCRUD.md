@@ -158,11 +158,11 @@ createExpressCrudRouter(resources, { authStrategy, envelope: 'data' })
 
 The wrap is **uniform** — it nests the entire body, it does not reshape it:
 
-| Endpoint        | Bare (default)            | `envelope: 'data'`                    |
-| --------------- | ------------------------- | ------------------------------------- |
-| List / query    | `{ count, results }`      | `{ data: { count, results } }`        |
-| Read / create   | `{ id, ... }`             | `{ data: { id, ... } }`               |
-| Delete one      | `{ deleted: true }`       | `{ data: { deleted: true } }`         |
+| Endpoint      | Bare (default)       | `envelope: 'data'`             |
+| ------------- | -------------------- | ------------------------------ |
+| List / query  | `{ count, results }` | `{ data: { count, results } }` |
+| Read / create | `{ id, ... }`        | `{ data: { id, ... } }`        |
+| Delete one    | `{ deleted: true }`  | `{ data: { deleted: true } }`  |
 
 Notes:
 

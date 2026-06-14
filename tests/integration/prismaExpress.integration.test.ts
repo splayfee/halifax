@@ -15,16 +15,53 @@ import {
   JwtClaimsAuthStrategy,
   PrismaAdapter,
   createExpressCrudRouter,
+  type IQueryOptions,
   type ResourceDefinition
 } from '@/index.js'
 
 const API_KEY = 'test-secret'
 const hasDb = !!process.env.DATABASE_URL
 
-// Prisma types come from the generated test client. We use `any` here so the
-// file compiles before `pnpm test:integration:generate` has been run.
-// The actual types are enforced at runtime by Prisma itself.
-type AnyPrisma = any
+// ---------------------------------------------------------------------------
+// Lightweight entity types that match the Prisma-generated Post and Author
+// shapes used in this test file. Typed here so we can avoid `any` while still
+// compiling before `pnpm test:integration:generate` has been run.
+// ---------------------------------------------------------------------------
+
+type Post = {
+  id: number | string
+  title: string
+  content?: string | null
+  published?: boolean
+  authorId?: number | string | null
+  createdAt?: unknown
+  author?: Author | null
+}
+
+type Author = {
+  id: number | string
+  name: string
+  email: string
+}
+
+type PostListBody = { count: number; results: Post[] }
+type PostErrorBody = { errors: Array<{ code: string; message: string }> }
+type DeleteBody = { deleted: boolean }
+
+/** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
+type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
+  post: {
+    deleteMany(args?: unknown): Promise<unknown>
+    createMany(args: { data: unknown[] | unknown }): Promise<unknown>
+    create(args: { data: unknown }): Promise<Post>
+    findUnique(args: { where: unknown }): Promise<Post | null>
+    count(args?: unknown): Promise<number>
+  }
+  author: {
+    deleteMany(args?: unknown): Promise<unknown>
+    create(args: { data: unknown }): Promise<Author>
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Shared app factory
@@ -60,11 +97,11 @@ function buildPostApp(repo: PrismaAdapter) {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let repo: PrismaAdapter
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
     repo = new PrismaAdapter({
       delegate: prisma.post
@@ -81,9 +118,9 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   })
 
   it('createOne returns the created record', async () => {
-    const post = await repo.createOne({ title: 'Hello', published: false })
-    expect((post as AnyPrisma).id).toBeTypeOf(idTypeName())
-    expect((post as AnyPrisma).title).toBe('Hello')
+    const post = (await repo.createOne({ title: 'Hello', published: false })) as Post
+    expect(post.id).toBeTypeOf(idTypeName())
+    expect(post.title).toBe('Hello')
   })
 
   it('createMany inserts all records', async () => {
@@ -100,8 +137,8 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   })
 
   it('getOne returns the record by id', async () => {
-    const created = (await repo.createOne({ title: 'Find me', published: false })) as AnyPrisma
-    const found = (await repo.getOne(created.id)) as AnyPrisma
+    const created = (await repo.createOne({ title: 'Find me', published: false })) as Post
+    const found = (await repo.getOne(created.id)) as Post | null
     expect(found?.title).toBe('Find me')
   })
 
@@ -110,8 +147,8 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       title: 'Sparse',
       content: 'body',
       published: false
-    })) as AnyPrisma
-    const found = (await repo.getOne(created.id, { fields: ['id', 'title'] })) as AnyPrisma
+    })) as Post
+    const found = (await repo.getOne(created.id, { fields: ['id', 'title'] })) as Post | null
     expect(found?.id).toBeDefined()
     expect(found?.title).toBeDefined()
     expect(found?.content).toBeUndefined()
@@ -123,8 +160,8 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       title: 'With author',
       authorId: author.id,
       published: true
-    })) as AnyPrisma
-    const found = (await repo.getOne(created.id, { include: ['author'] })) as AnyPrisma
+    })) as Post
+    const found = (await repo.getOne(created.id, { include: ['author'] })) as Post | null
     expect(found?.author?.name).toBe('Ada')
   })
 
@@ -160,13 +197,13 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       { title: 'Alpha', published: true }
     ])
     const { results } = await repo.getMany({ orderBy: [{ field: 'title', direction: 'asc' }] })
-    expect((results[0] as AnyPrisma)?.title).toBe('Alpha')
-    expect((results[1] as AnyPrisma)?.title).toBe('Bravo')
+    expect((results[0] as Post)?.title).toBe('Alpha')
+    expect((results[1] as Post)?.title).toBe('Bravo')
   })
 
   it('updateOne returns the updated record', async () => {
-    const created = (await repo.createOne({ title: 'Old', published: false })) as AnyPrisma
-    const updated = (await repo.updateOne(created.id, { title: 'New' })) as AnyPrisma
+    const created = (await repo.createOne({ title: 'Old', published: false })) as Post
+    const updated = (await repo.updateOne(created.id, { title: 'New' })) as Post | null
     expect(updated?.title).toBe('New')
   })
 
@@ -175,7 +212,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
   })
 
   it('deleteOne removes the record and returns true', async () => {
-    const created = (await repo.createOne({ title: 'Delete me', published: false })) as AnyPrisma
+    const created = (await repo.createOne({ title: 'Delete me', published: false })) as Post
     expect(await repo.deleteOne(created.id)).toBe(true)
     expect(await repo.getOne(created.id)).toBeNull()
   })
@@ -192,7 +229,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     const post = (await repo.upsertOne!(missingId(), {
       title: 'Upserted',
       published: false
-    })) as AnyPrisma
+    })) as Post
     expect(post.title).toBe('Upserted')
   })
 
@@ -206,17 +243,17 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       where: [{ field: 'published', comparison: '=', value1: true }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(result.count).toBe(2)
     expect(result.results).toHaveLength(2)
   })
 
   it('upsertOne updates a record that already exists', async () => {
-    const post = (await repo.createOne({ title: 'Original', published: false })) as AnyPrisma
+    const post = (await repo.createOne({ title: 'Original', published: false })) as Post
     const updated = (await repo.upsertOne!(post.id, {
       title: 'Updated via upsert',
       published: true
-    })) as AnyPrisma
+    })) as Post
     expect(updated.title).toBe('Updated via upsert')
     expect(updated.published).toBe(true)
   })
@@ -236,7 +273,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       fields: ['id', 'title'],
       limit: 100,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(result.count).toBe(2)
     expect(result.results).toHaveLength(2)
   })
@@ -255,7 +292,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(result.count).toBe(2)
   })
 
@@ -268,8 +305,8 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     const result = await repo.updateMany!(
       {
         where: [{ field: 'published', comparison: '=', value1: false }]
-      } as any,
-      { published: true } as any
+      } satisfies IQueryOptions,
+      { published: true } as Record<string, unknown>
     )
     expect(result.updated).toHaveLength(2)
     const { count } = await repo.getMany({ where: { published: false } })
@@ -284,7 +321,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     ])
     const result = await repo.deleteMany!({
       where: [{ field: 'published', comparison: '=', value1: false }]
-    } as any)
+    } satisfies IQueryOptions)
     expect(result.deleted).toHaveLength(2)
     const { count } = await repo.getMany()
     expect(count).toBe(1)
@@ -298,7 +335,7 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
     const repoNoClient = new PrismaAdapter({ delegate: prisma.post })
     const result = await repoNoClient.executeQuery!({
       where: [{ field: 'published', comparison: '=', value1: true }]
-    } as any)
+    } satisfies IQueryOptions)
     expect(result.count).toBe(1)
     expect(result.results).toHaveLength(1)
   })
@@ -309,11 +346,11 @@ describe.skipIf(!hasDb)('PrismaAdapter — direct', () => {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let app: ReturnType<typeof express>
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
     app = buildPostApp(new PrismaAdapter({ delegate: prisma.post }))
   })
@@ -336,8 +373,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
       .set('x-api-key', API_KEY)
       .send({ title: 'Via HTTP', published: false })
     expect(res.status).toBe(201)
-    expect(res.body.title).toBe('Via HTTP')
-    expect(res.body.id).toBeTypeOf(idTypeName())
+    const body = res.body as Post
+    expect(body.title).toBe('Via HTTP')
+    expect(body.id).toBeTypeOf(idTypeName())
   })
 
   it('POST /posts with an array creates multiple records', async () => {
@@ -355,15 +393,16 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     await prisma.post.createMany({ data: [{ title: 'X' }, { title: 'Y' }] })
     const res = await request(app).get('/api/posts').set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(2)
-    expect(res.body.results).toHaveLength(2)
+    const body = res.body as PostListBody
+    expect(body.count).toBe(2)
+    expect(body.results).toHaveLength(2)
   })
 
   it('GET /posts/:id returns one record', async () => {
     const post = await prisma.post.create({ data: { title: 'Single' } })
     const res = await request(app).get(`/api/posts/${post.id}`).set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
-    expect(res.body.title).toBe('Single')
+    expect((res.body as Post).title).toBe('Single')
   })
 
   it('GET /posts/:id returns 404 for a missing id', async () => {
@@ -379,7 +418,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
       .set('x-api-key', API_KEY)
       .send({ title: 'After' })
     expect(res.status).toBe(200)
-    expect(res.body.title).toBe('After')
+    expect((res.body as Post).title).toBe('After')
   })
 
   it('PATCH /posts/:id returns 404 for a missing id', async () => {
@@ -393,7 +432,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   it('DELETE /posts/:id removes the record', async () => {
     const post = await prisma.post.create({ data: { title: 'Bye' } })
     expect(
-      (await request(app).delete(`/api/posts/${post.id}`).set('x-api-key', API_KEY)).body.deleted
+      ((await request(app).delete(`/api/posts/${post.id}`).set('x-api-key', API_KEY)).body as DeleteBody).deleted
     ).toBe(true)
     expect((await request(app).get(`/api/posts/${post.id}`).set('x-api-key', API_KEY)).status).toBe(
       404
@@ -425,8 +464,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
         offset: 0
       })
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(2)
-    expect(res.body.results).toHaveLength(2)
+    const body = res.body as PostListBody
+    expect(body.count).toBe(2)
+    expect(body.results).toHaveLength(2)
   })
 
   it('POST /posts/query-builder with no where clause returns all records', async () => {
@@ -436,13 +476,13 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
       .set('x-api-key', API_KEY)
       .send({ fields: ['id', 'title'], limit: 50, offset: 0 })
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(3)
+    expect((res.body as PostListBody).count).toBe(3)
   })
 
   it('GET /posts/:id returns 400 for a non-integer id', async () => {
     const res = await request(app).get('/api/posts/abc').set('x-api-key', API_KEY)
     expect(res.status).toBe(400)
-    expect(res.body.errors[0].code).toBe('BAD_REQUEST')
+    expect((res.body as PostErrorBody).errors[0].code).toBe('BAD_REQUEST')
   })
 
   it('GET /posts with wrong API key returns 403', async () => {
@@ -453,8 +493,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     for (let i = 1; i <= 5; i++) await prisma.post.create({ data: { title: `P${i}` } })
     const res = await request(app).get('/api/posts?limit=2&offset=2').set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
-    expect(res.body.results).toHaveLength(2)
-    expect(res.body.count).toBe(5)
+    const body = res.body as PostListBody
+    expect(body.results).toHaveLength(2)
+    expect(body.count).toBe(5)
   })
 
   it('GET /posts with ?title= filters by title', async () => {
@@ -463,8 +504,9 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
     })
     const res = await request(app).get('/api/posts?title=FindMe').set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(1)
-    expect(res.body.results[0].title).toBe('FindMe')
+    const body = res.body as PostListBody
+    expect(body.count).toBe(1)
+    expect(body.results[0].title).toBe('FindMe')
   })
 
   it('PUT /posts/:id creates a record via upsert (returns 200)', async () => {
@@ -473,16 +515,17 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
       .set('x-api-key', API_KEY)
       .send({ title: 'Upserted via HTTP', published: false })
     expect(res.status).toBe(200)
-    expect(res.body.title).toBe('Upserted via HTTP')
+    expect((res.body as Post).title).toBe('Upserted via HTTP')
   })
 
   it('error response body has { errors: [{ code, message }] } shape', async () => {
     const res = await request(app).get('/api/posts/0').set('x-api-key', API_KEY)
     expect(res.status).toBe(400)
-    expect(res.body).toHaveProperty('errors')
-    expect(Array.isArray(res.body.errors)).toBe(true)
-    expect(res.body.errors[0]).toHaveProperty('code', 'BAD_REQUEST')
-    expect(res.body.errors[0]).toHaveProperty('message')
+    const errBody = res.body as PostErrorBody
+    expect(errBody).toHaveProperty('errors')
+    expect(Array.isArray(errBody.errors)).toBe(true)
+    expect(errBody.errors[0]).toHaveProperty('code', 'BAD_REQUEST')
+    expect(errBody.errors[0]).toHaveProperty('message')
   })
 })
 
@@ -491,7 +534,7 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!hasDb)('JwtClaimsAuthStrategy — permission enforcement', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let app: ReturnType<typeof express>
 
   function makeToken(payload: Record<string, unknown>) {
@@ -499,7 +542,7 @@ describe.skipIf(!hasDb)('JwtClaimsAuthStrategy — permission enforcement', () =
   }
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
 
     const repo = new PrismaAdapter({ delegate: prisma.post })

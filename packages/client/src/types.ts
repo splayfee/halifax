@@ -1,4 +1,9 @@
-export type { ListResult, QueryResult, UpdateManyResult, DeleteManyResult } from '@edium/halifax-types'
+export type {
+  ListResult,
+  QueryResult,
+  UpdateManyResult,
+  DeleteManyResult
+} from '@edium/halifax-types'
 
 /**
  * Query parameters for GET list requests. Known keys are typed; any additional
@@ -56,7 +61,9 @@ export interface HalifaxClientOptions {
    * Called before every request, so dynamic tokens are always fresh.
    * These are merged on top of the defaults (`Accept`, `Content-Type`).
    */
-  headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
+  headers?:
+    | Record<string, string>
+    | (() => Record<string, string> | Promise<Record<string, string>>)
   /**
    * When your Halifax server uses `envelope` (e.g. `'data'`), the client
    * automatically unwraps `{ data: <body> }` from every response.

@@ -150,7 +150,10 @@ export interface CrudHooks<
    * Fired after a list query.
    * Return a modified `ListResult` or `void` (e.g. annotate each record or replace `count`).
    */
-  afterReadMany?(result: ListResult<TRecord>, ctx: HookContext): MaybePromise<ListResult<TRecord> | void>
+  afterReadMany?(
+    result: ListResult<TRecord>,
+    ctx: HookContext
+  ): MaybePromise<ListResult<TRecord> | void>
 
   // ─── Update ───────────────────────────────────────────────────────────────────
 
@@ -167,7 +170,11 @@ export interface CrudHooks<
    * })
    * ```
    */
-  beforeUpdateOne?(id: string | number, data: TUpdate, ctx: HookContext): MaybePromise<TUpdate | void>
+  beforeUpdateOne?(
+    id: string | number,
+    data: TUpdate,
+    ctx: HookContext
+  ): MaybePromise<TUpdate | void>
 
   /**
    * Fired after a single-record update.
@@ -188,7 +195,10 @@ export interface CrudHooks<
    * Fired after a bulk update.
    * Return a modified `UpdateManyResult` or `void` to use as-is.
    */
-  afterUpdateMany?(result: UpdateManyResult<TRecord>, ctx: HookContext): MaybePromise<UpdateManyResult<TRecord> | void>
+  afterUpdateMany?(
+    result: UpdateManyResult<TRecord>,
+    ctx: HookContext
+  ): MaybePromise<UpdateManyResult<TRecord> | void>
 
   // ─── Upsert ───────────────────────────────────────────────────────────────────
 
@@ -196,7 +206,11 @@ export interface CrudHooks<
    * Fired before an upsert (`PUT /resource/:id`).
    * Return modified data or `void`. Throw to abort.
    */
-  beforeUpsertOne?(id: string | number, data: TCreate & TUpdate, ctx: HookContext): MaybePromise<(TCreate & TUpdate) | void>
+  beforeUpsertOne?(
+    id: string | number,
+    data: TCreate & TUpdate,
+    ctx: HookContext
+  ): MaybePromise<(TCreate & TUpdate) | void>
 
   /**
    * Fired after an upsert.
@@ -230,7 +244,10 @@ export interface CrudHooks<
    * Fired after a bulk delete.
    * Return a modified `DeleteManyResult` or `void` to use as-is.
    */
-  afterDeleteMany?(result: DeleteManyResult, ctx: HookContext): MaybePromise<DeleteManyResult | void>
+  afterDeleteMany?(
+    result: DeleteManyResult,
+    ctx: HookContext
+  ): MaybePromise<DeleteManyResult | void>
 
   // ─── Query builder ────────────────────────────────────────────────────────────
 
@@ -257,5 +274,8 @@ export interface CrudHooks<
    * Fired after a query-builder execution.
    * Return a modified `QueryResult` or `void` to use as-is.
    */
-  afterQuery?(result: QueryResult<TRecord>, ctx: HookContext): MaybePromise<QueryResult<TRecord> | void>
+  afterQuery?(
+    result: QueryResult<TRecord>,
+    ctx: HookContext
+  ): MaybePromise<QueryResult<TRecord> | void>
 }

@@ -7,7 +7,7 @@ import {
   PassportJwtStrategy,
   PassportSessionStrategy
 } from '@/auth/AuthStrategy.js'
-import type { HttpRequest } from '@/core/types.js'
+import type { HttpRequest, ResourceDefinition } from '@/core/types.js'
 
 function req(
   headers: Record<string, string> = {},
@@ -18,11 +18,11 @@ function req(
 }
 
 // Minimal ResourceDefinition stub for authorize() calls
-const resource = { name: 'R', routePrefix: 'r', fields: [], permissions: {} } as any
+const resource = { name: 'R', routePrefix: 'r', fields: [], permissions: {} } as unknown as ResourceDefinition
 
 describe('AllowAllAuthStrategy', () => {
   it('authenticates every request without inspection', () => {
-    const ctx = (new AllowAllAuthStrategy() as any).authenticate(req())
+    const ctx = new AllowAllAuthStrategy().authenticate(req())
     expect(ctx.isAuthenticated).toBe(true)
   })
 })
@@ -266,11 +266,14 @@ describe('PassportSessionStrategy', () => {
   })
 
   it('uses a custom mapUser function', () => {
-    const strategy = new PassportSessionStrategy((user: any) => ({
-      isAuthenticated: true,
-      userId: user.username,
-      roles: user.groups
-    }))
+    const strategy = new PassportSessionStrategy((user: unknown) => {
+      const u = user as { username: string; groups: string[] }
+      return {
+        isAuthenticated: true,
+        userId: u.username,
+        roles: u.groups
+      }
+    })
     const ctx = strategy.authenticate(
       req({}, 'GET', { user: { username: 'dave', groups: ['admin'] } })
     )

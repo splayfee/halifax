@@ -11,17 +11,17 @@ All notable changes to this project are documented here. This project adheres to
   `hooks` on `ResourceDefinition`. All 18 hooks cover every operation the auto-CRUD engine
   exposes:
 
-  | Category | Hooks |
-  |---|---|
-  | Create | `beforeCreate`, `afterCreate` |
-  | Read (list) | `beforeReadMany`, `afterReadMany` |
-  | Read (single) | `beforeReadOne`, `afterReadOne` |
-  | Update (single) | `beforeUpdateOne`, `afterUpdateOne` |
-  | Update (bulk) | `beforeUpdateMany`, `afterUpdateMany` |
-  | Upsert | `beforeUpsertOne`, `afterUpsertOne` |
-  | Delete (single) | `beforeDeleteOne`, `afterDeleteOne` |
-  | Delete (bulk) | `beforeDeleteMany`, `afterDeleteMany` |
-  | Query builder | `beforeQuery`, `afterQuery` |
+  | Category        | Hooks                                 |
+  | --------------- | ------------------------------------- |
+  | Create          | `beforeCreate`, `afterCreate`         |
+  | Read (list)     | `beforeReadMany`, `afterReadMany`     |
+  | Read (single)   | `beforeReadOne`, `afterReadOne`       |
+  | Update (single) | `beforeUpdateOne`, `afterUpdateOne`   |
+  | Update (bulk)   | `beforeUpdateMany`, `afterUpdateMany` |
+  | Upsert          | `beforeUpsertOne`, `afterUpsertOne`   |
+  | Delete (single) | `beforeDeleteOne`, `afterDeleteOne`   |
+  | Delete (bulk)   | `beforeDeleteMany`, `afterDeleteMany` |
+  | Query builder   | `beforeQuery`, `afterQuery`           |
 
   **Before hooks** can return a modified data object (replacing the incoming payload) or
   `void` to leave it unchanged. Throwing any `Error` aborts the operation and sends the

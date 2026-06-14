@@ -15,7 +15,7 @@ export function createPrismaResources(
   schema: ReadonlyArray<{ name: string; dbName?: string | null; fields: ModelField[] }>,
   options: CreatePrismaResourcesOptions = {}
 ): ResourceDefinition[] {
-  const client = prismaClient as any
+  const client = prismaClient as Record<string, PrismaDelegate>
 
   return schema
     .filter((model) => !options.models?.[model.name]?.exclude)

@@ -15,8 +15,71 @@ import type { FieldType } from '@/core/types.js'
 import { astToDrizzleWhere, astToDrizzleOrderBy, type ColumnMap } from './astToDrizzle.js'
 
 // Drizzle doesn't export a single unified DB type across all drivers.
-// This structural interface covers the common query-builder surface all drivers share.
-export type AnyDrizzleDB = any
+// These structural interfaces cover the common query-builder surface all drivers share.
+//
+// Drizzle uses a progressive builder pattern where each chained call removes the just-used
+// method from the return type (to prevent double-calling). Calling `.$dynamic()` on the
+// builder opts out of that restriction and returns a stable self-referential type where
+// all methods remain available at every step. This adapter calls `.$dynamic()` in
+// `buildSelect()` so the structural interface can be a simple self-referential chain.
+
+type DrizzleOrderByArg = SQL | AnyColumn | ((aliases: Record<string, AnyColumn>) => unknown)
+
+/**
+ * A dynamic Drizzle SELECT chain (returned after calling `.$dynamic()`).
+ * All methods remain on the type regardless of call order.
+ */
+interface DrizzleDynamicSelect extends PromiseLike<unknown[]> {
+  where(cond?: SQL): DrizzleDynamicSelect
+  orderBy(...cols: DrizzleOrderByArg[]): DrizzleDynamicSelect
+  limit(n: number): DrizzleDynamicSelect
+  offset(n: number): DrizzleDynamicSelect
+}
+
+/** The builder returned from `.from()` before dynamic mode is activated. */
+interface DrizzleSelectBuilder extends PromiseLike<unknown[]> {
+  $dynamic(): DrizzleDynamicSelect
+  where(cond?: SQL): PromiseLike<unknown[]>
+}
+
+interface DrizzleFromChain {
+  from(table: Table): DrizzleSelectBuilder
+}
+
+interface DrizzleUpdateWhereChain {
+  returning(): Promise<unknown[]>
+}
+
+interface DrizzleUpdateSetChain {
+  where(cond?: SQL): DrizzleUpdateWhereChain
+}
+
+interface DrizzleUpdateChain {
+  set(data: Record<string, unknown>): DrizzleUpdateSetChain
+}
+
+interface DrizzleDeleteWhereChain {
+  returning(): Promise<unknown[]>
+}
+
+interface DrizzleDeleteChain {
+  where(cond?: SQL): DrizzleDeleteWhereChain
+}
+
+interface DrizzleInsertValuesChain {
+  returning(): Promise<unknown[]>
+}
+
+interface DrizzleInsertChain {
+  values(data: unknown): DrizzleInsertValuesChain
+}
+
+export interface AnyDrizzleDB {
+  select(fields?: Record<string, AnyColumn | SQL>): DrizzleFromChain
+  insert(table: Table): DrizzleInsertChain
+  update(table: Table): DrizzleUpdateChain
+  delete(table: Table): DrizzleDeleteChain
+}
 
 export interface DrizzleAdapterConfig {
   /**
@@ -80,8 +143,7 @@ export class DrizzleAdapter<
   TRecord = Record<string, unknown>,
   TCreate = Partial<TRecord>,
   TUpdate = Partial<TRecord>
-> implements Repository<TRecord, TCreate, TUpdate>
-{
+> implements Repository<TRecord, TCreate, TUpdate> {
   public readonly fields: FieldDefinition[]
   public readonly idField: string
 
@@ -116,7 +178,10 @@ export class DrizzleAdapter<
    */
   static fieldsFromTable(table: Table, idField?: string): FieldDefinition[] {
     const cols = getTableColumns(table) as ColumnMap
-    const pkField = idField ?? Object.entries(cols).find(([, c]) => (c as { primary?: boolean }).primary)?.[0] ?? 'id'
+    const pkField =
+      idField ??
+      Object.entries(cols).find(([, c]) => (c as { primary?: boolean }).primary)?.[0] ??
+      'id'
     return Object.entries(cols).map(([name, col]) => ({
       name,
       filterable: true,
@@ -127,15 +192,20 @@ export class DrizzleAdapter<
     }))
   }
 
-  private buildSelect(fields?: string[]): AnyDrizzleDB {
+  /**
+   * Returns a dynamic SELECT builder so the chain type stays stable across `.where()`,
+   * `.orderBy()`, `.limit()`, and `.offset()` calls — Drizzle's `.$dynamic()` opts out
+   * of the progressive-omit type narrowing.
+   */
+  private buildSelect(fields?: string[]): DrizzleDynamicSelect {
     if (fields?.length) {
       const sel: Record<string, AnyColumn> = {}
       for (const f of fields) {
         if (this.columns[f]) sel[f] = this.columns[f]!
       }
-      return this.db.select(sel)
+      return this.db.select(sel).from(this.table).$dynamic()
     }
-    return this.db.select()
+    return this.db.select().from(this.table).$dynamic()
   }
 
   private listWhereToSQL(where?: Record<string, unknown>): SQL | undefined {
@@ -175,18 +245,21 @@ export class DrizzleAdapter<
   ): Promise<TRecord | null> {
     const idWhere = eq(this.columns[this.idField]!, id as QueryScalar)
     const where = this.withScopeWhere(idWhere)
-    const rows = await this.buildSelect(options?.fields).from(this.table).where(where)
-    return (rows[0] ?? null) as TRecord | null
+    const rows = (await this.buildSelect(options?.fields).where(where)) as (TRecord | undefined)[]
+    return rows[0] ?? null
   }
 
   async getMany(options?: ListOptions): Promise<ListResult<TRecord>> {
     const filterWhere = this.listWhereToSQL(options?.where)
     const where = this.withScopeWhere(filterWhere)
 
-    const countResult = await this.db.select({ count: count() }).from(this.table).where(where)
+    const countResult = (await this.db
+      .select({ count: count() })
+      .from(this.table)
+      .where(where)) as [{ count: string | number }?]
     const total = Number(countResult[0]?.count ?? 0)
 
-    let query = this.buildSelect(options?.fields).from(this.table).where(where)
+    let query = this.buildSelect(options?.fields).where(where)
     if (options?.orderBy?.length) {
       const sorts = options.orderBy
         .filter((s) => this.columns[s.field])
@@ -199,15 +272,15 @@ export class DrizzleAdapter<
     if (options?.limit != null) query = query.limit(options.limit)
     if (options?.offset != null) query = query.offset(options.offset)
 
-    const rows = await query
-    return { count: total, results: rows as TRecord[] }
+    const rows = (await query) as TRecord[]
+    return { count: total, results: rows }
   }
 
   async createOne(data: TCreate, _options?: { idempotencyKey?: string }): Promise<TRecord> {
-    const rows = await this.db
+    const rows = (await this.db
       .insert(this.table)
       .values(this.scope ? { ...data, [this.scope.field]: this.scope.value } : data)
-      .returning()
+      .returning()) as (TRecord | undefined)[]
     return rows[0] as TRecord
   }
 
@@ -216,19 +289,19 @@ export class DrizzleAdapter<
     const stamped = this.scope
       ? data.map((d) => ({ ...d, [this.scope!.field]: this.scope!.value }))
       : data
-    const rows = await this.db.insert(this.table).values(stamped).returning()
-    return rows as TRecord[]
+    const rows = (await this.db.insert(this.table).values(stamped).returning()) as TRecord[]
+    return rows
   }
 
   async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     const idWhere = eq(this.columns[this.idField]!, id as QueryScalar)
     const where = this.withScopeWhere(idWhere)
-    const rows = await this.db
+    const rows = (await this.db
       .update(this.table)
       .set(this.stripScope(data as Record<string, unknown>))
       .where(where)
-      .returning()
-    return (rows[0] ?? null) as TRecord | null
+      .returning()) as (TRecord | undefined)[]
+    return rows[0] ?? null
   }
 
   async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
@@ -242,13 +315,13 @@ export class DrizzleAdapter<
 
   async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
     const where = this.withScopeWhere(astToDrizzleWhere(query.where, this.columns))
-    const rows = await this.db
+    const rows = (await this.db
       .update(this.table)
       .set(this.stripScope(data as Record<string, unknown>))
       .where(where)
-      .returning()
-    const ids = rows.map((r: Record<string, unknown>) => r[this.idField])
-    return { updated: ids, results: rows as TRecord[] }
+      .returning()) as TRecord[]
+    const ids = (rows as Record<string, unknown>[]).map((r) => r[this.idField])
+    return { updated: ids, results: rows }
   }
 
   async deleteOne(id: string | number): Promise<boolean> {
@@ -260,28 +333,39 @@ export class DrizzleAdapter<
 
   async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
     const where = this.withScopeWhere(astToDrizzleWhere(query.where, this.columns))
-    const rows = await this.db.delete(this.table).where(where).returning()
-    const deleted = rows.map((r: Record<string, unknown>) => r[this.idField])
+    const rows = (await this.db.delete(this.table).where(where).returning()) as Record<
+      string,
+      unknown
+    >[]
+    const deleted = rows.map((r) => r[this.idField])
     return { deleted }
   }
 
   async executeQuery(query: IQueryOptions): Promise<QueryResult<TRecord>> {
     const where = this.withScopeWhere(astToDrizzleWhere(query.where, this.columns))
 
-    const countResult = await this.db.select({ count: count() }).from(this.table).where(where)
+    const countResult = (await this.db
+      .select({ count: count() })
+      .from(this.table)
+      .where(where)) as [{ count: string | number }?]
     const total = Number(countResult[0]?.count ?? 0)
 
     const sorts = astToDrizzleOrderBy(query.orderBy, this.columns)
-    let q = this.buildSelect(query.fields).from(this.table).where(where)
+    let q = this.buildSelect(query.fields).where(where)
     if (sorts.length) q = q.orderBy(...sorts)
     if (query.limit != null) q = q.limit(query.limit)
     if (query.offset != null) q = q.offset(query.offset)
 
-    const rows = await q
-    return { count: total, results: rows as TRecord[] }
+    const rows = (await q) as TRecord[]
+    return { count: total, results: rows }
   }
 
   withScope(scope: TenantScope): Repository<TRecord, TCreate, TUpdate> {
-    return new DrizzleAdapter<TRecord, TCreate, TUpdate>(this.db, this.table, { idField: this.idField }, scope ?? null)
+    return new DrizzleAdapter<TRecord, TCreate, TUpdate>(
+      this.db,
+      this.table,
+      { idField: this.idField },
+      scope ?? null
+    )
   }
 }

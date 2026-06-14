@@ -31,10 +31,10 @@ Reads a request header and compares it against a static shared secret.
 new ApiKeyAuthStrategy(expectedApiKey: string, headerName?: string)
 ```
 
-| Parameter | Default | Description |
-|---|---|---|
-| `expectedApiKey` | required | The secret key callers must supply. |
-| `headerName` | `'x-api-key'` | Header to read the key from. |
+| Parameter        | Default       | Description                         |
+| ---------------- | ------------- | ----------------------------------- |
+| `expectedApiKey` | required      | The secret key callers must supply. |
+| `headerName`     | `'x-api-key'` | Header to read the key from.        |
 
 - Missing header → 401 Unauthorized
 - Wrong key → 403 Forbidden
@@ -86,11 +86,12 @@ Authenticates using Passport session cookies. Reads `req.raw.user` (populated by
 new PassportSessionStrategy(mapUser?: (user: unknown) => AuthContext)
 ```
 
-| Parameter | Description |
-|---|---|
+| Parameter | Description                                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `mapUser` | Optional function to map the raw session user object to an `AuthContext`. Default reads `sub`/`id`, `roles`, and `permissions`. |
 
 **Prerequisites** — add before mounting Halifax:
+
 ```ts
 app.use(session({ secret: '...' }))
 app.use(passport.initialize())
@@ -210,6 +211,7 @@ See `PrismaAdapterOptions` in [README_INTERFACES.md](./README_INTERFACES.md).
 **Static method:** `PrismaAdapter` has no static methods. For auto-generating resources from all Prisma models, use `createPrismaResources` (a standalone function).
 
 **Capabilities reported:**
+
 - `supportsIncludes: true`
 - `supportsCreateManyReturn: <returnCreated option>`
 
@@ -294,27 +296,27 @@ Import: `@edium/halifax`
 
 Base class for all Halifax HTTP errors. Not instantiated directly.
 
-| Property | Type | Description |
-|---|---|---|
-| `status` | `number` | HTTP status code. |
-| `message` | `string` | Human-readable error message. |
+| Property  | Type      | Description                                             |
+| --------- | --------- | ------------------------------------------------------- |
+| `status`  | `number`  | HTTP status code.                                       |
+| `message` | `string`  | Human-readable error message.                           |
 | `details` | `unknown` | Optional structured details included in the error body. |
 
 ---
 
 ### Error subclasses
 
-| Class | Status | When to throw |
-|---|---|---|
-| `AuthenticationError` | 401 | Missing or invalid credentials. Throw from `AuthStrategy.authenticate`. |
-| `AuthorizationError` | 403 | Valid credentials but insufficient permissions. Throw from `AuthStrategy.authenticate` or `authorize`. |
-| `BadRequestError` | 400 | Malformed input — invalid ID format, bad query params, bad body structure. |
-| `NotFoundError` | 404 | Record with the given ID does not exist. Throw from a custom `Repository.getOne`. |
-| `MethodNotAllowedError` | 405 | HTTP method not enabled for this resource. Used internally by Halifax. |
-| `NotAcceptableError` | 406 | Client `Accept` header excludes `application/json`. Used internally by Halifax. |
-| `UnsupportedMediaTypeError` | 415 | Body-carrying request with non-JSON `Content-Type`. Used internally by Halifax. |
-| `UnprocessableEntityError` | 422 | Unknown fields in body, missing required filter, empty update payload. |
-| `NotImplementedError` | 501 | Repository does not support this operation (e.g. `upsertOne` not implemented). |
-| `ServerError` | 500 | Unexpected internal error. Halifax uses this as a catch-all; throw it from a custom adapter for explicit 500s. |
+| Class                       | Status | When to throw                                                                                                  |
+| --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `AuthenticationError`       | 401    | Missing or invalid credentials. Throw from `AuthStrategy.authenticate`.                                        |
+| `AuthorizationError`        | 403    | Valid credentials but insufficient permissions. Throw from `AuthStrategy.authenticate` or `authorize`.         |
+| `BadRequestError`           | 400    | Malformed input — invalid ID format, bad query params, bad body structure.                                     |
+| `NotFoundError`             | 404    | Record with the given ID does not exist. Throw from a custom `Repository.getOne`.                              |
+| `MethodNotAllowedError`     | 405    | HTTP method not enabled for this resource. Used internally by Halifax.                                         |
+| `NotAcceptableError`        | 406    | Client `Accept` header excludes `application/json`. Used internally by Halifax.                                |
+| `UnsupportedMediaTypeError` | 415    | Body-carrying request with non-JSON `Content-Type`. Used internally by Halifax.                                |
+| `UnprocessableEntityError`  | 422    | Unknown fields in body, missing required filter, empty update payload.                                         |
+| `NotImplementedError`       | 501    | Repository does not support this operation (e.g. `upsertOne` not implemented).                                 |
+| `ServerError`               | 500    | Unexpected internal error. Halifax uses this as a catch-all; throw it from a custom adapter for explicit 500s. |
 
 All constructors accept `(message: string, details?: unknown)`.

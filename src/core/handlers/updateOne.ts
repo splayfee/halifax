@@ -28,7 +28,7 @@ export function registerUpdateOne(
       const hookCtx: HookContext = { auth, resource, req }
       const rawBody = filterWritableFields(resource, req.body as Record<string, unknown>, auth)
       const body = hooks?.beforeUpdateOne
-        ? (await hooks.beforeUpdateOne(id, rawBody, hookCtx)) ?? rawBody
+        ? ((await hooks.beforeUpdateOne(id, rawBody, hookCtx)) ?? rawBody)
         : rawBody
       const rawResult = await repo.updateOne(id, body as never)
       if (!rawResult) throw new NotFoundError()

@@ -3,12 +3,17 @@ import type { CrudHooks } from '@/core/hooks.js'
 import { createCachingRepository, InMemoryCacheStore, type CacheStore } from '@/core/cache/index.js'
 import { generateOpenApiSpec, generateDocsHtml, type OpenApiOptions } from '@/openapi/index.js'
 import { defaultCrudPermissions, type ResourceDefinition } from '@/core/types.js'
-import type { FieldDefinition, HttpRequest, HttpServer, RelationDefinition, Repository } from '@/core/types.js'
+import type {
+  FieldDefinition,
+  HttpRequest,
+  HttpServer,
+  RelationDefinition,
+  Repository
+} from '@/core/types.js'
 import { ServerError } from '@/errors/ServerError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
 import {
-  getHeaderValue,
   normalizeError,
   sendError,
   wantsCacheBust,

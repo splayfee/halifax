@@ -16,16 +16,32 @@
 
 import { connectIntegrationDb } from '../helpers/integrationDb.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PrismaAdapter, SqlComparison } from '@/index.js'
+import { PrismaAdapter, SqlComparison, type IQueryOptions } from '@/index.js'
 
 const hasDb = !!process.env.DATABASE_URL
 
-type AnyPrisma = any
+type Post = {
+  id: number | string
+  title: string
+  content?: string | null
+  published?: boolean
+}
+
+/** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
+type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
+  post: {
+    deleteMany(args?: unknown): Promise<unknown>
+    create(args: { data: unknown }): Promise<Post>
+  }
+  author: {
+    deleteMany(args?: unknown): Promise<unknown>
+  }
+}
 
 const FIELDS = ['id', 'title', 'published', 'content']
 
 describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let repo: PrismaAdapter
   // Integer keys on SQL engines, 24-char ObjectId strings on MongoDB — captured after insert.
   let id1: string | number
@@ -33,7 +49,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
   let id3: string | number
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
     repo = new PrismaAdapter({ delegate: prisma.post })
   })
@@ -65,9 +81,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'published', comparison: SqlComparison.Equal, value1: true }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
-    const titles = results.map((r: AnyPrisma) => r.title)
+    const titles = results.map((r) => (r as Post).title)
     expect(titles).toContain('Alpha')
     expect(titles).toContain('Charlie')
   })
@@ -78,9 +94,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'published', comparison: SqlComparison.NotEqual, value1: true }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).title).toBe('Bravo')
+    expect((results[0] as Post).title).toBe('Bravo')
   })
 
   // ---------------------------------------------------------------------------
@@ -93,7 +109,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'id', comparison: SqlComparison.GreaterThan, value1: id1 }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2) // id2 and id3
   })
 
@@ -103,7 +119,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'id', comparison: SqlComparison.LessThan, value1: id3 }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2) // id1 and id2
   })
 
@@ -113,9 +129,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'id', comparison: SqlComparison.GreaterThanOrEqual, value1: id2 }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2) // id2 and id3
-    const ids = results.map((r: AnyPrisma) => r.id)
+    const ids = results.map((r) => (r as Post).id)
     expect(ids).toContain(id2)
     expect(ids).toContain(id3)
   })
@@ -126,9 +142,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'id', comparison: SqlComparison.LessThanOrEqual, value1: id2 }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2) // id1 and id2
-    const ids = results.map((r: AnyPrisma) => r.id)
+    const ids = results.map((r) => (r as Post).id)
     expect(ids).toContain(id1)
     expect(ids).toContain(id2)
   })
@@ -143,7 +159,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id3 }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(3)
   })
 
@@ -153,9 +169,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'id', comparison: SqlComparison.NotBetween, value1: id1, value2: id2 }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).id).toBe(id3)
+    expect((results[0] as Post).id).toBe(id3)
   })
 
   // ---------------------------------------------------------------------------
@@ -168,9 +184,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'title', comparison: SqlComparison.In, value1: ['Alpha', 'Charlie'] }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
-    const titles = results.map((r: AnyPrisma) => r.title)
+    const titles = results.map((r) => (r as Post).title)
     expect(titles).toContain('Alpha')
     expect(titles).toContain('Charlie')
   })
@@ -181,9 +197,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'title', comparison: SqlComparison.NotIn, value1: ['Alpha', 'Charlie'] }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).title).toBe('Bravo')
+    expect((results[0] as Post).title).toBe('Bravo')
   })
 
   // ---------------------------------------------------------------------------
@@ -196,9 +212,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'title', comparison: SqlComparison.Like, value1: 'Alpha%' }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).title).toBe('Alpha')
+    expect((results[0] as Post).title).toBe('Alpha')
   })
 
   it('NOT LIKE: excludes rows matching the SQL pattern', async () => {
@@ -207,9 +223,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'title', comparison: SqlComparison.NotLike, value1: 'Alpha%' }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
-    const titles = results.map((r: AnyPrisma) => r.title)
+    const titles = results.map((r) => (r as Post).title)
     expect(titles).not.toContain('Alpha')
   })
 
@@ -224,7 +240,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'content', comparison: SqlComparison.IsNull }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
   })
 
@@ -234,20 +250,20 @@ describe.skipIf(!hasDb)('QueryBuilder integration — comparison operators', () 
       where: [{ field: 'content', comparison: SqlComparison.IsNotNull }],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).title).toBe('Alpha')
+    expect((results[0] as Post).title).toBe('Alpha')
   })
 })
 
 describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and nesting', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let repo: PrismaAdapter
   let id1: string | number
   let id3: string | number
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
     repo = new PrismaAdapter({ delegate: prisma.post })
   })
@@ -281,9 +297,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).title).toBe('Alpha')
+    expect((results[0] as Post).title).toBe('Alpha')
   })
 
   it('AND chain (three conditions): returns intersection of all', async () => {
@@ -296,7 +312,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2) // Alpha and Charlie
   })
 
@@ -313,9 +329,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
-    const titles = results.map((r: AnyPrisma) => r.title)
+    const titles = results.map((r) => (r as Post).title)
     expect(titles).toContain('Alpha')
     expect(titles).toContain('Bravo')
   })
@@ -330,7 +346,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
   })
 
@@ -359,9 +375,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).title).toBe('Alpha')
+    expect((results[0] as Post).title).toBe('Alpha')
   })
 
   it('OR with nested children: rows satisfying either branch are returned', async () => {
@@ -380,9 +396,9 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
-    const titles = results.map((r: AnyPrisma) => r.title)
+    const titles = results.map((r) => (r as Post).title)
     expect(titles).toContain('Bravo')
     expect(titles).toContain('Alpha')
   })
@@ -403,7 +419,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
   })
 
@@ -423,7 +439,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
   })
 
@@ -451,7 +467,7 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       ],
       limit: 10,
       offset: 0
-    } as any)
+    } satisfies IQueryOptions)
     expect(count).toBe(2)
   })
 })

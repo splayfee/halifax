@@ -9,7 +9,9 @@ function makeClient(): RedisLikeClient & {
 } {
   return {
     get: vi.fn<(key: string) => Promise<string | null>>().mockResolvedValue(null),
-    set: vi.fn<(key: string, value: string, options?: { EX?: number }) => Promise<void>>().mockResolvedValue(undefined),
+    set: vi
+      .fn<(key: string, value: string, options?: { EX?: number }) => Promise<void>>()
+      .mockResolvedValue(undefined),
     del: vi.fn<(key: string) => Promise<void>>().mockResolvedValue(undefined)
   }
 }

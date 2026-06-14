@@ -24,13 +24,12 @@ export function registerUpsertOne(
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'upsertOne', authStrategy)
       const repo = await resolveRepo(req, auth)
-      if (!repo.upsertOne)
-        throw new NotImplementedError('This resource does not support upsert.')
+      if (!repo.upsertOne) throw new NotImplementedError('This resource does not support upsert.')
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }
       const rawBody = filterWritableFields(resource, req.body as Record<string, unknown>, auth)
       const body = hooks?.beforeUpsertOne
-        ? (await hooks.beforeUpsertOne(id, rawBody, hookCtx)) ?? rawBody
+        ? ((await hooks.beforeUpsertOne(id, rawBody, hookCtx)) ?? rawBody)
         : rawBody
       const rawResult = await repo.upsertOne(id, body as never)
       const result = await applyHook(

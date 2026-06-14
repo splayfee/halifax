@@ -15,7 +15,11 @@ export type { HttpTransport, TransportRequest, TransportResponse } from '@/trans
 export type { AxiosLike } from '@/transport/AxiosTransport'
 export type { KyLike } from '@/transport/KyTransport'
 export type { OfetchLike } from '@/transport/OfetchTransport'
-export type { SuperagentLike, SuperagentRequest, SuperagentResponse } from '@/transport/SuperagentTransport'
+export type {
+  SuperagentLike,
+  SuperagentRequest,
+  SuperagentResponse
+} from '@/transport/SuperagentTransport'
 export type {
   ListResult,
   QueryResult,

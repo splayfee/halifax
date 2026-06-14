@@ -113,7 +113,12 @@ describe('DrizzleAdapter — CRUD operations', () => {
 
   describe('createOne', () => {
     it('inserts a record and returns it with the generated id', async () => {
-      const result = await adapter.createOne({ name: 'Widget', price: 9.99, active: true, tenantId: null })
+      const result = await adapter.createOne({
+        name: 'Widget',
+        price: 9.99,
+        active: true,
+        tenantId: null
+      })
       expect(result.id).toBeGreaterThan(0)
       expect(result.name).toBe('Widget')
       expect(result.price).toBe(9.99)
@@ -138,7 +143,12 @@ describe('DrizzleAdapter — CRUD operations', () => {
 
   describe('getOne', () => {
     it('returns the record when found', async () => {
-      const { id } = await adapter.createOne({ name: 'Found', price: 1, active: true, tenantId: null })
+      const { id } = await adapter.createOne({
+        name: 'Found',
+        price: 1,
+        active: true,
+        tenantId: null
+      })
       const result = await adapter.getOne(id)
       expect(result).toMatchObject({ name: 'Found' })
     })
@@ -149,7 +159,12 @@ describe('DrizzleAdapter — CRUD operations', () => {
     })
 
     it('projects only requested fields', async () => {
-      const { id } = await adapter.createOne({ name: 'Widget', price: 5, active: true, tenantId: null })
+      const { id } = await adapter.createOne({
+        name: 'Widget',
+        price: 5,
+        active: true,
+        tenantId: null
+      })
       const result = await adapter.getOne(id, { fields: ['id', 'name'] })
       expect(result).toHaveProperty('id')
       expect(result).toHaveProperty('name')
@@ -201,7 +216,12 @@ describe('DrizzleAdapter — CRUD operations', () => {
 
   describe('updateOne', () => {
     it('updates and returns the record', async () => {
-      const { id } = await adapter.createOne({ name: 'Old', price: 1, active: true, tenantId: null })
+      const { id } = await adapter.createOne({
+        name: 'Old',
+        price: 1,
+        active: true,
+        tenantId: null
+      })
       const result = await adapter.updateOne(id, { name: 'New', price: 99 } as Partial<Product>)
       expect(result?.name).toBe('New')
       expect(result?.price).toBe(99)
@@ -215,21 +235,41 @@ describe('DrizzleAdapter — CRUD operations', () => {
 
   describe('upsertOne', () => {
     it('inserts a new record when id does not exist', async () => {
-      const result = await adapter.upsertOne(100, { name: 'New', price: 5, active: true, tenantId: null } as Product)
+      const result = await adapter.upsertOne(100, {
+        name: 'New',
+        price: 5,
+        active: true,
+        tenantId: null
+      } as Product)
       expect(result.id).toBe(100)
       expect(result.name).toBe('New')
     })
 
     it('updates an existing record', async () => {
-      const { id } = await adapter.createOne({ name: 'Orig', price: 1, active: true, tenantId: null })
-      const result = await adapter.upsertOne(id, { name: 'Updated', price: 2, active: false, tenantId: null } as Product)
+      const { id } = await adapter.createOne({
+        name: 'Orig',
+        price: 1,
+        active: true,
+        tenantId: null
+      })
+      const result = await adapter.upsertOne(id, {
+        name: 'Updated',
+        price: 2,
+        active: false,
+        tenantId: null
+      } as Product)
       expect(result.name).toBe('Updated')
     })
   })
 
   describe('deleteOne', () => {
     it('deletes the record and returns true', async () => {
-      const { id } = await adapter.createOne({ name: 'ToDelete', price: 1, active: true, tenantId: null })
+      const { id } = await adapter.createOne({
+        name: 'ToDelete',
+        price: 1,
+        active: true,
+        tenantId: null
+      })
       const result = await adapter.deleteOne(id)
       expect(result).toBe(true)
       expect(await adapter.getOne(id)).toBeNull()
@@ -366,7 +406,10 @@ describe('DrizzleAdapter — tenant isolation (withScope)', () => {
   })
 
   it('getMany only returns rows for the scoped tenant', async () => {
-    const repo = adapter.withScope({ field: 'tenantId', value: 'tenant1' }) as DrizzleAdapter<Product>
+    const repo = adapter.withScope({
+      field: 'tenantId',
+      value: 'tenant1'
+    }) as DrizzleAdapter<Product>
     const result = await repo.getMany()
     expect(result.count).toBe(2)
     expect(result.results.every((r) => r.tenantId === 'tenant1')).toBe(true)
@@ -376,19 +419,28 @@ describe('DrizzleAdapter — tenant isolation (withScope)', () => {
     const all = await adapter.getMany()
     const tenant2Row = all.results.find((r) => r.tenantId === 'tenant2')!
 
-    const repo = adapter.withScope({ field: 'tenantId', value: 'tenant1' }) as DrizzleAdapter<Product>
+    const repo = adapter.withScope({
+      field: 'tenantId',
+      value: 'tenant1'
+    }) as DrizzleAdapter<Product>
     const result = await repo.getOne(tenant2Row.id)
     expect(result).toBeNull()
   })
 
   it('createOne stamps the tenant field automatically', async () => {
-    const repo = adapter.withScope({ field: 'tenantId', value: 'tenant3' }) as DrizzleAdapter<Product>
+    const repo = adapter.withScope({
+      field: 'tenantId',
+      value: 'tenant3'
+    }) as DrizzleAdapter<Product>
     const result = await repo.createOne({ name: 'T3', price: 9, active: true } as Product)
     expect(result.tenantId).toBe('tenant3')
   })
 
   it('deleteMany only deletes within the tenant scope', async () => {
-    const repo = adapter.withScope({ field: 'tenantId', value: 'tenant1' }) as DrizzleAdapter<Product>
+    const repo = adapter.withScope({
+      field: 'tenantId',
+      value: 'tenant1'
+    }) as DrizzleAdapter<Product>
     await repo.deleteMany({ where: [{ field: 'active', comparison: '=', value1: true }] })
     const remaining = await adapter.getMany()
     expect(remaining.count).toBe(1)
