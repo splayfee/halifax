@@ -289,6 +289,73 @@ describe('createCachingRepository', () => {
     expect(calls.getMany).toBe(2) // both issued separate DB calls
   })
 
+  it('getOne result is served from cache on second call', async () => {
+    const calls = { getOne: 0 }
+    const repo: Repository<Row> = {
+      async getMany() { return { count: 0, results: [] } },
+      async getOne() { calls.getOne++; return { id: 1, name: 'a' } },
+      async createOne(d) { return d as Row },
+      async createMany(d) { return d as Row[] },
+      async updateOne() { return null },
+      async deleteOne() { return false }
+    }
+    const cached = createCachingRepository(repo, { store: new InMemoryCacheStore(), ttlSeconds: 60, namespace: 'ns' })
+    await cached.getOne(1)
+    await cached.getOne(1)
+    expect(calls.getOne).toBe(1) // second call served from cache
+  })
+
+  it('createMany bumps the cache version and invalidates reads', async () => {
+    const calls = { getMany: 0 }
+    const repo: Repository<Row> = {
+      async getMany() { calls.getMany++; return { count: 1, results: [{ id: 1, name: 'a' }] } },
+      async getOne() { return null },
+      async createOne(d) { return d as Row },
+      async createMany(d) { return d as Row[] },
+      async updateOne() { return null },
+      async deleteOne() { return false }
+    }
+    const cached = createCachingRepository(repo, { store: new InMemoryCacheStore(), ttlSeconds: 60, namespace: 'ns' })
+    await cached.getMany()
+    await cached.createMany([{ id: 2, name: 'b' }])
+    await cached.getMany()
+    expect(calls.getMany).toBe(2) // cache busted by createMany
+  })
+
+  it('updateOne bumps the cache version and invalidates reads', async () => {
+    const calls = { getMany: 0 }
+    const repo: Repository<Row> = {
+      async getMany() { calls.getMany++; return { count: 1, results: [{ id: 1, name: 'a' }] } },
+      async getOne() { return null },
+      async createOne(d) { return d as Row },
+      async createMany(d) { return d as Row[] },
+      async updateOne() { return null },
+      async deleteOne() { return false }
+    }
+    const cached = createCachingRepository(repo, { store: new InMemoryCacheStore(), ttlSeconds: 60, namespace: 'ns' })
+    await cached.getMany()
+    await cached.updateOne(1, { name: 'b' })
+    await cached.getMany()
+    expect(calls.getMany).toBe(2) // cache busted by updateOne
+  })
+
+  it('deleteOne bumps the cache version and invalidates reads', async () => {
+    const calls = { getMany: 0 }
+    const repo: Repository<Row> = {
+      async getMany() { calls.getMany++; return { count: 1, results: [{ id: 1, name: 'a' }] } },
+      async getOne() { return null },
+      async createOne(d) { return d as Row },
+      async createMany(d) { return d as Row[] },
+      async updateOne() { return null },
+      async deleteOne() { return false }
+    }
+    const cached = createCachingRepository(repo, { store: new InMemoryCacheStore(), ttlSeconds: 60, namespace: 'ns' })
+    await cached.getMany()
+    await cached.deleteOne(1)
+    await cached.getMany()
+    expect(calls.getMany).toBe(2) // cache busted by deleteOne
+  })
+
   it('optional methods not exposed when underlying repo lacks them', () => {
     const minimal: Repository<Row> = {
       async getMany() { return { count: 0, results: [] } },

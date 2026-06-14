@@ -20,6 +20,7 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🏢 **Multi-tenancy built in** — per-resource tenant scoping with fail-closed guarantees; one tenant can never read or write another's rows.
 - ⚡ **Pluggable read-through caching** — in-memory or Redis, per-resource TTLs, never-expire mode, automatic write-invalidation, tenant-safe keys, and a `Cache-Control` bust header.
 - 🔐 **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action permissions; `filterable`/`sortable`/`selectable`/`writable` field flags; and per-field `readRoles`/`writeRoles` for role-based column visibility.
+- 🪝 **Lifecycle hooks** — inject custom logic before or after any CRUD operation per resource (`beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, …). Stamp audit fields, emit events, enforce ownership, or transform results without writing a custom repository. See [README_HOOKS.md](./README_HOOKS.md).
 - 📦 **Companion browser client** — [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is a typed, zero-dependency client with a fluent query builder and built-in TanStack Query helpers (queries + mutation auto-invalidation). Bring your own HTTP library (fetch, axios, ky, ofetch, superagent).
 - 🧪 **Type-safe & battle-tested** — strict TypeScript, ESM, ships full `.d.ts`; hundreds of unit tests plus the full integration suite run against six real databases + Redis in CI.
 
@@ -128,6 +129,7 @@ app.listen(3000)
 | [README_MULTITENANCY.md](./README_MULTITENANCY.md)   | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour                |
 | [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)   | Query-builder payload, comparisons, nested filters, portable execution                                       |
 | [README_CACHE.md](./README_CACHE.md)                 | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                              |
+| [README_HOOKS.md](./README_HOOKS.md)                 | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook        |
 | [README_OPENAPI.md](./README_OPENAPI.md)             | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use              |
 | [README_TYPES.md](./README_TYPES.md)                 | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants                 |
 | [README_INTERFACES.md](./README_INTERFACES.md)       | All exported interfaces — resource, auth, HTTP, repository, cache, Prisma, Drizzle, query AST               |

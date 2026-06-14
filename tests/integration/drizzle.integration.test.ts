@@ -15,7 +15,7 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
-import { eq } from 'drizzle-orm'
+
 import express from 'express'
 import request, { agent as supertestAgent } from 'supertest'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'

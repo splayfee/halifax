@@ -16,7 +16,6 @@ import { astToDrizzleWhere, astToDrizzleOrderBy, type ColumnMap } from './astToD
 
 // Drizzle doesn't export a single unified DB type across all drivers.
 // This structural interface covers the common query-builder surface all drivers share.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyDrizzleDB = any
 
 export interface DrizzleAdapterConfig {

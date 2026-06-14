@@ -5,6 +5,7 @@ import type {
   UpdateManyResult,
   DeleteManyResult
 } from '@edium/halifax-types'
+import type { CrudHooks } from '@/core/hooks.js'
 
 export type { ListResult, QueryResult, UpdateManyResult, DeleteManyResult }
 
@@ -100,7 +101,6 @@ export interface ListOptions {
   /** Relation names to eager-load. */
   include?: string[] | undefined
 }
-
 
 /** Options passed to `createOne` / `createMany` for idempotent writes. */
 export interface CreateOptions {
@@ -296,7 +296,7 @@ export interface ModelResourceOptions {
   defaultLimit?: number
   /** Hard cap on page size. Requests above this are silently capped. */
   maxLimit?: number
-  /** Maximum nesting depth for WHERE clause children (default: 3). */
+  /** Maximum nesting depth for WHERE clause children (default: 4). */
   maxFilterDepth?: number
 }
 
@@ -422,8 +422,16 @@ export interface ResourceDefinition<
    * the cap entirely — combine `defaultLimit: 0` and `maxLimit: 0` to disable pagination.
    */
   maxLimit?: number
-  /** Maximum nesting depth for WHERE clause children. Defaults to 3. */
+  /** Maximum nesting depth for WHERE clause children. Defaults to 4. */
   maxFilterDepth?: number
+  /**
+   * Lifecycle hooks for this resource. Halifax calls these before and after every CRUD
+   * operation, letting you inject custom logic — validation, auditing, event emission,
+   * data transformation — without writing a custom repository or HTTP middleware.
+   *
+   * See {@link CrudHooks} for the full list of available hooks and their signatures.
+   */
+  hooks?: CrudHooks<TRecord, TCreate, TUpdate>
   /**
    * Read-through caching for this resource. When set, the router caches
    * `getOne`/`getMany`/query reads and invalidates them on any write to this resource.

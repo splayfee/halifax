@@ -12,6 +12,7 @@ export default tseslint.config(
       'dist/**',
       'coverage/**',
       'node_modules/**',
+      'packages/types/**',
       'examples/**',
       'eslint.config.mjs',
       'prettier.config.mjs',
@@ -34,7 +35,12 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off'
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_'
+      }]
     }
   }
 )

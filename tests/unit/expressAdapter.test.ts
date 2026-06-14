@@ -1172,6 +1172,48 @@ describe('createExpressCrudRouter — requiredPermissions enforcement', () => {
   })
 })
 
+describe('createExpressCrudRouter — OpenAPI routes', () => {
+  function createOpenApiApp() {
+    const app = express()
+    app.use(express.json())
+    const resource: ResourceDefinition = {
+      name: 'User',
+      routePrefix: 'users',
+      fields: [{ name: 'id' }, { name: 'email', writable: true }],
+      repository: makeUserRepo()
+    }
+    app.use(
+      '/api',
+      createExpressCrudRouter([resource], {
+        authStrategy: new ApiKeyAuthStrategy('secret'),
+        openapi: { enabled: true, specPath: '/openapi.json', docsPath: '/docs', title: 'Test API' }
+      })
+    )
+    return app
+  }
+
+  it('GET /openapi.json returns 200 with JSON content-type', async () => {
+    const res = await request(createOpenApiApp()).get('/api/openapi.json')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/application\/json/)
+    expect(res.body.openapi).toMatch(/^3\./)
+  })
+
+  it('GET /docs returns 200 with HTML content-type', async () => {
+    const res = await request(createOpenApiApp()).get('/api/docs')
+    expect(res.status).toBe(200)
+    expect(res.headers['content-type']).toMatch(/text\/html/)
+    expect(res.text).toContain('<html')
+  })
+
+  it('GET /openapi.json includes paths for the resource', async () => {
+    const res = await request(createOpenApiApp()).get('/api/openapi.json')
+    expect(res.status).toBe(200)
+    expect(res.body.paths).toHaveProperty('/users')
+    expect(res.body.paths).toHaveProperty('/users/{id}')
+  })
+})
+
 describe('ExpressHttpServer', () => {
   it('start() resolves immediately on a Router (no listen)', async () => {
     const router = express.Router()

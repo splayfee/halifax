@@ -5,7 +5,7 @@ import { createExpressCrudRouter } from '@/adapters/http/ExpressAdapter.js'
 import type { AuthContext, AuthStrategy } from '@/auth/AuthStrategy.js'
 import type { AuthorizeParams } from '@/auth/AuthStrategy.js'
 import type { HttpRequest } from '@/core/types.js'
-import type { ListResult, Repository, ResourceDefinition } from '@/core/types.js'
+import type { FieldDefinition, ListResult, Repository, ResourceDefinition } from '@/core/types.js'
 
 type Article = { id: number; title: string; draft: boolean; internalNotes: string }
 
@@ -75,7 +75,7 @@ class HeaderRoleStrategy implements AuthStrategy {
   }
 }
 
-const RESOURCE_FIELDS: ResourceDefinition['fields'] = [
+const RESOURCE_FIELDS: FieldDefinition[] = [
   { name: 'id', writable: false },
   { name: 'title' },
   { name: 'draft', writeRoles: ['editor', 'admin'] },

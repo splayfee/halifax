@@ -395,7 +395,6 @@ describe('generateOpenApiSpec — relations', () => {
 describe('generateOpenApiSpec — mergeFields', () => {
   it('inherits fields from repository.fields', () => {
     const spec = generateOpenApiSpec([makeResource({
-      fields: undefined,
       repository: {
         fields: [{ name: 'id', writable: false }, { name: 'title' }],
         async getOne() { return null },

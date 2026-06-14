@@ -42,7 +42,7 @@ function makeUERequest(overrides = {}) {
 
 function makeUEResponse() {
   const res = {
-    status: vi.fn<(code: number) => typeof res>().mockReturnThis(),
+    status: vi.fn().mockReturnThis(),
     json: vi.fn(),
     send: vi.fn(),
     setHeader: vi.fn()
@@ -135,10 +135,10 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
     capturedRes!.json({ error: true })
     expect(ueRes.json).toHaveBeenCalledWith({ error: true })
 
-    capturedRes!.send('ok')
+    capturedRes!.send!('ok')
     expect(ueRes.send).toHaveBeenCalledWith('ok')
 
-    capturedRes!.setHeader('X-Foo', 'bar')
+    capturedRes!.setHeader!('X-Foo', 'bar')
     expect(ueRes.setHeader).toHaveBeenCalledWith('X-Foo', 'bar')
 
     expect(capturedRes!.raw).toBe(ueRes)
