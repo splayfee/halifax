@@ -24,6 +24,9 @@ pnpm-debug.log*
 .scannerwork
 .java-version
 
+# Claude Code agent worktrees and session state
+.claude/
+
 # System Files
 node_modules
 .DS_Store
