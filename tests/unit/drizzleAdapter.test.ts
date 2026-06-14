@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { integer, sqliteTable, text, real } from 'drizzle-orm/sqlite-core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DrizzleAdapter } from '@/adapters/orm/drizzle/DrizzleAdapter.js'
+import { SqlOrder } from '@edium/halifax-types'
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -325,7 +326,7 @@ describe('DrizzleAdapter — CRUD operations', () => {
 
     it('applies orderBy and pagination', async () => {
       const result = await adapter.executeQuery({
-        orderBy: [{ field: 'price', order: 'DESC' }],
+        orderBy: [{ field: 'price', order: SqlOrder.DESC }],
         limit: 2,
         offset: 0
       })

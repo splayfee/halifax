@@ -125,6 +125,44 @@ export const authStrategy = new PassportJwtStrategy({
 })
 ```
 
+## Per-Field Role-Based Access Control
+
+`FieldDefinition` supports two optional arrays for column-level visibility:
+
+```ts
+const postResource: ResourceDefinition = {
+  routePrefix: 'posts',
+  repository: new PrismaAdapter({ delegate: prisma.post }),
+  fields: [
+    { name: 'id' },
+    { name: 'title' },
+    { name: 'content' },
+    // Only users with role 'editor' or 'admin' can read or write the `status` field.
+    { name: 'status',     readRoles: ['editor', 'admin'], writeRoles: ['editor', 'admin'] },
+    // Any authenticated user can read `authorId`, but only admins can set it.
+    { name: 'authorId',   writeRoles: ['admin'] },
+    // `internalNote` is invisible to everyone except admins.
+    { name: 'internalNote', readRoles: ['admin'], writeRoles: ['admin'] },
+  ]
+}
+```
+
+### `readRoles`
+
+When a field has `readRoles`, it is **stripped from every response** for any caller whose `auth.roles` and `auth.permissions` contain none of the listed values. This applies uniformly across `getOne`, `getMany`, `query`, and the records returned by `createOne`, `updateOne`, and `upsertOne` — no extra configuration per operation. The field is never sent to the database `SELECT`; it is removed at the response boundary after the auth context is resolved.
+
+### `writeRoles`
+
+When a field has `writeRoles`, callers without a matching role have the field **silently dropped** from write bodies before the repository sees them. The effect is identical to `writable: false` for that caller. Callers with a matching role can write the field normally.
+
+### Role matching
+
+Both `readRoles` and `writeRoles` are matched against both `auth.roles` and `auth.permissions` — a caller needs at least one match in either array. This is consistent with how `requiredPermissions` works.
+
+### Primary key note
+
+The primary key is protected by `writable: false` by default regardless of `writeRoles`. Setting `writeRoles` on the primary key has no additional effect.
+
 ## Per-Action Permission Requirements
 
 `requiredPermissions` on a resource maps each CRUD action to a list of roles or permission strings. The authenticated user must possess at least one entry from the list (matched against both `auth.roles` and `auth.permissions`).

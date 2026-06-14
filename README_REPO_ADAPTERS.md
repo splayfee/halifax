@@ -245,6 +245,83 @@ The integration suite runs unchanged against **all six** engines in CI — Postg
 
 **MongoDB note.** MongoDB is absent from the table above because **Prisma 7 dropped its MongoDB connector** (it's "coming soon" in v7) — and the table/CI matrix target Prisma 7. MongoDB still works **on Prisma 6**, which Halifax also supports (see the Prisma 6 section above) — Mongo keys are 24-character `ObjectId` strings (`@id @default(auto()) @map("_id") @db.ObjectId`), and Halifax's `:id` route validation already accepts integers, UUIDs, **and** ObjectIds, so id-based routes work on Mongo out of the box. The forward-ready `schema.mongodb.prisma` and an ObjectId-aware integration suite rejoin the CI matrix unchanged the moment Prisma 7 supports MongoDB again.
 
+## Drizzle ORM Adapter
+
+`DrizzleAdapter` implements the full `Repository` interface against any Drizzle-compatible database. It lives behind a sub-path export so `drizzle-orm` is never a hard dependency when unused:
+
+```bash
+pnpm add drizzle-orm
+```
+
+```ts
+import { DrizzleAdapter } from '@edium/halifax/drizzle'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+import { usersTable } from './schema'
+
+const db = drizzle(postgres(process.env.DATABASE_URL!))
+
+const usersResource: ResourceDefinition = {
+  routePrefix: 'users',
+  repository: new DrizzleAdapter(db, usersTable)
+  // No `fields` needed — derived automatically from the table schema.
+}
+```
+
+### Supported databases
+
+`DrizzleAdapter` works with any driver Drizzle supports. The commonly used ones:
+
+| Database      | Drizzle driver import               |
+|---------------|-------------------------------------|
+| PostgreSQL    | `drizzle-orm/postgres-js`           |
+| MySQL         | `drizzle-orm/mysql2`                |
+| SQLite        | `drizzle-orm/better-sqlite3`        |
+| LibSQL / Turso | `drizzle-orm/libsql`               |
+
+### Type introspection
+
+`DrizzleAdapter` calls `getTableColumns()` on your table and derives the Halifax field schema automatically — types, primary key, and `writable` flags are all inferred. For OpenAPI generation, Drizzle column types are mapped to their OpenAPI equivalents:
+
+| Drizzle `dataType` | OpenAPI type | Format |
+|--------------------|--------------|--------|
+| `string`           | `string`     | —      |
+| `number`           | `number`     | —      |
+| `boolean`          | `boolean`    | —      |
+| `bigint`           | `integer`    | `int64` |
+| `date`             | `string`     | `date-time` |
+| `json`             | `object`     | —      |
+| `buffer`           | `string`     | `binary` |
+
+### Constructor options
+
+```ts
+new DrizzleAdapter(db, table, config?, scope?)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `db` | Drizzle DB instance | Any Drizzle-compatible database connection. |
+| `table` | Drizzle `Table` | Your table schema (e.g. `usersTable`). |
+| `config.idField` | `string` (optional) | Primary key field name. Defaults to auto-detecting the first column marked `.primaryKey()`. Set explicitly for composite PKs or non-standard names. |
+| `scope` | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly. |
+
+### Multi-tenancy
+
+`DrizzleAdapter` supports per-resource tenant scoping via `withScope()` exactly like `PrismaAdapter`. See [README_MULTITENANCY.md](./README_MULTITENANCY.md) for how to configure it on the resource.
+
+### Static field derivation
+
+You can derive the field schema without constructing a full adapter instance:
+
+```ts
+import { DrizzleAdapter } from '@edium/halifax/drizzle'
+import { usersTable } from './schema'
+
+const fields = DrizzleAdapter.fieldsFromTable(usersTable)
+// Use as the `fields` array in a ResourceDefinition, or inspect for overrides.
+```
+
 ## Targeting database Views
 
 A database **view is just a model** to Halifax. Prisma exposes a `view` block as a delegate with the same read API as a model (`prisma.activeUsers.findMany()`), so you point a resource's repository at it and disable writes:
