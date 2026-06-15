@@ -41,6 +41,21 @@ function isDuplicateError(error: unknown): boolean {
   )
 }
 
+/**
+ * Returns true for SQL Server's "IDENTITY_INSERT is set to OFF" error (code 544).
+ * MSSQL IDENTITY columns reject any explicit-value INSERT via the driver adapter rather
+ * than surfacing a P2002 duplicate — so this must be caught separately.
+ */
+function isIdentityInsertError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const cause = (error as Record<string, unknown>).cause
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    (cause as Record<string, unknown>).code === 544
+  )
+}
+
 function prismaTypeToOpenApi(prismaType?: string): { type?: FieldType; format?: string } {
   switch (prismaType) {
     case 'Int':
@@ -444,6 +459,11 @@ export class PrismaAdapter<
               })) as TRecord
             } catch (error) {
               if (isDuplicateError(error)) throw new ConflictError()
+              if (isIdentityInsertError(error)) {
+                const anyMatch = await this.delegate.findFirst!({ where: { [this.idField]: id } })
+                if (anyMatch) throw new ConflictError()
+                return (await this.delegate.create({ data: this.stampTenant(data as TCreate) })) as TRecord
+              }
               throw error
             }
           }
@@ -471,6 +491,14 @@ export class PrismaAdapter<
         })) as TRecord
       } catch (error) {
         if (isDuplicateError(error)) throw new ConflictError()
+        if (isIdentityInsertError(error)) {
+          // MSSQL IDENTITY columns reject any explicit-ID insert. Probe to distinguish a
+          // cross-tenant ID collision (another tenant owns this ID → ConflictError) from a
+          // genuinely new row (let the DB assign the ID instead).
+          const anyMatch = await this.delegate.findFirst!({ where: { [this.idField]: id } })
+          if (anyMatch) throw new ConflictError()
+          return (await this.delegate.create({ data: this.stampTenant(data as TCreate) })) as TRecord
+        }
         throw error
       }
     }
