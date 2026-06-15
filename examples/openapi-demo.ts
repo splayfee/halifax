@@ -19,45 +19,52 @@ import {
 function makeRepo(fields: FieldDefinition[]): Repository {
   const store: Record<string, unknown>[] = []
   let nextId = 1
-  return {
+
+  async function getOne(id: string | number) {
+    return store.find((r) => (r as any).id == id) ?? null
+  }
+
+  async function createOne(data: unknown) {
+    const r = { id: nextId++, ...(data as object) }
+    store.push(r)
+    return r
+  }
+
+  async function updateOne(id: string | number, data: unknown) {
+    const r = store.find((r) => (r as any).id == id)
+    if (!r) return null
+    Object.assign(r, data)
+    return r
+  }
+
+  const repo: Repository = {
     fields,
     idField: 'id',
     capabilities: { supportsIncludes: false, supportsCreateManyReturn: true },
-    async getOne(id) {
-      return store.find((r) => (r as any).id == id) ?? null
-    },
+    getOne,
     async getMany(): Promise<ListResult<unknown>> {
       return { count: store.length, results: store }
     },
-    async createOne(data) {
-      const r = { id: nextId++, ...(data as object) }
-      store.push(r)
-      return r
-    },
+    createOne,
     async createMany(data) {
-      return Promise.all(data.map((d) => this.createOne!(d)))
+      return Promise.all(data.map((d) => createOne(d)))
     },
-    async updateOne(id, data) {
-      const r = store.find((r) => (r as any).id == id)
-      if (!r) return null
-      Object.assign(r, data)
-      return r
-    },
+    updateOne,
     async updateMany() {
       return { updated: [], results: [] }
     },
     async upsertOne(id, data) {
-      const existing = await this.getOne!(id)
-      if (existing) return this.updateOne!(id, data)
+      const existing = await getOne(id)
+      if (existing) return updateOne(id, data)
       const r = { id, ...(data as object) }
       store.push(r)
       return r
     },
     async deleteOne(id) {
       const idx = store.findIndex((r) => (r as any).id == id)
-      if (idx < 0) return null
-      const [removed] = store.splice(idx, 1)
-      return removed ?? null
+      if (idx < 0) return false
+      store.splice(idx, 1)
+      return true
     },
     async deleteMany() {
       return { deleted: [] }
@@ -65,7 +72,8 @@ function makeRepo(fields: FieldDefinition[]): Repository {
     async executeQuery() {
       return { count: store.length, results: store }
     }
-  } as Repository
+  }
+  return repo
 }
 
 // ─── Resource definitions ──────────────────────────────────────────────────────
