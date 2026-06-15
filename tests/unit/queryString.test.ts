@@ -182,4 +182,40 @@ describe('parseListOptions — where clause construction', () => {
   it('throws 422 for an unknown query-string property', () => {
     expect(() => parseListOptions({ bogus: 'x' }, resource)).toThrow(UnprocessableEntityError)
   })
+
+  it('treats an array filter value as multi-value { in: [...] } clause (line 104)', () => {
+    // queryString.ts line 104: Array.isArray(value) ? value : String(value).split(',')
+    // Express delivers repeated ?id=1&id=2 as an array
+    const opts = parseListOptions({ id: ['1', '2'] as unknown as string }, resource)
+    expect(opts.where).toEqual({ id: { in: ['1', '2'] } })
+  })
+
+  it('handles a resource with no fields defined (fields ?? [] fallback, line 100)', () => {
+    // queryString.ts line 100: (resource.fields ?? []).map(...)
+    // When fields is undefined, fieldNames is empty so every key throws 422
+    const noFieldsResource = { ...resource, fields: undefined as never }
+    expect(() => parseListOptions({ id: '1' }, noFieldsResource)).toThrow(UnprocessableEntityError)
+  })
+})
+
+describe('parseListOptions — array-valued query params', () => {
+  it('uses the first element of an array limit (line 27)', () => {
+    // queryString.ts line 27: Array.isArray(value) ? value[0] : value inside parseInteger
+    const opts = parseListOptions({ limit: ['10', '99'] as unknown as string }, resource)
+    expect(opts.limit).toBe(10)
+  })
+
+  it('joins an array fields value with commas (line 40)', () => {
+    // queryString.ts line 40: Array.isArray(value) ? value.join(',') : value inside parseCsv
+    const opts = parseListOptions({ fields: ['id', 'title'] as unknown as string }, resource)
+    expect(opts.fields).toEqual(['id', 'title'])
+  })
+
+  it('joins an array order value with commas (line 40)', () => {
+    const opts = parseListOptions({ order: ['-id', 'title'] as unknown as string }, resource)
+    expect(opts.orderBy).toEqual([
+      { field: 'id', direction: 'desc' },
+      { field: 'title', direction: 'asc' }
+    ])
+  })
 })

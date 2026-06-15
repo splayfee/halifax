@@ -14,6 +14,6 @@ export default defineConfig({
     globalSetup: ['tests/integration/globalSetup.ts'],
     testTimeout: 30_000,
     fileParallelism: false,
-    reporter: 'verbose'
+    reporters: ['verbose']
   }
 })

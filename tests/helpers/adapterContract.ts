@@ -149,14 +149,16 @@ export function runAdapterContract(
     it('GET list returns count and results', async () => {
       const res = await key(agent().get('/api/v1/users'))
       expect(res.status).toBe(200)
-      expect(res.body.count).toBe(2)
-      expect(res.body.results).toHaveLength(2)
+      const listBody = res.body as { count: number; results: unknown[] }
+      expect(listBody.count).toBe(2)
+      expect(listBody.results).toHaveLength(2)
     })
 
     it('GET /:id returns the record', async () => {
       const res = await key(agent().get('/api/v1/users/1'))
       expect(res.status).toBe(200)
-      expect(res.body.email).toBe('one@example.com')
+      const recordBody = res.body as { email: string }
+      expect(recordBody.email).toBe('one@example.com')
     })
 
     it('GET /:id returns 404 for a missing id', async () => {
@@ -166,7 +168,8 @@ export function runAdapterContract(
     it('GET /:id returns 400 for a non-integer id', async () => {
       const res = await key(agent().get('/api/v1/users/abc'))
       expect(res.status).toBe(400)
-      expect(res.body.errors[0].code).toBe('BAD_REQUEST')
+      const errBody = res.body as { errors: Array<{ code: string }> }
+      expect(errBody.errors[0].code).toBe('BAD_REQUEST')
     })
 
     it('POST creates a single record (201) and strips non-writable fields', async () => {
@@ -175,8 +178,9 @@ export function runAdapterContract(
         role: 'superadmin'
       })
       expect(res.status).toBe(201)
-      expect(res.body.email).toBe('new@example.com')
-      expect(res.body.role).not.toBe('superadmin')
+      const postBody = res.body as { email: string; role: string }
+      expect(postBody.email).toBe('new@example.com')
+      expect(postBody.role).not.toBe('superadmin')
     })
 
     it('POST creates multiple records (201) when given an array', async () => {
@@ -190,13 +194,15 @@ export function runAdapterContract(
     it('POST returns 422 for an unknown field', async () => {
       const res = await key(agent().post('/api/v1/users')).send({ email: 'x@x.com', bogus: 1 })
       expect(res.status).toBe(422)
-      expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
+      const errBody422 = res.body as { errors: Array<{ code: string }> }
+      expect(errBody422.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
     })
 
     it('PATCH /:id updates a record (200)', async () => {
       const res = await key(agent().patch('/api/v1/users/1')).send({ email: 'updated@example.com' })
       expect(res.status).toBe(200)
-      expect(res.body.email).toBe('updated@example.com')
+      const patchBody = res.body as { email: string }
+      expect(patchBody.email).toBe('updated@example.com')
     })
 
     it('PATCH /:id returns 404 for a missing id', async () => {
@@ -207,13 +213,15 @@ export function runAdapterContract(
     it('PUT /:id upserts a record (200)', async () => {
       const res = await key(agent().put('/api/v1/users/8001')).send({ email: 'upserted@x.com' })
       expect(res.status).toBe(200)
-      expect(res.body.email).toBe('upserted@x.com')
+      const putBody = res.body as { email: string }
+      expect(putBody.email).toBe('upserted@x.com')
     })
 
     it('DELETE /:id removes a record (200)', async () => {
       const res = await key(agent().delete('/api/v1/users/2'))
       expect(res.status).toBe(200)
-      expect(res.body.deleted).toBe(true)
+      const deleteBody = res.body as { deleted: boolean }
+      expect(deleteBody.deleted).toBe(true)
     })
 
     it('DELETE /:id returns 404 for a missing id', async () => {
@@ -225,7 +233,8 @@ export function runAdapterContract(
       expect(res.status).toBe(405)
       expect(res.headers['allow']).toContain('GET')
       expect(res.headers['allow']).toContain('POST')
-      expect(res.body.errors[0].code).toBe('METHOD_NOT_ALLOWED')
+      const err405Body = res.body as { errors: Array<{ code: string }> }
+      expect(err405Body.errors[0].code).toBe('METHOD_NOT_ALLOWED')
     })
 
     it('returns 405 with an Allow header for an unsupported method on the id path', async () => {
@@ -245,14 +254,16 @@ export function runAdapterContract(
         .set('Content-Type', 'text/plain')
         .send('not json')
       expect(res.status).toBe(415)
-      expect(res.body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE')
+      const err415Body = res.body as { errors: Array<{ code: string }> }
+      expect(err415Body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE')
     })
 
     it('error bodies have the { errors: [{ code, message }] } shape', async () => {
       const res = await key(agent().get('/api/v1/users/abc'))
-      expect(Array.isArray(res.body.errors)).toBe(true)
-      expect(typeof res.body.errors[0].code).toBe('string')
-      expect(typeof res.body.errors[0].message).toBe('string')
+      const errShapeBody = res.body as { errors: Array<{ code: string; message: string }> }
+      expect(Array.isArray(errShapeBody.errors)).toBe(true)
+      expect(typeof errShapeBody.errors[0].code).toBe('string')
+      expect(typeof errShapeBody.errors[0].message).toBe('string')
     })
 
     it('echoes X-Correlation-ID on success', async () => {
@@ -280,7 +291,8 @@ export function runAdapterContract(
         where: [{ field: 'bogus', comparison: '=', value1: 1 }]
       })
       expect(res.status).toBe(422)
-      expect(res.body.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
+      const qbErrBody = res.body as { errors: Array<{ code: string }> }
+      expect(qbErrBody.errors[0].code).toBe('UNPROCESSABLE_ENTITY')
     })
   })
 }

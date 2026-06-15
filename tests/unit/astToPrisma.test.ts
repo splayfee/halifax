@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { astToPrismaWhere, astToPrismaOrderBy } from '@/adapters/orm/prisma/astToPrisma.js'
-import { SqlComparison } from '@/enums/SqlComparison.js'
-import type { IQueryFilter } from '@/interfaces/IQueryFilter.js'
+import { SqlComparison } from '@edium/halifax-types'
+import type { IQueryFilter } from '@edium/halifax-types'
 
 describe('astToPrismaWhere — comparison mapping', () => {
   const one = (f: Partial<IQueryFilter>): unknown =>

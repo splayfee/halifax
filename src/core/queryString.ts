@@ -1,4 +1,4 @@
-import { SqlOrder } from '@/enums/SqlOrder.js'
+import { SqlOrder } from '@edium/halifax-types'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import {
   DEFAULT_PAGE_LIMIT,

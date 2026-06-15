@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/prisma/index.js'
 import { toRoutePrefix } from '@/adapters/orm/prisma/helpers.js'
 import type { ModelSchema } from '@/core/types.js'
-import { SqlComparison } from '@/enums/SqlComparison.js'
+import { SqlComparison } from '@edium/halifax-types'
 
 type Row = { id: number; email: string }
 
@@ -419,6 +419,115 @@ describe('toRoutePrefix', () => {
   })
 })
 
+describe('PrismaAdapter — scoped getOne', () => {
+  it('uses findFirst with scoped where when scoped', async () => {
+    const delegate = makeDelegate()
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    const result = await a.getOne(1)
+    expect(delegate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: 1, tenantId: 'tenant-a' }) })
+    )
+    expect(result).toMatchObject({ id: 1 })
+  })
+
+  it('throws ServerError when scoped and findFirst is absent', async () => {
+    const delegate = makeDelegate()
+    delete (delegate as Record<string, unknown>).findFirst
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await expect(a.getOne(1)).rejects.toMatchObject({ status: 500 })
+  })
+})
+
+describe('PrismaAdapter — scoped updateOne', () => {
+  it('returns null when owned record is not in scope', async () => {
+    const delegate = makeDelegate({ findFirst: vi.fn().mockResolvedValue(null) })
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    const result = await a.updateOne(1, { email: 'x@t.com' })
+    expect(result).toBeNull()
+    expect(delegate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 1, tenantId: 'tenant-a' })
+      })
+    )
+    expect(delegate.update).not.toHaveBeenCalled()
+  })
+
+  it('throws ServerError when scoped but no findFirst', async () => {
+    const delegate = makeDelegate()
+    delete (delegate as Record<string, unknown>).findFirst
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await expect(a.updateOne(1, { email: 'x@t.com' })).rejects.toMatchObject({ status: 500 })
+  })
+})
+
+describe('PrismaAdapter — scoped upsertOne', () => {
+  it('throws ServerError when scoped but no findFirst', async () => {
+    const delegate = makeDelegate()
+    delete (delegate as Record<string, unknown>).findFirst
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await expect(a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })).rejects.toMatchObject({ status: 500 })
+  })
+
+  it('throws NotFoundError when existing row belongs to different tenant', async () => {
+    const delegate = makeDelegate({
+      findFirst: vi.fn().mockResolvedValue({ id: 1, email: 'a@t.com', tenantId: 'other-tenant' })
+    })
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await expect(a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('stamps tenant on create and strips it on update when scoped', async () => {
+    const delegate = makeDelegate({
+      findFirst: vi.fn().mockResolvedValue(null)
+    })
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })
+    expect(delegate.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        create: expect.objectContaining({ tenantId: 'tenant-a', email: 'x@t.com' }),
+        update: expect.not.objectContaining({ tenantId: expect.anything() })
+      })
+    )
+  })
+})
+
+describe('PrismaAdapter — scoped deleteOne', () => {
+  it('uses deleteMany for scoped delete when deleteMany is available', async () => {
+    const delegate = makeDelegate({ deleteMany: vi.fn().mockResolvedValue({ count: 1 }) })
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    const result = await a.deleteOne(5)
+    expect(result).toBe(true)
+    expect(delegate.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 5, tenantId: 'tenant-a' })
+      })
+    )
+  })
+
+  it('throws ServerError when scoped but no deleteMany and no findFirst', async () => {
+    const delegate = makeDelegate()
+    delete (delegate as Record<string, unknown>).deleteMany
+    delete (delegate as Record<string, unknown>).findFirst
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await expect(a.deleteOne(1)).rejects.toMatchObject({ status: 500 })
+  })
+
+  it('uses findFirst when deleteMany is absent and returns false when not owned', async () => {
+    const delegate = makeDelegate({ findFirst: vi.fn().mockResolvedValue(null) })
+    delete (delegate as Record<string, unknown>).deleteMany
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    const result = await a.deleteOne(99)
+    expect(result).toBe(false)
+    expect(delegate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 99, tenantId: 'tenant-a' })
+      })
+    )
+    expect(delegate.delete).not.toHaveBeenCalled()
+  })
+})
+
 describe('createPrismaResources', () => {
   const userModel = {
     name: 'User',
@@ -522,5 +631,66 @@ describe('createPrismaResources', () => {
       models: { User: { routePrefix: 'members' } }
     })
     expect(resources[0]!.routePrefix).toBe('members')
+  })
+})
+
+// ─── prismaTypeToOpenApi — field type mapping ─────────────────────────────────
+
+describe('prismaTypeToOpenApi — Prisma scalar types map to OpenAPI types', () => {
+  const typeModel = (fields: { name: string; type: string }[]) => ({
+    name: 'Thing',
+    dbName: 'things',
+    fields: fields.map((f) => ({ ...f, kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false }))
+  })
+
+  function fieldType(prismaType: string): string | undefined {
+    const model = typeModel([{ name: 'val', type: prismaType }])
+    const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
+    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model])
+    return resources[0]?.fields?.find((f) => f.name === 'val')?.type
+  }
+
+  function fieldFormat(prismaType: string): string | undefined {
+    const model = typeModel([{ name: 'val', type: prismaType }])
+    const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
+    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model])
+    return resources[0]?.fields?.find((f) => f.name === 'val')?.format
+  }
+
+  it('BigInt → integer int64', () => {
+    expect(fieldType('BigInt')).toBe('integer')
+    expect(fieldFormat('BigInt')).toBe('int64')
+  })
+
+  it('Float → number float', () => {
+    expect(fieldType('Float')).toBe('number')
+    expect(fieldFormat('Float')).toBe('float')
+  })
+
+  it('Decimal → number double', () => {
+    expect(fieldType('Decimal')).toBe('number')
+    expect(fieldFormat('Decimal')).toBe('double')
+  })
+
+  it('Boolean → boolean', () => {
+    expect(fieldType('Boolean')).toBe('boolean')
+  })
+
+  it('DateTime → string date-time', () => {
+    expect(fieldType('DateTime')).toBe('string')
+    expect(fieldFormat('DateTime')).toBe('date-time')
+  })
+
+  it('Json → object', () => {
+    expect(fieldType('Json')).toBe('object')
+  })
+
+  it('Bytes → string binary', () => {
+    expect(fieldType('Bytes')).toBe('string')
+    expect(fieldFormat('Bytes')).toBe('binary')
+  })
+
+  it('unknown type → no type (default case)', () => {
+    expect(fieldType('UnknownType')).toBeUndefined()
   })
 })

@@ -18,6 +18,7 @@ import {
   ApiKeyAuthStrategy,
   PrismaAdapter,
   createExpressCrudRouter,
+  type IQueryOptions,
   type ResourceDefinition
 } from '@/index.js'
 
@@ -26,22 +27,47 @@ const API_KEY = 'test-secret'
 const COMPANY_A = 100
 const COMPANY_B = 200
 
-// Prisma types come from the generated test client; `any` lets the file compile before
-// `pnpm test:integration:generate` has run. Runtime types are enforced by Prisma itself.
-type AnyPrisma = any
+// ---------------------------------------------------------------------------
+// Lightweight entity types matching the Prisma-generated Widget shape.
+// Typed here to avoid `any` while still compiling before
+// `pnpm test:integration:generate` has run.
+// ---------------------------------------------------------------------------
+
+type Widget = {
+  id: number | string
+  name: string
+  companyId: number
+}
+
+type WidgetListBody = { count: number; results: Widget[] }
+type WidgetBody = { companyId: number; name: string; id: number | string }
+
+/** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
+type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
+  widget: {
+    deleteMany(args?: unknown): Promise<{ count: number }>
+    createMany(args: { data: unknown[] }): Promise<{ count: number }>
+    create(args: { data: unknown }): Promise<Widget>
+    findUnique(args: { where: unknown }): Promise<Widget | null>
+    findMany(args?: unknown): Promise<Widget[]>
+    count(args?: unknown): Promise<number>
+    update(args: unknown): Promise<Widget>
+    delete(args: unknown): Promise<unknown>
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Suite 1: PrismaAdapter.withScope — direct (no HTTP), against a real database
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let base: PrismaAdapter
   let repoA: PrismaAdapter
   let repoB: PrismaAdapter
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
     base = new PrismaAdapter({ delegate: prisma.widget })
     repoA = base.withScope({ field: 'companyId', value: COMPANY_A })
@@ -69,7 +95,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
     const a = await repoA.getMany()
     expect(a.count).toBe(2)
-    expect((a.results as AnyPrisma[]).every((r) => r.companyId === COMPANY_A)).toBe(true)
+    expect((a.results as Widget[]).every((r) => r.companyId === COMPANY_A)).toBe(true)
 
     const b = await repoB.getMany()
     expect(b.count).toBe(1)
@@ -85,15 +111,15 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
     // Caller asks for company B while scoped to A — scope wins.
     const { count, results } = await repoA.getMany({ where: { companyId: COMPANY_B } })
     expect(count).toBe(1)
-    expect((results[0] as AnyPrisma).companyId).toBe(COMPANY_A)
+    expect((results[0] as Widget).companyId).toBe(COMPANY_A)
   })
 
   it('getOne returns the row for the owning tenant but null cross-tenant', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'owned' }
-    })) as AnyPrisma
+    })
 
-    expect(((await repoA.getOne(owned.id)) as AnyPrisma)?.name).toBe('owned')
+    expect(((await repoA.getOne(owned.id)) as Widget | null)?.name).toBe('owned')
     expect(await repoB.getOne(owned.id)).toBeNull()
   })
 
@@ -103,48 +129,51 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
     const created = (await repoA.createOne({
       name: 'stamped',
       companyId: COMPANY_B // attempt to plant into another tenant
-    } as AnyPrisma)) as AnyPrisma
+    } as Record<string, unknown>)) as Widget
 
     expect(created.companyId).toBe(COMPANY_A)
     const row = await prisma.widget.findUnique({ where: { id: created.id } })
-    expect(row.companyId).toBe(COMPANY_A)
+    expect(row?.companyId).toBe(COMPANY_A)
   })
 
   it('createMany stamps every row with the caller tenant', async () => {
-    await repoA.createMany([{ name: 'm1' }, { name: 'm2', companyId: COMPANY_B }] as AnyPrisma[])
+    await repoA.createMany([
+      { name: 'm1' },
+      { name: 'm2', companyId: COMPANY_B }
+    ] as Array<Record<string, unknown>>)
     const rows = await prisma.widget.findMany()
     expect(rows).toHaveLength(2)
-    expect(rows.every((r: AnyPrisma) => r.companyId === COMPANY_A)).toBe(true)
+    expect(rows.every((r) => r.companyId === COMPANY_A)).toBe(true)
   })
 
   it('updateOne updates an owned row and cannot move it to another tenant', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'before' }
-    })) as AnyPrisma
+    })
 
     const updated = (await repoA.updateOne(owned.id, {
       name: 'after',
       companyId: COMPANY_B // attempt to reassign tenant
-    } as AnyPrisma)) as AnyPrisma
+    } as Record<string, unknown>)) as Widget | null
 
     expect(updated?.name).toBe('after')
     expect(updated?.companyId).toBe(COMPANY_A) // tenant field stripped from the payload
   })
 
   it('updateOne returns null for a row owned by another tenant (no write)', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'before' }
-    })) as AnyPrisma
+    })
 
-    expect(await repoB.updateOne(owned.id, { name: 'hacked' } as AnyPrisma)).toBeNull()
+    expect(await repoB.updateOne(owned.id, { name: 'hacked' } as Record<string, unknown>)).toBeNull()
     const row = await prisma.widget.findUnique({ where: { id: owned.id } })
-    expect(row.name).toBe('before')
+    expect(row?.name).toBe('before')
   })
 
   it('deleteOne removes an owned row but is a no-op cross-tenant', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'x' }
-    })) as AnyPrisma
+    })
 
     expect(await repoB.deleteOne(owned.id)).toBe(false)
     expect(await prisma.widget.findUnique({ where: { id: owned.id } })).not.toBeNull()
@@ -154,17 +183,17 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
   })
 
   it('upsertOne refuses to overwrite a row owned by another tenant', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'owned' }
-    })) as AnyPrisma
+    })
 
     await expect(
-      repoB.upsertOne!(owned.id, { name: 'hijacked' } as AnyPrisma)
+      repoB.upsertOne!(owned.id, { name: 'hijacked' } as Record<string, unknown>)
     ).rejects.toMatchObject({ status: 404 })
 
     const row = await prisma.widget.findUnique({ where: { id: owned.id } })
-    expect(row.name).toBe('owned')
-    expect(row.companyId).toBe(COMPANY_A)
+    expect(row?.name).toBe('owned')
+    expect(row?.companyId).toBe(COMPANY_A)
   })
 
   it('upsertOne stamps the tenant when creating a new row', async () => {
@@ -172,7 +201,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
     const created = (await repoA.upsertOne!(missingId(), {
       name: 'fresh',
       companyId: COMPANY_B
-    } as AnyPrisma)) as AnyPrisma
+    } as Record<string, unknown>)) as Widget
     expect(created.companyId).toBe(COMPANY_A)
   })
 
@@ -188,7 +217,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
     const result = await repoA.executeQuery!({
       where: [{ field: 'name', comparison: '=', value1: 'shared' }]
-    } as AnyPrisma)
+    } satisfies IQueryOptions)
 
     expect(result.count).toBe(1)
     expect(result.results).toHaveLength(1)
@@ -210,10 +239,10 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
         { field: 'name', comparison: '=', value1: 'only-a', operator: 'OR' },
         { field: 'companyId', comparison: '=', value1: COMPANY_B }
       ]
-    } as AnyPrisma)
+    } satisfies IQueryOptions)
 
     expect(result.count).toBe(1)
-    expect((result.results as AnyPrisma[]).every((r) => r.companyId === COMPANY_A)).toBe(true)
+    expect((result.results as Widget[]).every((r) => r.companyId === COMPANY_A)).toBe(true)
   })
 
   it('updateMany only affects the caller-tenant rows', async () => {
@@ -228,8 +257,8 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
     const result = await repoA.updateMany!(
       {
         where: [{ field: 'name', comparison: '=', value1: 'old' }]
-      } as AnyPrisma,
-      { name: 'new', companyId: COMPANY_B } as AnyPrisma // tenant change attempt
+      } satisfies IQueryOptions,
+      { name: 'new', companyId: COMPANY_B } as Record<string, unknown> // tenant change attempt
     )
 
     expect(result.updated).toHaveLength(2)
@@ -249,7 +278,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
     const result = await repoA.deleteMany!({
       where: [{ field: 'name', comparison: '=', value1: 'gone' }]
-    } as AnyPrisma)
+    } satisfies IQueryOptions)
 
     expect(result.deleted).toHaveLength(1)
     expect(await prisma.widget.count()).toBe(1)
@@ -262,7 +291,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 // ---------------------------------------------------------------------------
 
 describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () => {
-  let prisma: AnyPrisma
+  let prisma: PrismaClient
   let app: ReturnType<typeof express>
 
   function buildApp(strict?: boolean) {
@@ -306,7 +335,7 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
   }
 
   beforeAll(async () => {
-    prisma = await connectIntegrationDb()
+    prisma = (await connectIntegrationDb()) as PrismaClient
     await prisma.$connect()
     app = buildApp()
   })
@@ -330,16 +359,16 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
 
     const a = await request(app).get('/api/v3/widgets').set(as(COMPANY_A))
     expect(a.status).toBe(200)
-    expect(a.body.count).toBe(1)
+    expect((a.body as WidgetListBody).count).toBe(1)
 
     const b = await request(app).get('/api/v3/widgets').set(as(COMPANY_B))
-    expect(b.body.count).toBe(2)
+    expect((b.body as WidgetListBody).count).toBe(2)
   })
 
   it('GET /:id is 404 across tenants', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'owned' }
-    })) as AnyPrisma
+    })
 
     expect((await request(app).get(`/api/v3/widgets/${owned.id}`).set(as(COMPANY_A))).status).toBe(
       200
@@ -356,15 +385,15 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
       .send({ name: 'created', companyId: COMPANY_B })
 
     expect(res.status).toBe(201)
-    expect(res.body.companyId).toBe(COMPANY_A)
+    expect((res.body as WidgetBody).companyId).toBe(COMPANY_A)
     // Not visible to company B.
-    expect((await request(app).get('/api/v3/widgets').set(as(COMPANY_B))).body.count).toBe(0)
+    expect(((await request(app).get('/api/v3/widgets').set(as(COMPANY_B))).body as WidgetListBody).count).toBe(0)
   })
 
   it('PATCH /:id cannot modify another tenant row (404)', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'before' }
-    })) as AnyPrisma
+    })
 
     const res = await request(app)
       .patch(`/api/v3/widgets/${owned.id}`)
@@ -372,13 +401,13 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
       .send({ name: 'hacked' })
 
     expect(res.status).toBe(404)
-    expect((await prisma.widget.findUnique({ where: { id: owned.id } })).name).toBe('before')
+    expect((await prisma.widget.findUnique({ where: { id: owned.id } }))?.name).toBe('before')
   })
 
   it('DELETE /:id cannot remove another tenant row (404)', async () => {
-    const owned = (await prisma.widget.create({
+    const owned = await prisma.widget.create({
       data: { companyId: COMPANY_A, name: 'x' }
-    })) as AnyPrisma
+    })
 
     expect(
       (await request(app).delete(`/api/v3/widgets/${owned.id}`).set(as(COMPANY_B))).status
@@ -400,7 +429,7 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
       .send({ where: [{ field: 'name', comparison: '=', value1: 'shared' }] })
 
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(1)
+    expect((res.body as WidgetListBody).count).toBe(1)
   })
 
   it('fails closed with 403 when no tenant can be resolved (strict default)', async () => {
@@ -419,6 +448,6 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
     })
     const res = await request(lenient).get('/api/v3/widgets').set('x-api-key', API_KEY)
     expect(res.status).toBe(200)
-    expect(res.body.count).toBe(2)
+    expect((res.body as WidgetListBody).count).toBe(2)
   })
 })

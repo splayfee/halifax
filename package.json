@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Auto-generate type-safe REST CRUD APIs from your data models. Adapter-driven: Express/Fastify/HyperExpress, Prisma (PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, SQLite), JWT/API-key auth, multi-tenancy, a dynamic query builder, and pluggable Redis caching.",
   "author": "David LaTour <david@edium.com>",
   "homepage": "https://github.com/splayfee/halifax#readme",
@@ -41,6 +41,11 @@
       "import": "./dist/adapters/http/UltimateExpressAdapter.js",
       "default": "./dist/adapters/http/UltimateExpressAdapter.js"
     },
+    "./drizzle": {
+      "types": "./dist/adapters/orm/drizzle/index.d.ts",
+      "import": "./dist/adapters/orm/drizzle/index.js",
+      "default": "./dist/adapters/orm/drizzle/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -54,6 +59,11 @@
     "README_MULTITENANCY.md",
     "README_QUERYBUILDER.md",
     "README_REPO_ADAPTERS.md",
+    "README_HOOKS.md",
+    "README_OPENAPI.md",
+    "README_TYPES.md",
+    "README_INTERFACES.md",
+    "README_CLASSES.md",
     "LICENSE"
   ],
   "publishConfig": {
@@ -61,7 +71,8 @@
   },
   "sideEffects": false,
   "scripts": {
-    "prepublishOnly": "npm run build",
+    "preinstall": "node -e \"const ua = process.env.npm_config_user_agent; if (ua && !ua.startsWith('pnpm')) { console.error('\\nERROR: This repo requires pnpm. Run: pnpm install\\n'); process.exit(1); }\"",
+    "prepublishOnly": "pnpm run build",
     "build": "rm -rf dist && tsc --build && tsc-alias",
     "dev": "tsx watch ./examples/http-express.ts",
     "lint": "eslint .",
@@ -81,6 +92,7 @@
   },
   "peerDependencies": {
     "@prisma/client": ">=6.0.0",
+    "drizzle-orm": ">=0.30.0",
     "express": "^4.17.0 || ^5.0.0",
     "fastify": ">=4.0.0",
     "hyper-express": ">=6.0.0",
@@ -88,6 +100,9 @@
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
+      "optional": true
+    },
+    "drizzle-orm": {
       "optional": true
     },
     "express": {
@@ -110,14 +125,16 @@
     "@prisma/adapter-mssql": "7.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.3",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^12.10.1",
     "dotenv-cli": "^11.0.0",
-    "eslint": "^10.4.1",
+    "drizzle-orm": "^0.45.2",
+    "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
     "express": "^5.2.1",
     "fastify": "^5.8.5",
@@ -166,6 +183,7 @@
   ],
   "packageManager": "pnpm@11.6.0",
   "dependencies": {
+    "@edium/halifax-types": "workspace:*",
     "uuid": "^14.0.0"
   }
 }

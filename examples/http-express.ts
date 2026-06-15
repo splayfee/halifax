@@ -54,9 +54,22 @@ app.use(express.json())
 app.use(
   '/api/v1',
   createExpressCrudRouter([posts], {
-    authStrategy: new ApiKeyAuthStrategy(process.env.API_KEY ?? 'dev-secret')
+    authStrategy: new ApiKeyAuthStrategy(process.env.API_KEY ?? 'dev-secret'),
+    // Enable OpenAPI docs — zero manual annotation needed for Prisma resources.
+    // Visit http://localhost:3000/api/v1/docs for Swagger UI.
+    // Visit http://localhost:3000/api/v1/openapi.json for the raw spec.
+    openapi: {
+      title: 'Halifax Example API',
+      version: '1.0.0',
+      servers: [
+        { url: `http://localhost:${process.env.PORT ?? 3000}/api/v1`, description: 'Local dev' }
+      ]
+    }
   })
 )
 
 const port = Number(process.env.PORT ?? 3000)
-app.listen(port, () => console.log(`Halifax (Express) listening on :${port}`))
+app.listen(port, () => {
+  console.log(`Halifax (Express) listening on :${port}`)
+  console.log(`  API docs → http://localhost:${port}/api/v1/docs`)
+})

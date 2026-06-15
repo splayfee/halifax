@@ -367,4 +367,62 @@ describe('createExpressCrudRouter — tenant integration', () => {
     await request(app).get('/api/v3/widgets')
     expect(delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }))
   })
+
+  it('falls through to auto-detection when resource.tenant has no field property', async () => {
+    // resource.tenant is truthy but .field is undefined → branch 3 of effectiveTenantField
+    // is NOT taken; falls through to auto-detect by matching field names.
+    // The resource has 'companyId' so auto-detection picks it up.
+    const delegate = makeDelegate()
+    const resource: ResourceDefinition = {
+      name: 'Widget',
+      routePrefix: 'widgets',
+      // tenant is truthy ({}) but .field is absent — exercises the false branch of
+      // `resource.tenant && resource.tenant.field` at crudRouter.ts line 126
+      tenant: {} as { field: string },
+      fields: [
+        { name: 'id' },
+        { name: 'companyId' },
+        { name: 'name' }
+      ],
+      repository: new PrismaAdapter<Row>({ delegate })
+    }
+
+    const app = express()
+    app.use(express.json())
+    app.use(
+      '/api/v3',
+      createExpressCrudRouter([resource], {
+        authStrategy: sessionStrategy({ id: 7 }),
+        tenant: { field: 'companyId', resolveId: () => 7 }
+      })
+    )
+
+    const res = await request(app).get('/api/v3/widgets')
+    expect(res.status).toBe(200)
+    // Auto-detection found 'companyId' so the repo is called with the tenant scope
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 7 } })
+    )
+  })
+
+  it('throws ServerError when the tenant field name contains unsafe characters', () => {
+    // Field name 'tenant-id' fails /^[a-zA-Z_][a-zA-Z0-9_]*$/ → crudRouter.ts line 254
+    const delegate = makeDelegate()
+    const resource: ResourceDefinition = {
+      name: 'Widget',
+      routePrefix: 'widgets',
+      fields: [
+        { name: 'id' },
+        { name: 'tenant-id' },
+        { name: 'name' }
+      ],
+      repository: new PrismaAdapter<Row>({ delegate })
+    }
+
+    expect(() =>
+      createExpressCrudRouter([resource], {
+        tenant: { field: 'tenant-id', resolveId: () => 7 }
+      })
+    ).toThrow(/unsafe tenant field name/)
+  })
 })

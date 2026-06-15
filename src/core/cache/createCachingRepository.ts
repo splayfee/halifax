@@ -6,7 +6,7 @@ import type {
   Repository,
   TenantScope
 } from '@/core/types.js'
-import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type { IQueryOptions } from '@edium/halifax-types'
 import type { CacheStore } from './CacheStore.js'
 
 /** Options for {@link createCachingRepository}. */

@@ -3,6 +3,68 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0]
+
+### Added
+
+- **Lifecycle hooks** — inject custom logic before or after any CRUD operation by setting
+  `hooks` on `ResourceDefinition`. All 18 hooks cover every operation the auto-CRUD engine
+  exposes:
+
+  | Category        | Hooks                                 |
+  | --------------- | ------------------------------------- |
+  | Create          | `beforeCreate`, `afterCreate`         |
+  | Read (list)     | `beforeReadMany`, `afterReadMany`     |
+  | Read (single)   | `beforeReadOne`, `afterReadOne`       |
+  | Update (single) | `beforeUpdateOne`, `afterUpdateOne`   |
+  | Update (bulk)   | `beforeUpdateMany`, `afterUpdateMany` |
+  | Upsert          | `beforeUpsertOne`, `afterUpsertOne`   |
+  | Delete (single) | `beforeDeleteOne`, `afterDeleteOne`   |
+  | Delete (bulk)   | `beforeDeleteMany`, `afterDeleteMany` |
+  | Query builder   | `beforeQuery`, `afterQuery`           |
+
+  **Before hooks** can return a modified data object (replacing the incoming payload) or
+  `void` to leave it unchanged. Throwing any `Error` aborts the operation and sends the
+  correct HTTP error response — use Halifax error classes (`AuthorizationError`,
+  `BadRequestError`, `UnprocessableEntityError`, …) for precise status codes.
+
+  **After hooks** can return a modified result (replacing what is sent to the client) or
+  `void`. They run after the database write but before response field-filtering
+  (`readRoles` / `selectable`), so they see every field the DB returned.
+
+  Every hook receives a `HookContext` as its last argument: `{ auth, resource, req }`.
+
+  Common patterns: stamping `createdBy` / `updatedBy` from auth context, emitting domain
+  events, enforcing ownership checks beyond what `AuthStrategy` provides, restricting
+  query-builder results to the caller's own data, and soft-delete read interception.
+
+  See [README_HOOKS.md](./README_HOOKS.md) for the full reference and examples.
+
+- **OpenAPI 3.1 spec generation** — pass an `openapi` object to `createExpressCrudRouter` / `registerCrudApi` and Halifax generates a complete spec from your registered resources at startup. No manual annotation needed. Routes for `GET /openapi.json` and `GET /docs` (Swagger UI) are registered automatically at your mount point.
+  - Field types are introspected from the Prisma DMMF (`PrismaAdapter`) and from Drizzle column metadata (`DrizzleAdapter`) with no extra configuration. Custom / non-ORM repositories annotate individual fields with optional `type` and `format` on `FieldDefinition`.
+  - The spec documents exactly the operations your `permissions` allow — disabled actions are omitted entirely.
+  - Query-string parameters, request/response schemas, error shapes, and envelope wrapping are all reflected accurately.
+  - Auth is wired automatically: `ApiKeyAuthStrategy`, `JwtClaimsAuthStrategy`, `PassportJwtStrategy`, `Auth0JwtStrategy`, and `FirebaseJwtStrategy` each contribute the correct security scheme; `AllowAllAuthStrategy` produces no security requirement. Override with `openApiScheme()` on a custom strategy, or pass `securityScheme` directly in `openapi` options.
+  - Gate docs behind an environment check with `enabled: process.env.NODE_ENV !== 'production'` — when `enabled` is `false` (or the `openapi` key is omitted), no routes are registered and the generator is never called.
+  - Custom spec and docs paths via `specPath` and `docsPath`.
+  - `generateOpenApiSpec(resources, options)` is exported standalone for CI validation, static hosting, or piping into code generators.
+  - See [README_OPENAPI.md](./README_OPENAPI.md) for full documentation.
+
+- **`@edium/halifax-client` companion package** — a typed browser/Node client that lives alongside this package in the same repository. Zero runtime dependencies. Bring your own HTTP client (native `fetch`, axios, ky, ofetch, or superagent — each ships a ready-made transport adapter). Features: typed CRUD methods, a fluent `QueryBuilder` that compiles to the server's query AST, and full TanStack Query integration (read query options + mutation options with auto-invalidation) built directly into `ResourceClient`. See the [client README](../halifax-client/README.md) for details.
+
+- **Drizzle ORM adapter** — `DrizzleAdapter<TRecord, TCreate, TUpdate>` implements the full `Repository` interface against any Drizzle-compatible database (PostgreSQL, MySQL, SQLite, LibSQL). Import from the `@edium/halifax/drizzle` sub-path export; `drizzle-orm` is an optional peer dependency and is never required when unused.
+  - Field schema and OpenAPI types are derived automatically via `getTableColumns()` — no `fields` array needed.
+  - All Halifax query-AST operators are compiled to native Drizzle SQL expressions (never raw strings).
+  - Multi-tenant isolation via `withScope()` and full `executeQuery()` (query-builder endpoint) support.
+  - Primary key is auto-detected from the table schema; override with `config.idField` when using composite keys or non-standard names.
+  - See [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) for usage.
+
+- **Per-field role-based access control** — `FieldDefinition` gains two optional arrays:
+  - `readRoles: string[]` — callers whose `auth.roles` or `auth.permissions` contain none of these strings have the field stripped from every response (getOne, getMany, query, and the results of create/update/upsert). Applied at the response boundary — no extra DB round-trips.
+  - `writeRoles: string[]` — callers lacking a matching role have the field silently dropped from write bodies (same effect as `writable: false` for that caller). Callers with a matching role can write the field normally.
+  - Roles are matched against both `auth.roles` and `auth.permissions` for consistency with `requiredPermissions`.
+  - See [README_AUTH.md](./README_AUTH.md) for usage.
+
 ## [2.1.0]
 
 ### Added
@@ -124,5 +186,6 @@ First public release.
 - **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action
   required permissions; and `filterable`/`sortable`/`selectable`/`writable` field flags.
 
+[2.2.0]: https://github.com/splayfee/halifax/releases/tag/v2.2.0
+[2.1.0]: https://github.com/splayfee/halifax/releases/tag/v2.1.0
 [2.0.0]: https://github.com/splayfee/halifax/releases/tag/v2.0.0
-[1.0.0]: https://github.com/splayfee/halifax/releases/tag/v1.0.0

@@ -20,6 +20,7 @@ import type {
 } from '@/core/types.js'
 
 type Row = { id: number; title: string; secret: string }
+type RowBody = { id: number; title: string; secret?: string }
 
 /** A minimal in-memory repository that can optionally advertise schema + capabilities. */
 function makeRepo(
@@ -90,7 +91,7 @@ describe('ResourceDefinition — permissive + minimal defaults (2.0.0)', () => {
 
     const res = await request(app).post('/api/rows').send({ title: 'written' })
     expect(res.status).toBe(201)
-    expect(res.body.title).toBe('written')
+    expect((res.body as RowBody).title).toBe('written')
   })
 
   it('the primary key is protected from write bodies by default', async () => {
@@ -104,7 +105,7 @@ describe('ResourceDefinition — permissive + minimal defaults (2.0.0)', () => {
     const res = await request(app).post('/api/rows').send({ id: 999, title: 'x' })
     expect(res.status).toBe(201)
     // The supplied id is ignored — the repo assigned its own.
-    expect(res.body.id).toBe(1)
+    expect((res.body as RowBody).id).toBe(1)
   })
 
   it('sources fields from the repository; resource entries are sparse overrides', async () => {
@@ -121,7 +122,7 @@ describe('ResourceDefinition — permissive + minimal defaults (2.0.0)', () => {
 
     const res = await request(app).post('/api/rows').send({ title: 't', secret: 'leak' })
     expect(res.status).toBe(201)
-    expect(res.body.title).toBe('t') // base field, writable by default
+    expect((res.body as RowBody).title).toBe('t') // base field, writable by default
     expect(repo.rows[0]!.secret).toBe('') // override stripped the non-writable field
   })
 

@@ -1,8 +1,5 @@
-import { SqlComparison } from '@/enums/SqlComparison.js'
-import { SqlOperator } from '@/enums/SqlOperator.js'
-import { SqlOrder } from '@/enums/SqlOrder.js'
-import type { IQueryFilter, QueryScalar } from '@/interfaces/IQueryFilter.js'
-import type { ISort } from '@/interfaces/ISort.js'
+import { SqlComparison, SqlOperator, SqlOrder } from '@edium/halifax-types'
+import type { IQueryFilter, QueryScalar, ISort } from '@edium/halifax-types'
 
 /** A Prisma `where` fragment — an arbitrary nested object of field conditions and AND/OR/NOT groups. */
 export type PrismaWhere = Record<string, unknown>

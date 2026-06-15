@@ -1,4 +1,13 @@
-import type { IQueryOptions } from '@/interfaces/IQueryOptions.js'
+import type {
+  IQueryOptions,
+  ListResult,
+  QueryResult,
+  UpdateManyResult,
+  DeleteManyResult
+} from '@edium/halifax-types'
+import type { CrudHooks } from '@/core/hooks.js'
+
+export type { ListResult, QueryResult, UpdateManyResult, DeleteManyResult }
 
 // ─── HTTP ─────────────────────────────────────────────────────────────────────
 
@@ -91,36 +100,6 @@ export interface ListOptions {
   orderBy?: Array<{ field: string; direction: 'asc' | 'desc' }> | undefined
   /** Relation names to eager-load. */
   include?: string[] | undefined
-}
-
-/** Paginated result envelope returned by `getMany`. */
-export interface ListResult<TRecord> {
-  /** Total number of matching records (before pagination). */
-  count: number
-  /** Records for the current page. */
-  results: TRecord[]
-}
-
-/** Result envelope returned by `deleteMany`. */
-export interface DeleteManyResult {
-  /** IDs (or records) of the deleted rows. */
-  deleted: unknown[]
-}
-
-/** Result envelope returned by `updateMany`. */
-export interface UpdateManyResult<TRecord> {
-  /** IDs of the updated rows. */
-  updated: unknown[]
-  /** Updated records, when the adapter supports returning them. */
-  results?: TRecord[]
-}
-
-/** Result envelope returned by `executeQuery`. */
-export interface QueryResult<TRecord> {
-  /** Total number of matching records (before pagination). */
-  count?: number
-  /** Records for the current page. */
-  results: TRecord[]
 }
 
 /** Options passed to `createOne` / `createMany` for idempotent writes. */
@@ -284,6 +263,8 @@ export interface ModelField {
   isReadOnly: boolean
   /** True when Prisma provides a default value (e.g. `@default(autoincrement())`). */
   hasDefault: boolean
+  /** Prisma scalar type name (e.g. `'String'`, `'Int'`, `'Boolean'`, `'DateTime'`). Used for OpenAPI type inference. */
+  type?: string
 }
 
 /** Minimal shape of a Prisma DMMF model — structurally compatible with `Prisma.DMMF.Model`. */
@@ -315,9 +296,15 @@ export interface ModelResourceOptions {
   defaultLimit?: number
   /** Hard cap on page size. Requests above this are silently capped. */
   maxLimit?: number
-  /** Maximum nesting depth for WHERE clause children (default: 3). */
+  /** Maximum nesting depth for WHERE clause children (default: 4). */
   maxFilterDepth?: number
 }
+
+/**
+ * OpenAPI-compatible scalar type for a field. Used for spec generation only — has no effect
+ * on runtime behaviour. Auto-populated by `PrismaAdapter`; set manually for custom repositories.
+ */
+export type FieldType = 'string' | 'integer' | 'number' | 'boolean' | 'object'
 
 /**
  * Describes a single column exposed through the Halifax API.
@@ -338,6 +325,24 @@ export interface FieldDefinition {
   selectable?: boolean
   /** When `false`, the field is stripped from POST/PATCH/PUT bodies. Defaults to `true` (except the primary key). */
   writable?: boolean
+  /** OpenAPI scalar type. Auto-populated from Prisma DMMF; set manually for non-Prisma fields. Defaults to `'string'`. */
+  type?: FieldType
+  /** OpenAPI format modifier (e.g. `'date-time'`, `'int64'`, `'binary'`). Auto-populated from Prisma DMMF. */
+  format?: string
+  /**
+   * Roles or permissions required to **read** this field. Any single match grants access.
+   * When absent or empty, any authenticated caller can read the field (no restriction).
+   * Values are matched against `AuthContext.roles` and `AuthContext.permissions`.
+   */
+  readRoles?: string[]
+  /**
+   * Roles or permissions required to **write** this field. Any single match grants access.
+   * Fields the caller cannot write are silently dropped from POST/PATCH/PUT bodies
+   * (consistent with how `writable: false` behaves). When absent or empty, any caller
+   * with general write access can write this field.
+   * Values are matched against `AuthContext.roles` and `AuthContext.permissions`.
+   */
+  writeRoles?: string[]
 }
 
 /**
@@ -417,8 +422,16 @@ export interface ResourceDefinition<
    * the cap entirely — combine `defaultLimit: 0` and `maxLimit: 0` to disable pagination.
    */
   maxLimit?: number
-  /** Maximum nesting depth for WHERE clause children. Defaults to 3. */
+  /** Maximum nesting depth for WHERE clause children. Defaults to 4. */
   maxFilterDepth?: number
+  /**
+   * Lifecycle hooks for this resource. Halifax calls these before and after every CRUD
+   * operation, letting you inject custom logic — validation, auditing, event emission,
+   * data transformation — without writing a custom repository or HTTP middleware.
+   *
+   * See {@link CrudHooks} for the full list of available hooks and their signatures.
+   */
+  hooks?: CrudHooks<TRecord, TCreate, TUpdate>
   /**
    * Read-through caching for this resource. When set, the router caches
    * `getOne`/`getMany`/query reads and invalidates them on any write to this resource.

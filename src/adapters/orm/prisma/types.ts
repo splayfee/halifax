@@ -11,17 +11,17 @@ import type {
  * and properties, but these are the ones that the adapter will use.
  */
 export interface PrismaDelegate {
-  findUnique?(args: any): Promise<any>
-  findFirst?(args: any): Promise<any>
-  findMany(args?: any): Promise<any[]>
-  count(args?: any): Promise<number>
-  create(args: any): Promise<any>
-  createMany?(args: any): Promise<{ count: number }>
-  update(args: any): Promise<any>
-  updateMany?(args: any): Promise<{ count: number }>
-  upsert?(args: any): Promise<any>
-  delete(args: any): Promise<any>
-  deleteMany?(args: any): Promise<{ count: number }>
+  findUnique?(args: unknown): Promise<unknown>
+  findFirst?(args: unknown): Promise<unknown>
+  findMany(args?: unknown): Promise<unknown[]>
+  count(args?: unknown): Promise<number>
+  create(args: unknown): Promise<unknown>
+  createMany?(args: unknown): Promise<{ count: number }>
+  update(args: unknown): Promise<unknown>
+  updateMany?(args: unknown): Promise<{ count: number }>
+  upsert?(args: unknown): Promise<unknown>
+  delete(args: unknown): Promise<unknown>
+  deleteMany?(args: unknown): Promise<{ count: number }>
 }
 
 /** Construction options for {@link PrismaAdapter}. */

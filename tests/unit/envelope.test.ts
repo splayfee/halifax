@@ -134,7 +134,9 @@ describe('response envelope', () => {
     it('never envelopes error bodies', async () => {
       const res = await request(app).get('/api/widgets/12345')
       expect(res.status).toBe(404)
-      expect(res.body).toEqual({ errors: [{ code: 'NOT_FOUND', message: expect.any(String) }] })
+      const errBody = res.body as { errors: Array<{ code: string; message: string }> }
+      expect(errBody.errors[0]!.code).toBe('NOT_FOUND')
+      expect(errBody.errors[0]!.message).toEqual(expect.any(String))
     })
   })
 

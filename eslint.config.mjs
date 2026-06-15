@@ -12,11 +12,13 @@ export default tseslint.config(
       'dist/**',
       'coverage/**',
       'node_modules/**',
+      'packages/types/**',
       'examples/**',
       'eslint.config.mjs',
       'prettier.config.mjs',
       'prisma.config.ts',
-      'tests/integration/prisma/**'
+      'tests/integration/prisma/**',
+      '.claude/**'
     ]
   },
   {
@@ -30,7 +32,24 @@ export default tseslint.config(
       }
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ]
+    }
+  },
+  {
+    files: ['tests/**'],
+    rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',

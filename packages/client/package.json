@@ -1,0 +1,79 @@
+{
+  "name": "@edium/halifax-client",
+  "version": "2.2.0",
+  "description": "Browser AST client for the halifax autocrud API.",
+  "author": "David LaTour <david@edium.com>",
+  "homepage": "https://github.com/splayfee/halifax-client#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/splayfee/halifax-client.git"
+  },
+  "bugs": {
+    "url": "https://github.com/splayfee/halifax-client/issues"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "preinstall": "node -e \"const ua = process.env.npm_config_user_agent; if (ua && !ua.startsWith('pnpm')) { console.error('\\nERROR: This repo requires pnpm. Run: pnpm install\\n'); process.exit(1); }\"",
+    "prepublishOnly": "pnpm run build",
+    "build": "rm -rf dist && tsc --build && tsc-alias",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prettier": "prettier --check .",
+    "prettier:fix": "prettier --write .",
+    "test:unit": "vitest run tests/unit",
+    "test:unit:coverage": "vitest run --coverage tests/unit",
+    "type-check": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@edium/halifax-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.3",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.4",
+    "tsc-alias": "^1.8.17",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.0",
+    "vitest": "^4.1.8"
+  },
+  "keywords": [
+    "ast",
+    "browser",
+    "client",
+    "crud",
+    "halifax",
+    "query-builder",
+    "rest",
+    "typescript"
+  ],
+  "packageManager": "pnpm@11.6.0"
+}

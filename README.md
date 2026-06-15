@@ -14,21 +14,25 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🚀 **Zero-boilerplate CRUD** — define a resource once and get standards-compliant REST endpoints (list, read, create, update, upsert, delete, bulk) with correct status codes and a consistent error shape.
 - 🧩 **Adapter-driven & swappable** — your HTTP framework, ORM/database, and auth provider are injected, not baked in. Switch any layer without touching your resource definitions.
 - 🌐 **4 HTTP frameworks, identical behavior** — Express 4/5, Fastify, HyperExpress, and Ultimate Express, all verified against one shared conformance suite.
-- 🗄️ **Six databases, one adapter** — PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, and SQLite via [Prisma](https://www.prisma.io/). The query builder compiles to portable Prisma calls (never raw SQL), so the **same client request behaves identically on every database** — switch engines by changing one line. Every engine is verified in CI against a real database — one matrix leg each, the same suite on all.
+- 🗄️ **Two ORM adapters, six databases** — `PrismaAdapter` covers PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, and SQLite; `DrizzleAdapter` (sub-path `@edium/halifax/drizzle`) covers PostgreSQL, MySQL, SQLite, and LibSQL. Both compile to ORM calls (never raw SQL) so the same query behaves identically across engines.
 - 🔎 **Dynamic query-builder endpoint** — let the front-end compose rich filtered/sorted/paginated queries "for free" (`AND`/`OR`/nesting, `IN`, `BETWEEN`, `CONTAINS`, …) without hand-writing endpoints. Fully validated — bad fields/operators return structured `4xx` errors, never leaked DB internals.
+- 📄 **OpenAPI 3.1 generation** — zero-annotation spec generated from your resource definitions at startup. Prisma and Drizzle types are introspected automatically; custom repos annotate individual fields. Swagger UI at `/docs`, raw spec at `/openapi.json`. Disable with `enabled: false` for zero production overhead.
 - 🏢 **Multi-tenancy built in** — per-resource tenant scoping with fail-closed guarantees; one tenant can never read or write another's rows.
 - ⚡ **Pluggable read-through caching** — in-memory or Redis, per-resource TTLs, never-expire mode, automatic write-invalidation, tenant-safe keys, and a `Cache-Control` bust header.
-- 🔐 **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action permissions; and `filterable`/`sortable`/`selectable`/`writable` flags enforced on every request.
+- 🔐 **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action permissions; `filterable`/`sortable`/`selectable`/`writable` field flags; and per-field `readRoles`/`writeRoles` for role-based column visibility.
+- 🪝 **Lifecycle hooks** — inject custom logic before or after any CRUD operation per resource (`beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, …). Stamp audit fields, emit events, enforce ownership, or transform results without writing a custom repository. See [README_HOOKS.md](./README_HOOKS.md).
+- 📦 **Companion browser client** — [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is a typed, zero-dependency client with a fluent query builder and built-in TanStack Query helpers (queries + mutation auto-invalidation). Bring your own HTTP library (fetch, axios, ky, ofetch, superagent).
 - 🧪 **Type-safe & battle-tested** — strict TypeScript, ESM, ships full `.d.ts`; hundreds of unit tests plus the full integration suite run against six real databases + Redis in CI.
 
 ## Current Support
 
-| Layer          | Supported                                                                 |
-| -------------- | ------------------------------------------------------------------------- |
-| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                      |
-| ORM / database | Prisma 6 or 7 + Postgres, MySQL, MariaDB, SQL Server, CockroachDB, SQLite |
-| Auth           | API key, JWT/Bearer, Passport + JWT                                       |
-| Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)       |
+| Layer          | Supported                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                                                                 |
+| ORM / database | Prisma 6 or 7 (Postgres, MySQL, MariaDB, SQL Server, CockroachDB, SQLite); Drizzle (Postgres, MySQL, SQLite, LibSQL) |
+| Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`                                              |
+| Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)                                                  |
+| API docs       | OpenAPI 3.1 spec + Swagger UI (optional, zero overhead when disabled)                                                |
 
 Every HTTP adapter is interchangeable and behaves identically — same routes, status codes,
 error-body shape, and content negotiation — so you can switch frameworks without touching
@@ -51,6 +55,81 @@ CockroachDB, and SQLite — in CI (one matrix leg per engine) to keep that hones
 > **Prisma 6**, which Halifax also supports — see [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md).
 >
 > **Roadmap** — community-written adapters for Drizzle, Sequelize, etc. are also welcome.
+
+## Monorepo packages
+
+Halifax ships as two packages from the same repository:
+
+| Package                                                                        | Description                                                                 |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| [`@edium/halifax`](https://www.npmjs.com/package/@edium/halifax)               | Server — auto-CRUD engine, adapters, auth, caching, OpenAPI                 |
+| [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) | Browser/Node client — typed CRUD, query builder, TanStack Query integration |
+
+## Browser Client — React & Vue
+
+[`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is the companion
+frontend package. It ships a fully-typed resource client, a fluent query builder, and **built-in
+TanStack Query option factories** so list/detail queries and mutations wire up in a few lines —
+with automatic cache invalidation on writes.
+
+```bash
+pnpm add @edium/halifax-client
+
+# add whichever TanStack Query adapter your framework uses
+pnpm add @tanstack/react-query   # React
+pnpm add @tanstack/vue-query     # Vue
+```
+
+**React**
+
+```tsx
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { HalifaxClient } from '@edium/halifax-client'
+
+const client = new HalifaxClient({ baseUrl: '/api/v1' })
+const posts = client.resource<Post, NewPost, PatchPost>('posts')
+
+// Paginated list — queryKey is managed for you
+function usePostList(page: number) {
+  return useQuery(posts.getManyOptions({ limit: 20, offset: page * 20 }))
+}
+
+// Create with automatic list invalidation
+function useCreatePost() {
+  const qc = useQueryClient()
+  return useMutation({
+    ...posts.createOneMutation(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: posts.queryKey() })
+  })
+}
+```
+
+**Vue**
+
+```ts
+import { computed, ref } from 'vue'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { HalifaxClient } from '@edium/halifax-client'
+
+const client = new HalifaxClient({ baseUrl: '/api/v1' })
+const posts = client.resource<Post, NewPost, PatchPost>('posts')
+
+// Reactive query — re-fetches automatically when page changes
+const page = ref(0)
+const postList = useQuery(computed(() => posts.getManyOptions({ limit: 20, offset: page.value * 20 })))
+
+// Mutation with cache invalidation
+const qc = useQueryClient()
+const createPost = useMutation({
+  ...posts.createOneMutation(),
+  onSuccess: () => qc.invalidateQueries({ queryKey: posts.queryKey() })
+})
+```
+
+Five HTTP transports are included out of the box: `fetch` (default), `axios`, `ky`, `ofetch`, and
+`superagent` — swap with one line. Full docs: [README_CLIENT.md](./README_CLIENT.md).
+
+---
 
 ## Install
 
@@ -107,15 +186,21 @@ app.listen(3000)
 
 ## Documentation
 
-| Guide                                                | Contents                                                                                      |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [README_AUTOCRUD.md](./README_AUTOCRUD.md)           | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes |
-| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) | Prisma 7 (and 6) setup, `PrismaAdapter` options, capabilities, custom repositories            |
-| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters          |
-| [README_AUTH.md](./README_AUTH.md)                   | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, custom `authorize`      |
-| [README_MULTITENANCY.md](./README_MULTITENANCY.md)   | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour |
-| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)   | Query-builder payload, comparisons, nested filters, portable Prisma execution                 |
-| [README_CACHE.md](./README_CACHE.md)                 | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header               |
+| Guide                                                | Contents                                                                                                 |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [README_CLIENT.md](./README_CLIENT.md)               | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples       |
+| [README_AUTOCRUD.md](./README_AUTOCRUD.md)           | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
+| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, capabilities, custom repositories             |
+| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |
+| [README_AUTH.md](./README_AUTH.md)                   | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, per-field `readRoles`/`writeRoles` |
+| [README_MULTITENANCY.md](./README_MULTITENANCY.md)   | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour            |
+| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)   | Query-builder payload, comparisons, nested filters, portable execution                                   |
+| [README_CACHE.md](./README_CACHE.md)                 | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                          |
+| [README_HOOKS.md](./README_HOOKS.md)                 | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook    |
+| [README_OPENAPI.md](./README_OPENAPI.md)             | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use          |
+| [README_TYPES.md](./README_TYPES.md)                 | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants             |
+| [README_INTERFACES.md](./README_INTERFACES.md)       | All exported interfaces — resource, auth, HTTP, repository, cache, Prisma, Drizzle, query AST            |
+| [README_CLASSES.md](./README_CLASSES.md)             | All exported classes — auth strategies, HTTP adapters, ORM adapters, cache stores, error types           |
 
 ## Examples
 
