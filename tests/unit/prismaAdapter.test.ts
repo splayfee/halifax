@@ -481,17 +481,29 @@ describe('PrismaAdapter — scoped upsertOne', () => {
     ).rejects.toMatchObject({ status: 404 })
   })
 
-  it('stamps tenant on create and strips it on update when scoped', async () => {
+  it('stamps tenant on create when scoped (create path: findFirst returns null)', async () => {
     const delegate = makeDelegate({
       findFirst: vi.fn().mockResolvedValue(null)
     })
     const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
     await a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })
-    expect(delegate.upsert).toHaveBeenCalledWith(
+    expect(delegate.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 1 },
-        create: expect.objectContaining({ tenantId: 'tenant-a', email: 'x@t.com' }),
-        update: expect.not.objectContaining({ tenantId: expect.anything() })
+        data: expect.objectContaining({ tenantId: 'tenant-a', email: 'x@t.com' })
+      })
+    )
+  })
+
+  it('strips tenant from update payload when scoped (update path: findFirst returns existing)', async () => {
+    const delegate = makeDelegate({
+      findFirst: vi.fn().mockResolvedValue({ id: 1, email: 'a@test.com', tenantId: 'tenant-a' })
+    })
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await a.upsertOne(1, { email: 'x@t.com', tenantId: 'injected' } as Row & { tenantId?: string })
+    expect(delegate.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 1, tenantId: 'tenant-a' }),
+        data: expect.not.objectContaining({ tenantId: expect.anything() })
       })
     )
   })
@@ -518,18 +530,11 @@ describe('PrismaAdapter — scoped deleteOne', () => {
     await expect(a.deleteOne(1)).rejects.toMatchObject({ status: 500 })
   })
 
-  it('uses findFirst when deleteMany is absent and returns false when not owned', async () => {
+  it('throws ServerError when deleteMany is absent (even when findFirst is available)', async () => {
     const delegate = makeDelegate({ findFirst: vi.fn().mockResolvedValue(null) })
     delete (delegate as Record<string, unknown>).deleteMany
     const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
-    const result = await a.deleteOne(99)
-    expect(result).toBe(false)
-    expect(delegate.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: 99, tenantId: 'tenant-a' })
-      })
-    )
-    expect(delegate.delete).not.toHaveBeenCalled()
+    await expect(a.deleteOne(99)).rejects.toMatchObject({ status: 500 })
   })
 })
 
@@ -774,10 +779,10 @@ describe('PrismaAdapter — ConflictError on P2002 (unique constraint)', () => {
     })
   })
 
-  it('upsertOne (scoped) throws ConflictError when delegate.upsert throws P2002', async () => {
+  it('upsertOne (scoped, create path) throws ConflictError when delegate.create throws P2002', async () => {
     const delegate = makeDelegate({
       findFirst: vi.fn().mockResolvedValue(null),
-      upsert: vi.fn().mockRejectedValue(p2002)
+      create: vi.fn().mockRejectedValue(p2002)
     })
     const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
     await expect(

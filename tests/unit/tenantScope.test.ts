@@ -121,19 +121,19 @@ describe('PrismaAdapter.withScope — writes', () => {
     })
   })
 
-  it('updateOne verifies ownership then strips the tenant field from the payload', async () => {
+  it('updateOne atomically updates via updateMany and strips the tenant field from the payload', async () => {
     const delegate = makeDelegate()
     const repo = new PrismaAdapter<Row>({ delegate }).withScope(SCOPE)
 
     await repo.updateOne(1, { name: 'z', companyId: 999 } as Partial<Row>)
 
-    expect(delegate.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 1, companyId: 7 } })
+    expect(delegate.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 1, companyId: 7 }),
+        data: { name: 'z' } // companyId stripped — cannot move tenants
+      })
     )
-    expect(delegate.update).toHaveBeenCalledWith({
-      where: { id: 1 },
-      data: { name: 'z' } // companyId stripped — cannot move tenants
-    })
+    expect(delegate.update).not.toHaveBeenCalled()
   })
 
   it('updateOne returns null without updating when the row is in another tenant', async () => {
@@ -170,17 +170,33 @@ describe('PrismaAdapter.withScope — writes', () => {
     expect(delegate.upsert).not.toHaveBeenCalled()
   })
 
-  it('upsertOne stamps create and strips tenant from update for an owned/new row', async () => {
+  it('upsertOne stamps tenant on create (create path: no existing row for this tenant)', async () => {
     const delegate = makeDelegate({ findFirst: vi.fn().mockResolvedValue(null) })
     const repo = new PrismaAdapter<Row>({ delegate }).withScope(SCOPE)
 
     await repo.upsertOne(1, { name: 'z', companyId: 999 } as Row)
 
-    expect(delegate.upsert).toHaveBeenCalledWith({
-      where: { id: 1 },
-      create: { name: 'z', companyId: 7 },
-      update: { name: 'z' }
-    })
+    expect(delegate.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ id: 1, name: 'z', companyId: 7 })
+      })
+    )
+    expect(delegate.upsert).not.toHaveBeenCalled()
+  })
+
+  it('upsertOne strips tenant from update payload (update path: existing row for this tenant)', async () => {
+    const delegate = makeDelegate()
+    const repo = new PrismaAdapter<Row>({ delegate }).withScope(SCOPE)
+
+    await repo.upsertOne(1, { name: 'z', companyId: 999 } as Row)
+
+    expect(delegate.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 1, companyId: 7 }),
+        data: expect.not.objectContaining({ companyId: expect.anything() })
+      })
+    )
+    expect(delegate.upsert).not.toHaveBeenCalled()
   })
 })
 

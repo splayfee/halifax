@@ -421,6 +421,12 @@ export class PrismaAdapter<
         where: scopedWhere
       })) as Record<string, unknown> | null
 
+      // Defense-in-depth: even though scopedWhere already filters by tenant, verify the
+      // returned record actually belongs to this tenant before treating it as owned.
+      if (existing && existing[this.scope.field] !== this.scope.value) {
+        throw new NotFoundError()
+      }
+
       if (existing) {
         // Record exists for this tenant — update it atomically via updateMany(scopedWhere)
         // so the tenant constraint is enforced in the same SQL statement as the write.
