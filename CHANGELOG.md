@@ -3,6 +3,26 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2]
+
+### Fixed
+
+- Removed the `preinstall` script from both `@edium/halifax` and `@edium/halifax-client`. The
+  script was a developer-convenience guard that enforced pnpm usage inside the monorepo, but because it shipped in the published package it caused npm (v7+) to prompt consumers with an  "approve build scripts" confirmation on every install. End-users no longer need to approve anything to install either package.
+
+## [2.2.1]
+
+### Added
+
+- Published `README.md` files for `@edium/halifax-client` and `@edium/halifax-types` — both
+  packages now ship documentation with the npm tarball.
+
+### Fixed
+
+- `@edium/halifax-types` was re-versioned from `0.1.0` to `2.2.1` to align with the rest of
+  the suite. Consumers importing from this package directly should update their version
+  constraint accordingly.
+
 ## [2.2.0]
 
 ### Added

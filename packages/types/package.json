@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax-types",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Shared TypeScript types and enums for @edium/halifax and @edium/halifax-client.",
   "author": "David LaTour <david@edium.com>",
   "license": "MIT",
