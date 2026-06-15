@@ -65,69 +65,40 @@ Halifax ships as two packages from the same repository:
 | [`@edium/halifax`](https://www.npmjs.com/package/@edium/halifax)               | Server — auto-CRUD engine, adapters, auth, caching, OpenAPI                 |
 | [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) | Browser/Node client — typed CRUD, query builder, TanStack Query integration |
 
-## Browser Client — React & Vue
+## Browser Client
 
 [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is the companion
 frontend package. It ships a fully-typed resource client, a fluent query builder, and **built-in
 TanStack Query option factories** so list/detail queries and mutations wire up in a few lines —
-with automatic cache invalidation on writes.
+with automatic cache invalidation on writes. Five HTTP transports ship out of the box: `fetch`
+(default), `axios`, `ky`, `ofetch`, and `superagent` — swap with one line.
 
 ```bash
 pnpm add @edium/halifax-client
-
-# add whichever TanStack Query adapter your framework uses
 pnpm add @tanstack/react-query   # React
 pnpm add @tanstack/vue-query     # Vue
 ```
 
-**React**
-
-```tsx
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { HalifaxClient } from '@edium/halifax-client'
-
-const client = new HalifaxClient({ baseUrl: '/api/v1' })
-const posts = client.resource<Post, NewPost, PatchPost>('posts')
-
-// Paginated list — queryKey is managed for you
-function usePostList(page: number) {
-  return useQuery(posts.getManyOptions({ limit: 20, offset: page * 20 }))
-}
-
-// Create with automatic list invalidation
-function useCreatePost() {
-  const qc = useQueryClient()
-  return useMutation({
-    ...posts.createOneMutation(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: posts.queryKey() })
-  })
-}
-```
-
-**Vue**
-
 ```ts
-import { computed, ref } from 'vue'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { HalifaxClient } from '@edium/halifax-client'
+import { HalifaxClient, QueryBuilder, SqlComparison } from '@edium/halifax-client'
 
 const client = new HalifaxClient({ baseUrl: '/api/v1' })
-const posts = client.resource<Post, NewPost, PatchPost>('posts')
+const posts = client.resource<Post, Omit<Post, 'id'>, Partial<Omit<Post, 'id'>>>('posts')
 
-// Reactive query — re-fetches automatically when page changes
-const page = ref(0)
-const postList = useQuery(computed(() => posts.getManyOptions({ limit: 20, offset: page.value * 20 })))
+// CRUD
+const { results, count } = await posts.getMany({ limit: 20 })
+const post = await posts.getOne(1)
+await posts.createOne({ title: 'Hello', published: false })
 
-// Mutation with cache invalidation
-const qc = useQueryClient()
-const createPost = useMutation({
-  ...posts.createOneMutation(),
-  onSuccess: () => qc.invalidateQueries({ queryKey: posts.queryKey() })
-})
+// Query builder — sends to POST /posts/query
+const q = new QueryBuilder().where('published', SqlComparison.Equal, true).limit(10)
+const { results: published } = await posts.query(q)
+
+// React — queryKey + queryFn wired automatically
+const { data } = useQuery(posts.getManyOptions({ limit: 20 }))
 ```
 
-Five HTTP transports are included out of the box: `fetch` (default), `axios`, `ky`, `ofetch`, and
-`superagent` — swap with one line. Full docs: [README_CLIENT.md](./README_CLIENT.md).
+Full docs: [README_CLIENT.md](./README_CLIENT.md) · [npm](https://www.npmjs.com/package/@edium/halifax-client)
 
 ---
 
@@ -188,7 +159,7 @@ app.listen(3000)
 
 | Guide                                                | Contents                                                                                                 |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [README_CLIENT.md](./README_CLIENT.md)               | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples       |
+| [README_CLIENT.md](./README_CLIENT.md) · [npm](https://www.npmjs.com/package/@edium/halifax-client) | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples |
 | [README_AUTOCRUD.md](./README_AUTOCRUD.md)           | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
 | [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md) | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, capabilities, custom repositories             |
 | [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md) | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |

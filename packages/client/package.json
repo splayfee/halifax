@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax-client",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Browser AST client for the halifax autocrud API.",
   "author": "David LaTour <david@edium.com>",
   "homepage": "https://github.com/splayfee/halifax-client#readme",

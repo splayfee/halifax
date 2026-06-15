@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Auto-generate type-safe REST CRUD APIs from your data models. Adapter-driven: Express/Fastify/HyperExpress, Prisma (PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, SQLite), JWT/API-key auth, multi-tenancy, a dynamic query builder, and pluggable Redis caching.",
   "author": "David LaTour <david@edium.com>",
   "homepage": "https://github.com/splayfee/halifax#readme",
