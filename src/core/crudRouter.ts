@@ -19,6 +19,7 @@ import {
   wantsCacheBust,
   type RouteHandlerContext
 } from '@/core/handlerUtils.js'
+import { mergeFieldDefinitions } from '@/core/fields.js'
 import { registerCreate } from '@/core/handlers/create.js'
 import { registerReadMany } from '@/core/handlers/readMany.js'
 import { registerReadOne } from '@/core/handlers/readOne.js'
@@ -52,12 +53,7 @@ function deriveResourceName(routePrefix: string): string {
  * @throws {@link ServerError} when neither the repository nor the resource provides any fields.
  */
 function resolveFields(resource: ResourceDefinition, idField: string): FieldDefinition[] {
-  const byName = new Map<string, FieldDefinition>()
-  for (const field of resource.repository?.fields ?? []) byName.set(field.name, { ...field })
-  for (const override of resource.fields ?? [])
-    byName.set(override.name, { ...byName.get(override.name), ...override })
-
-  const merged = [...byName.values()]
+  const merged = mergeFieldDefinitions(resource)
   if (merged.length === 0) {
     throw new ServerError(
       `Resource '${resource.name ?? resource.routePrefix}' has no fields. Provide 'fields', ` +

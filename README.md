@@ -65,6 +65,72 @@ Halifax ships as two packages from the same repository:
 | [`@edium/halifax`](https://www.npmjs.com/package/@edium/halifax)               | Server — auto-CRUD engine, adapters, auth, caching, OpenAPI                 |
 | [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) | Browser/Node client — typed CRUD, query builder, TanStack Query integration |
 
+## Browser Client — React & Vue
+
+[`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is the companion
+frontend package. It ships a fully-typed resource client, a fluent query builder, and **built-in
+TanStack Query option factories** so list/detail queries and mutations wire up in a few lines —
+with automatic cache invalidation on writes.
+
+```bash
+pnpm add @edium/halifax-client
+
+# add whichever TanStack Query adapter your framework uses
+pnpm add @tanstack/react-query   # React
+pnpm add @tanstack/vue-query     # Vue
+```
+
+**React**
+
+```tsx
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { HalifaxClient } from '@edium/halifax-client'
+
+const client = new HalifaxClient({ baseUrl: '/api/v1' })
+const posts = client.resource<Post, NewPost, PatchPost>('posts')
+
+// Paginated list — queryKey is managed for you
+function usePostList(page: number) {
+  return useQuery(posts.getManyOptions({ limit: 20, offset: page * 20 }))
+}
+
+// Create with automatic list invalidation
+function useCreatePost() {
+  const qc = useQueryClient()
+  return useMutation({
+    ...posts.createOneMutation(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: posts.queryKey() })
+  })
+}
+```
+
+**Vue**
+
+```ts
+import { computed, ref } from 'vue'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { HalifaxClient } from '@edium/halifax-client'
+
+const client = new HalifaxClient({ baseUrl: '/api/v1' })
+const posts = client.resource<Post, NewPost, PatchPost>('posts')
+
+// Reactive query — re-fetches automatically when page changes
+const page = ref(0)
+const postList = useQuery(computed(() => posts.getManyOptions({ limit: 20, offset: page.value * 20 })))
+
+// Mutation with cache invalidation
+const qc = useQueryClient()
+const createPost = useMutation({
+  ...posts.createOneMutation(),
+  onSuccess: () => qc.invalidateQueries({ queryKey: posts.queryKey() })
+})
+```
+
+Five HTTP transports are included out of the box: `fetch` (default), `axios`, `ky`, `ofetch`, and
+`superagent` — swap with one line. Full docs: [README_CLIENT.md](./README_CLIENT.md).
+
+---
+
 ## Install
 
 ```bash

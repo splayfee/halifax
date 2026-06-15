@@ -6,6 +6,7 @@ import {
   type ResourceDefinition
 } from '@/core/types.js'
 import type { SecurityScheme } from '@/auth/AuthStrategy.js'
+import { mergeFieldDefinitions } from '@/core/fields.js'
 
 /** Options for OpenAPI spec generation and the built-in docs UI. */
 export interface OpenApiOptions {
@@ -168,10 +169,7 @@ function normalizeEnvelope(value: string | null | undefined): string | null {
 
 function mergeFields(resource: ResourceDefinition): FieldDefinition[] {
   const idField = resource.repository?.idField ?? 'id'
-  const byName = new Map<string, FieldDefinition>()
-  for (const f of resource.repository?.fields ?? []) byName.set(f.name, { ...f })
-  for (const f of resource.fields ?? []) byName.set(f.name, { ...byName.get(f.name), ...f })
-  return [...byName.values()].map((f) => ({
+  return mergeFieldDefinitions(resource).map((f) => ({
     ...f,
     writable: f.name === idField ? f.writable === true : f.writable !== false
   }))

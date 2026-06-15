@@ -99,8 +99,8 @@ export function filterWritableFields(
   auth?: AuthContext
 ): Record<string, unknown> {
   const fields = resource.fields ?? []
-  const knownFields = new Set(fields.map((f) => f.name))
-  const unknownFields = Object.keys(data).filter((key) => !knownFields.has(key))
+  const fieldMap = new Map(fields.map((f) => [f.name, f]))
+  const unknownFields = Object.keys(data).filter((key) => !fieldMap.has(key))
   if (unknownFields.length) {
     throw new UnprocessableEntityError(`Unknown field(s): ${unknownFields.join(', ')}.`)
   }
@@ -109,7 +109,7 @@ export function filterWritableFields(
 
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => {
-      const field = fields.find((f) => f.name === key)
+      const field = fieldMap.get(key)
       if (field?.writable === false) return false
       if (field?.writeRoles?.length) {
         return field.writeRoles.some((r) => userRoles.has(r))
@@ -131,10 +131,11 @@ export function filterReadableFields(
   const fields = resource.fields ?? []
   if (!fields.some((f) => (f.readRoles?.length ?? 0) > 0)) return record
 
+  const fieldMap = new Map(fields.map((f) => [f.name, f]))
   const userRoles = new Set([...(auth?.roles ?? []), ...(auth?.permissions ?? [])])
   return Object.fromEntries(
     Object.entries(record).filter(([key]) => {
-      const field = fields.find((f) => f.name === key)
+      const field = fieldMap.get(key)
       if (!field?.readRoles?.length) return true
       return field.readRoles.some((r) => userRoles.has(r))
     })
