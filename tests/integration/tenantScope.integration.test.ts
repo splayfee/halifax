@@ -45,12 +45,14 @@ type WidgetBody = { companyId: number; name: string; id: number | string }
 /** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
 type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
   widget: {
-    deleteMany(args?: unknown): Promise<unknown>
-    createMany(args: { data: unknown[] }): Promise<unknown>
+    deleteMany(args?: unknown): Promise<{ count: number }>
+    createMany(args: { data: unknown[] }): Promise<{ count: number }>
     create(args: { data: unknown }): Promise<Widget>
     findUnique(args: { where: unknown }): Promise<Widget | null>
     findMany(args?: unknown): Promise<Widget[]>
     count(args?: unknown): Promise<number>
+    update(args: unknown): Promise<Widget>
+    delete(args: unknown): Promise<unknown>
   }
 }
 

@@ -30,11 +30,15 @@ type Post = {
 /** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
 type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
   post: {
-    deleteMany(args?: unknown): Promise<unknown>
+    deleteMany(args?: unknown): Promise<{ count: number }>
     create(args: { data: unknown }): Promise<Post>
+    findMany(args?: unknown): Promise<Post[]>
+    count(args?: unknown): Promise<number>
+    update(args: unknown): Promise<Post>
+    delete(args: unknown): Promise<unknown>
   }
   author: {
-    deleteMany(args?: unknown): Promise<unknown>
+    deleteMany(args?: unknown): Promise<{ count: number }>
   }
 }
 

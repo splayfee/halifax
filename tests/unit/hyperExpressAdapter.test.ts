@@ -93,7 +93,7 @@ function makeResponse() {
 describe('HyperExpressHttpServer — adaptRequest JSON parse error', () => {
   it('sets body to undefined when req.json() throws', async () => {
     const app = makeApp()
-    const server = new HyperExpressHttpServer(app as unknown as HyperExpressAppLike)
+    const server = new HyperExpressHttpServer(app as HyperExpressAppLike)
 
     let capturedBody: unknown = 'NOT_SET'
     server.registerRoute('POST', '/items', async (req) => {
@@ -121,7 +121,7 @@ describe('HyperExpressHttpServer — adaptRequest JSON parse error', () => {
 describe('HyperExpressHttpServer — start', () => {
   it('calls listen with port and host when host is provided', async () => {
     const app = makeApp()
-    const server = new HyperExpressHttpServer(app as unknown as HyperExpressAppLike)
+    const server = new HyperExpressHttpServer(app as HyperExpressAppLike)
     const listenSpy = vi.spyOn(app, 'listen').mockResolvedValue(undefined)
     await server.start(3001, '0.0.0.0')
     expect(listenSpy).toHaveBeenCalledWith(3001, '0.0.0.0')
@@ -129,7 +129,7 @@ describe('HyperExpressHttpServer — start', () => {
 
   it('start() is a no-op when the app has no listen method', async () => {
     const router = makeRouter()
-    const server = new HyperExpressHttpServer(router as unknown as HyperExpressAppLike)
+    const server = new HyperExpressHttpServer(router as HyperExpressAppLike)
     await expect(server.start(3000)).resolves.toBeUndefined()
   })
 })

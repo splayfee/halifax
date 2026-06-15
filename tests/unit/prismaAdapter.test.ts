@@ -646,14 +646,14 @@ describe('prismaTypeToOpenApi — Prisma scalar types map to OpenAPI types', () 
   function fieldType(prismaType: string): string | undefined {
     const model = typeModel([{ name: 'val', type: prismaType }])
     const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
-    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model as unknown as ModelSchema])
+    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model])
     return resources[0]?.fields?.find((f) => f.name === 'val')?.type
   }
 
   function fieldFormat(prismaType: string): string | undefined {
     const model = typeModel([{ name: 'val', type: prismaType }])
     const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
-    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model as unknown as ModelSchema])
+    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model])
     return resources[0]?.fields?.find((f) => f.name === 'val')?.format
   }
 

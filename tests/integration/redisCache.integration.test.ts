@@ -28,9 +28,13 @@ type ListBody = { count: number; results: unknown[] }
 /** Typed view of the Prisma client returned by `connectIntegrationDb()`. */
 type PrismaClient = Awaited<ReturnType<typeof connectIntegrationDb>> & {
   post: {
-    deleteMany(args?: unknown): Promise<unknown>
-    createMany(args: { data: unknown[] }): Promise<unknown>
+    deleteMany(args?: unknown): Promise<{ count: number }>
+    createMany(args: { data: unknown[] }): Promise<{ count: number }>
     create(args: { data: unknown }): Promise<unknown>
+    findMany(args?: unknown): Promise<unknown[]>
+    count(args?: unknown): Promise<number>
+    update(args: unknown): Promise<unknown>
+    delete(args: unknown): Promise<unknown>
   }
 }
 

@@ -1440,7 +1440,7 @@ describe('createExpressCrudRouter — OpenAPI routes (lines 350-370)', () => {
       name: 'Item',
       routePrefix: 'items',
       fields: [{ name: 'id' }],
-      repository: { async getOne() { return null }, async getMany() { return { count: 0, results: [] } } }
+      repository: { async getOne() { return null }, async getMany() { return { count: 0, results: [] } }, async createOne() { return null }, async createMany() { return [] }, async updateOne() { return null }, async deleteOne() { return false } }
     }
     app.use('/api', createExpressCrudRouter([resource], { openapi: { enabled: true } }))
     const res = await request(app).get('/api/openapi.json').set('Accept', '*/*')
@@ -1459,7 +1459,7 @@ describe('createExpressCrudRouter — 405 wildcard callbacks', () => {
       routePrefix: 'items',
       permissions: { allowReadOne: true, allowUpdateOne: false, allowUpsertOne: false, allowDeleteOne: false },
       fields: [{ name: 'id' }],
-      repository: { async getOne() { return { id: 1 } }, async getMany() { return { count: 0, results: [] } } }
+      repository: { async getOne() { return { id: 1 } }, async getMany() { return { count: 0, results: [] } }, async createOne() { return null }, async createMany() { return [] }, async updateOne() { return null }, async deleteOne() { return false } }
     }
     app.use('/api', createExpressCrudRouter([resource], {}))
     // OPTIONS is not a registered CRUD method → triggers the /:id wildcard 405 handler
@@ -1481,7 +1481,7 @@ describe('createExpressCrudRouter — 405 wildcard callbacks', () => {
         allowReadManyWithQueryBuilder: true
       },
       fields: [{ name: 'id' }],
-      repository: { async getOne() { return null }, async getMany() { return { count: 0, results: [] } } }
+      repository: { async getOne() { return null }, async getMany() { return { count: 0, results: [] } }, async createOne() { return null }, async createMany() { return [] }, async updateOne() { return null }, async deleteOne() { return false } }
     }
     app.use('/api', createExpressCrudRouter([resource], {}))
     // PUT /items/query is not POST → triggers the query-builder wildcard 405 handler

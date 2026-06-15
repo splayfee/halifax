@@ -529,7 +529,7 @@ describe('DrizzleAdapter — listWhereToSQL branches', () => {
 
   it('unknown column branch: conditions all filtered out → no WHERE → all rows returned', async () => {
     const result = await adapter.getMany({
-      where: { unknownCol: 'foo' } as unknown as Record<string, unknown>
+      where: { unknownCol: 'foo' }
     })
     expect(result.count).toBe(3)
   })

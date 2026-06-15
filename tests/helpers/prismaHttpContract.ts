@@ -12,11 +12,15 @@ const hasDb = !!process.env.DATABASE_URL
 // Prisma types come from the generated test client. We use a structural interface here
 // so these files compile before `pnpm test:integration:generate` has been run.
 type PrismaDelegate = {
-  deleteMany(opts?: Record<string, unknown>): Promise<unknown>
+  deleteMany(opts?: Record<string, unknown>): Promise<{ count: number }>
   create(opts: Record<string, unknown>): Promise<Record<string, unknown>>
-  createMany(opts: Record<string, unknown>): Promise<unknown>
+  createMany(opts: Record<string, unknown>): Promise<{ count: number }>
+  findMany(opts?: unknown): Promise<unknown[]>
+  count(opts?: unknown): Promise<number>
+  update(opts: unknown): Promise<unknown>
+  delete(opts: unknown): Promise<unknown>
 }
-type AnyPrisma = {
+type AnyPrisma = Awaited<ReturnType<typeof connectIntegrationDb>> & {
   $disconnect(): Promise<void>
   post: PrismaDelegate
 }
@@ -70,7 +74,7 @@ export function runPrismaHttpContract(
     const key = (req: request.Test) => req.set('x-api-key', PRISMA_API_KEY)
 
     beforeAll(async () => {
-      prisma = await connectIntegrationDb()
+      prisma = (await connectIntegrationDb()) as AnyPrisma
       const repo = new PrismaAdapter({ delegate: prisma.post })
       app = await mount([postResource(repo)], new ApiKeyAuthStrategy(PRISMA_API_KEY))
     })

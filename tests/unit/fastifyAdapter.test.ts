@@ -41,7 +41,7 @@ function makeFastifyApp() {
 
 function makeServer() {
   const app = makeFastifyApp()
-  const server = new FastifyHttpServer(app as unknown as FastifyAppLike)
+  const server = new FastifyHttpServer(app as FastifyAppLike)
   return { server, app }
 }
 
@@ -51,7 +51,7 @@ describe('FastifyHttpServer — constructor', () => {
     app.addContentTypeParser = vi.fn().mockImplementation(() => {
       throw new Error('already registered')
     })
-    expect(() => new FastifyHttpServer(app as unknown as FastifyAppLike)).not.toThrow()
+    expect(() => new FastifyHttpServer(app as FastifyAppLike)).not.toThrow()
   })
 })
 
