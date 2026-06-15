@@ -1,9 +1,11 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { integer, sqliteTable, text, real, blob } from 'drizzle-orm/sqlite-core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DrizzleAdapter } from '@/adapters/orm/drizzle/DrizzleAdapter.js'
+import type { AnyDrizzleDB } from '@/adapters/orm/drizzle/DrizzleAdapter.js'
 import { SqlOrder } from '@edium/halifax-types'
+import { ConflictError } from '@/errors/ConflictError.js'
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -672,5 +674,140 @@ describe('DrizzleAdapter — drizzleTypeToOpenApi column types', () => {
     const fields = DrizzleAdapter.fieldsFromTable(richTable)
     const metaField = fields.find((f) => f.name === 'meta')
     expect(metaField?.type).toBe('object')
+  })
+})
+
+// ─── ConflictError — SQLite real unique constraint violations ─────────────────
+
+const codeTable = sqliteTable('codes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull()
+})
+
+type CodeRow = { id: number; code: string }
+
+function createUniqueDb() {
+  const sqlite = new Database(':memory:')
+  sqlite.exec(`
+    CREATE TABLE codes (
+      id   INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE
+    )
+  `)
+  return { db: drizzle(sqlite), sqlite }
+}
+
+describe('DrizzleAdapter — ConflictError on SQLite unique constraint violation', () => {
+  let sqlite: ReturnType<typeof Database>
+  let adapter: DrizzleAdapter<CodeRow>
+
+  beforeEach(() => {
+    const ctx = createUniqueDb()
+    sqlite = ctx.sqlite
+    adapter = new DrizzleAdapter<CodeRow>(ctx.db, codeTable)
+  })
+
+  afterEach(() => {
+    sqlite.close()
+  })
+
+  it('createOne throws ConflictError (409) on duplicate unique column', async () => {
+    await adapter.createOne({ code: 'ABC' } as CodeRow)
+    const err = await adapter.createOne({ code: 'ABC' } as CodeRow).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConflictError)
+    expect((err as ConflictError).status).toBe(409)
+  })
+
+  it('createMany throws ConflictError (409) when bulk insert hits unique constraint', async () => {
+    await adapter.createOne({ code: 'XYZ' } as CodeRow)
+    await expect(adapter.createMany([{ code: 'XYZ' }] as CodeRow[])).rejects.toMatchObject({
+      status: 409
+    })
+  })
+
+  it('updateOne throws ConflictError (409) when update violates unique constraint', async () => {
+    await adapter.createOne({ code: 'FIRST' } as CodeRow)
+    const second = await adapter.createOne({ code: 'SECOND' } as CodeRow)
+    await expect(
+      adapter.updateOne(second.id, { code: 'FIRST' } as Partial<CodeRow>)
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('non-unique errors propagate unchanged', async () => {
+    const err = new Error('Some other DB error')
+    const badDb = {
+      insert: () => ({ values: () => ({ returning: () => Promise.reject(err) }) }),
+      select: () => ({ from: () => ({ $dynamic: () => ({ where: () => Promise.resolve([]) }) }) }),
+      update: () => ({ set: () => ({ where: () => ({ returning: () => Promise.resolve([]) }) }) }),
+      delete: () => ({ where: () => ({ returning: () => Promise.resolve([]) }) })
+    } as unknown as AnyDrizzleDB
+    const a = new DrizzleAdapter<CodeRow>(badDb, codeTable)
+    await expect(a.createOne({ code: 'x' } as CodeRow)).rejects.toThrow('Some other DB error')
+  })
+})
+
+// ─── ConflictError — multi-vendor error signature detection (mocked DB) ───────
+
+function makeMockDbThrowing(err: Error): AnyDrizzleDB {
+  const throwing = { returning: vi.fn().mockRejectedValue(err) }
+  return {
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        $dynamic: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([])
+        })
+      })
+    }),
+    insert: vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue(throwing) }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue(throwing) })
+    }),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) })
+    })
+  } as unknown as AnyDrizzleDB
+}
+
+describe('DrizzleAdapter — ConflictError detection across DB vendors (mocked)', () => {
+  it('PostgreSQL 23505 (unique_violation) → ConflictError on createOne', async () => {
+    const pgErr = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505'
+    })
+    const adapter = new DrizzleAdapter(makeMockDbThrowing(pgErr), products)
+    await expect(
+      adapter.createOne({ name: 'x', price: 1, active: true, tenantId: null })
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('MySQL errno 1062 (ER_DUP_ENTRY) → ConflictError on createOne', async () => {
+    const mysqlErr = Object.assign(new Error("Duplicate entry 'x' for key 'idx_code'"), {
+      errno: 1062
+    })
+    const adapter = new DrizzleAdapter(makeMockDbThrowing(mysqlErr), products)
+    await expect(
+      adapter.createOne({ name: 'x', price: 1, active: true, tenantId: null })
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('MySQL ER_DUP_ENTRY code string → ConflictError on createOne', async () => {
+    const mysqlErr = Object.assign(new Error('Duplicate entry'), { code: 'ER_DUP_ENTRY' })
+    const adapter = new DrizzleAdapter(makeMockDbThrowing(mysqlErr), products)
+    await expect(
+      adapter.createOne({ name: 'x', price: 1, active: true, tenantId: null })
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('PostgreSQL 23505 → ConflictError on updateOne', async () => {
+    const pgErr = Object.assign(new Error('duplicate key value'), { code: '23505' })
+    const adapter = new DrizzleAdapter(makeMockDbThrowing(pgErr), products)
+    await expect(
+      adapter.updateOne(1, { name: 'dup' } as Partial<{
+        id: number
+        name: string
+        price: number
+        active: boolean
+        tenantId: string | null
+      }>)
+    ).rejects.toMatchObject({ status: 409 })
   })
 })

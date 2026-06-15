@@ -102,7 +102,10 @@ describe('createExpressCrudRouter — caching', () => {
     const resource: ResourceDefinition = {
       name: 'Widget',
       routePrefix: 'widgets',
-      fields: [{ name: 'id', filterable: true }, { name: 'name', writable: true }],
+      fields: [
+        { name: 'id', filterable: true },
+        { name: 'name', writable: true }
+      ],
       cache: { ttlSeconds: 0 },
       repository: repo
     }

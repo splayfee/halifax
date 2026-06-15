@@ -312,9 +312,7 @@ export function runRepositoryContract(
       it('Between: inclusive range returns all rows within', async () => {
         const { count } = await repo.executeQuery!({
           fields: FIELDS,
-          where: [
-            { field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id3 }
-          ]
+          where: [{ field: 'id', comparison: SqlComparison.Between, value1: id1, value2: id3 }]
         })
         expect(count).toBe(3)
       })
@@ -322,9 +320,7 @@ export function runRepositoryContract(
       it('NotBetween: rows outside the range', async () => {
         const { count, results } = await repo.executeQuery!({
           fields: FIELDS,
-          where: [
-            { field: 'id', comparison: SqlComparison.NotBetween, value1: id1, value2: id2 }
-          ]
+          where: [{ field: 'id', comparison: SqlComparison.NotBetween, value1: id1, value2: id2 }]
         })
         expect(count).toBe(1)
         expect((results[0] as AnyPost).id).toBe(id3)

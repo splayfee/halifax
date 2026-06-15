@@ -10,6 +10,7 @@ import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { BadRequestError } from '@/errors/BadRequestError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
+import { ConflictError } from '@/errors/ConflictError.js'
 import type { ResourceDefinition } from '@/core/types.js'
 import type { Repository, ListResult, CreateOptions } from '@/core/types.js'
 
@@ -1086,6 +1087,92 @@ describe('normalizeError', () => {
       message: 'Internal server error'
     })
   })
+
+  it('normalizes ConflictError to CONFLICT 409', () => {
+    const result = normalizeError(new ConflictError('Email already taken'))
+    expect(result).toEqual({
+      status: 409,
+      code: 'CONFLICT',
+      message: 'Email already taken',
+      details: undefined
+    })
+  })
+})
+
+describe('ConflictError — HTTP layer propagation via Express', () => {
+  function createConflictApp(throwOn: 'create' | 'update' = 'create') {
+    const app = express()
+    app.use(express.json())
+
+    const records: Array<{ id: number; email: string }> = [{ id: 1, email: 'existing@test.com' }]
+
+    const resource: ResourceDefinition = {
+      name: 'User',
+      routePrefix: 'users',
+      fields: [
+        { name: 'id', filterable: true },
+        { name: 'email', filterable: true, writable: true }
+      ],
+      repository: {
+        idField: 'id',
+        async getOne(id) {
+          return records.find((r) => r.id === Number(id)) ?? null
+        },
+        async getMany() {
+          return { count: records.length, results: [...records] }
+        },
+        async createOne() {
+          if (throwOn === 'create') throw new ConflictError('Email already taken')
+          return { id: 2, email: 'new@test.com' }
+        },
+        async createMany() {
+          if (throwOn === 'create') throw new ConflictError('Email already taken')
+          return []
+        },
+        async updateOne() {
+          if (throwOn === 'update') throw new ConflictError('Email already taken')
+          return records[0]!
+        },
+        async deleteOne() {
+          return false
+        }
+      }
+    }
+
+    app.use('/api', createExpressCrudRouter([resource]))
+    return app
+  }
+
+  it('POST returns 409 with CONFLICT code when repository throws ConflictError', async () => {
+    const res = await request(createConflictApp('create'))
+      .post('/api/users')
+      .set('Content-Type', 'application/json')
+      .send({ email: 'dup@test.com' })
+
+    expect(res.status).toBe(409)
+    expect(res.body.errors[0].code).toBe('CONFLICT')
+    expect(res.body.errors[0].message).toBe('Email already taken')
+  })
+
+  it('bulk POST returns 409 with CONFLICT code when repository throws ConflictError', async () => {
+    const res = await request(createConflictApp('create'))
+      .post('/api/users')
+      .set('Content-Type', 'application/json')
+      .send([{ email: 'dup@test.com' }, { email: 'dup2@test.com' }])
+
+    expect(res.status).toBe(409)
+    expect(res.body.errors[0].code).toBe('CONFLICT')
+  })
+
+  it('PATCH returns 409 with CONFLICT code when repository throws ConflictError', async () => {
+    const res = await request(createConflictApp('update'))
+      .patch('/api/users/1')
+      .set('Content-Type', 'application/json')
+      .send({ email: 'existing@test.com' })
+
+    expect(res.status).toBe(409)
+    expect(res.body.errors[0].code).toBe('CONFLICT')
+  })
 })
 
 describe('createExpressCrudRouter — query-string edge cases', () => {
@@ -1328,12 +1415,24 @@ function makeOpenApiApp(overrides: Parameters<typeof createExpressCrudRouter>[1]
       { name: 'email', filterable: true, writable: true }
     ],
     repository: {
-      async getOne() { return null },
-      async getMany() { return { count: 0, results: [] } },
-      async createOne(d) { return d as User },
-      async createMany(d) { return d as User[] },
-      async updateOne() { return null },
-      async deleteOne() { return false }
+      async getOne() {
+        return null
+      },
+      async getMany() {
+        return { count: 0, results: [] }
+      },
+      async createOne(d) {
+        return d as User
+      },
+      async createMany(d) {
+        return d as User[]
+      },
+      async updateOne() {
+        return null
+      },
+      async deleteOne() {
+        return false
+      }
     }
   }
 
@@ -1440,7 +1539,26 @@ describe('createExpressCrudRouter — OpenAPI routes (lines 350-370)', () => {
       name: 'Item',
       routePrefix: 'items',
       fields: [{ name: 'id' }],
-      repository: { async getOne() { return null }, async getMany() { return { count: 0, results: [] } }, async createOne() { return null }, async createMany() { return [] }, async updateOne() { return null }, async deleteOne() { return false } }
+      repository: {
+        async getOne() {
+          return null
+        },
+        async getMany() {
+          return { count: 0, results: [] }
+        },
+        async createOne() {
+          return null
+        },
+        async createMany() {
+          return []
+        },
+        async updateOne() {
+          return null
+        },
+        async deleteOne() {
+          return false
+        }
+      }
     }
     app.use('/api', createExpressCrudRouter([resource], { openapi: { enabled: true } }))
     const res = await request(app).get('/api/openapi.json').set('Accept', '*/*')
@@ -1457,9 +1575,33 @@ describe('createExpressCrudRouter — 405 wildcard callbacks', () => {
     const resource: ResourceDefinition = {
       name: 'Item',
       routePrefix: 'items',
-      permissions: { allowReadOne: true, allowUpdateOne: false, allowUpsertOne: false, allowDeleteOne: false },
+      permissions: {
+        allowReadOne: true,
+        allowUpdateOne: false,
+        allowUpsertOne: false,
+        allowDeleteOne: false
+      },
       fields: [{ name: 'id' }],
-      repository: { async getOne() { return { id: 1 } }, async getMany() { return { count: 0, results: [] } }, async createOne() { return null }, async createMany() { return [] }, async updateOne() { return null }, async deleteOne() { return false } }
+      repository: {
+        async getOne() {
+          return { id: 1 }
+        },
+        async getMany() {
+          return { count: 0, results: [] }
+        },
+        async createOne() {
+          return null
+        },
+        async createMany() {
+          return []
+        },
+        async updateOne() {
+          return null
+        },
+        async deleteOne() {
+          return false
+        }
+      }
     }
     app.use('/api', createExpressCrudRouter([resource], {}))
     // OPTIONS is not a registered CRUD method → triggers the /:id wildcard 405 handler
@@ -1475,13 +1617,37 @@ describe('createExpressCrudRouter — 405 wildcard callbacks', () => {
       routePrefix: 'items',
       // Disable all /:id routes so GET /items/query isn't swallowed by /:id as id='query'
       permissions: {
-        allowCreate: false, allowReadMany: false, allowReadOne: false,
-        allowUpdateOne: false, allowUpdateMany: false, allowUpsertOne: false,
-        allowDeleteOne: false, allowDeleteMany: false,
+        allowCreate: false,
+        allowReadMany: false,
+        allowReadOne: false,
+        allowUpdateOne: false,
+        allowUpdateMany: false,
+        allowUpsertOne: false,
+        allowDeleteOne: false,
+        allowDeleteMany: false,
         allowReadManyWithQueryBuilder: true
       },
       fields: [{ name: 'id' }],
-      repository: { async getOne() { return null }, async getMany() { return { count: 0, results: [] } }, async createOne() { return null }, async createMany() { return [] }, async updateOne() { return null }, async deleteOne() { return false } }
+      repository: {
+        async getOne() {
+          return null
+        },
+        async getMany() {
+          return { count: 0, results: [] }
+        },
+        async createOne() {
+          return null
+        },
+        async createMany() {
+          return []
+        },
+        async updateOne() {
+          return null
+        },
+        async deleteOne() {
+          return false
+        }
+      }
     }
     app.use('/api', createExpressCrudRouter([resource], {}))
     // PUT /items/query is not POST → triggers the query-builder wildcard 405 handler

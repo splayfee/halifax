@@ -435,7 +435,10 @@ describe.skipIf(!hasDb)('Express CRUD routes — HTTP layer', () => {
   it('DELETE /posts/:id removes the record', async () => {
     const post = await prisma.post.create({ data: { title: 'Bye' } })
     expect(
-      ((await request(app).delete(`/api/posts/${post.id}`).set('x-api-key', API_KEY)).body as DeleteBody).deleted
+      (
+        (await request(app).delete(`/api/posts/${post.id}`).set('x-api-key', API_KEY))
+          .body as DeleteBody
+      ).deleted
     ).toBe(true)
     expect((await request(app).get(`/api/posts/${post.id}`).set('x-api-key', API_KEY)).status).toBe(
       404

@@ -1,4 +1,8 @@
-import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
+import type {
+  HttpTransport,
+  TransportRequest,
+  TransportResponse
+} from '@/transport/HttpTransport.js'
 
 /**
  * A superagent request — thenable so it can be `await`-ed directly after chaining.

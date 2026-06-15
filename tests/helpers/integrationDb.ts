@@ -81,18 +81,28 @@ export async function connectIntegrationDb(): Promise<{
   const db = integrationDbName()
   const url = process.env.DATABASE_URL!
 
-  const { PrismaClient } = (await import('@prisma/client')) as unknown as { PrismaClient: new (opts: Record<string, unknown>) => { $connect(): Promise<void>; $disconnect(): Promise<void>; [key: string]: unknown } }
+  const { PrismaClient } = (await import('@prisma/client')) as unknown as {
+    PrismaClient: new (opts: Record<string, unknown>) => {
+      $connect(): Promise<void>
+      $disconnect(): Promise<void>
+      [key: string]: unknown
+    }
+  }
 
   let prisma: { $connect(): Promise<void>; $disconnect(): Promise<void>; [key: string]: unknown }
 
   // Loads a driver-adapter package by name via a non-literal specifier, so adapters that
   // are only installed in a given CI matrix leg don't need to resolve at build time.
 
-  const loadDriver = (pkg: string): Promise<Record<string, unknown>> => import(/* @vite-ignore */ pkg) as Promise<Record<string, unknown>>
+  const loadDriver = (pkg: string): Promise<Record<string, unknown>> =>
+    import(/* @vite-ignore */ pkg) as Promise<Record<string, unknown>>
 
   switch (db) {
     case 'sqlite': {
-      const { PrismaBetterSqlite3 } = (await import('@prisma/adapter-better-sqlite3')) as unknown as { PrismaBetterSqlite3: new (opts: Record<string, unknown>) => unknown }
+      const { PrismaBetterSqlite3 } =
+        (await import('@prisma/adapter-better-sqlite3')) as unknown as {
+          PrismaBetterSqlite3: new (opts: Record<string, unknown>) => unknown
+        }
       // better-sqlite3 wants a filesystem path; Prisma's URL form is `file:<path>`.
       prisma = new PrismaClient({
         adapter: new PrismaBetterSqlite3({ url: url.replace(/^file:/, '') })
@@ -109,7 +119,11 @@ export async function connectIntegrationDb(): Promise<{
       const { PrismaMssql } = await loadDriver('@prisma/adapter-mssql')
       // node-mssql doesn't understand Prisma's JDBC-style `sqlserver://host:port;k=v;…` URL,
       // so translate it into the `mssql` config object the adapter expects.
-      prisma = new PrismaClient({ adapter: new (PrismaMssql as new (c: Record<string, unknown>) => unknown)(mssqlConfigFromUrl(url)) })
+      prisma = new PrismaClient({
+        adapter: new (PrismaMssql as new (c: Record<string, unknown>) => unknown)(
+          mssqlConfigFromUrl(url)
+        )
+      })
       break
     }
     case 'mongodb': {
@@ -125,7 +139,9 @@ export async function connectIntegrationDb(): Promise<{
     case 'postgres':
     case 'cockroachdb':
     default: {
-      const { PrismaPg } = (await import('@prisma/adapter-pg')) as { PrismaPg: new (url: string) => unknown }
+      const { PrismaPg } = (await import('@prisma/adapter-pg')) as {
+        PrismaPg: new (url: string) => unknown
+      }
       prisma = new PrismaClient({ adapter: new PrismaPg(url) })
       break
     }

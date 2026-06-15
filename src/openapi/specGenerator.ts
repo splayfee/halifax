@@ -422,6 +422,9 @@ const unprocessableError = errorRef(
 const notImplementedError = errorRef(
   'Not Implemented — the underlying repository does not support this operation.'
 )
+const conflictError = errorRef(
+  'Conflict — the write was rejected because it would violate a unique constraint.'
+)
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
@@ -652,6 +655,7 @@ export function generateOpenApiSpec(
             content: { 'application/json': { schema: { oneOf: [singleResponse, arrayResponse] } } }
           },
           '400': badRequestError,
+          '409': conflictError,
           '422': unprocessableError,
           ...commonErrors,
           ...writeErrors
@@ -736,6 +740,7 @@ export function generateOpenApiSpec(
             }
           },
           '400': badRequestError,
+          '409': conflictError,
           '422': unprocessableError,
           '501': notImplementedError,
           ...commonErrors,
@@ -903,6 +908,7 @@ export function generateOpenApiSpec(
           },
           '400': badRequestError,
           '404': notFoundError,
+          '409': conflictError,
           '422': unprocessableError,
           ...commonErrors,
           ...writeErrors
@@ -941,6 +947,7 @@ export function generateOpenApiSpec(
             }
           },
           '400': badRequestError,
+          '409': conflictError,
           '422': unprocessableError,
           '501': notImplementedError,
           ...commonErrors,
@@ -982,4 +989,3 @@ export function generateOpenApiSpec(
 
   return spec
 }
-

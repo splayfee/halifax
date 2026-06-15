@@ -1,6 +1,10 @@
 import { HalifaxClient } from '@/HalifaxClient.js'
 import { HalifaxError } from '@/errors/HalifaxError.js'
-import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
+import type {
+  HttpTransport,
+  TransportRequest,
+  TransportResponse
+} from '@/transport/HttpTransport.js'
 
 function makeResponse(
   options: {
@@ -82,14 +86,18 @@ describe('HalifaxClient — request headers', () => {
     const { transport, spy } = makeTransport()
     const client = new HalifaxClient({ baseUrl: 'https://api.example.com', transport })
     await client.resource('users').getOne(1)
-    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({ Accept: 'application/json' })
+    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({
+      Accept: 'application/json'
+    })
   })
 
   it('sends Content-Type: application/json when body is present', async () => {
     const { transport, spy } = makeTransport()
     const client = new HalifaxClient({ baseUrl: 'https://api.example.com', transport })
     await client.resource('users').createOne({ name: 'alice' })
-    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({ 'Content-Type': 'application/json' })
+    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({
+      'Content-Type': 'application/json'
+    })
   })
 
   it('does NOT send Content-Type when body is absent', async () => {
@@ -107,7 +115,9 @@ describe('HalifaxClient — request headers', () => {
       headers: { Authorization: 'Bearer tok' }
     })
     await client.resource('users').getOne(1)
-    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({ Authorization: 'Bearer tok' })
+    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({
+      Authorization: 'Bearer tok'
+    })
   })
 
   it('calls async header function before every request', async () => {
@@ -120,7 +130,9 @@ describe('HalifaxClient — request headers', () => {
     })
     await client.resource('users').getOne(1)
     expect(headerFn).toHaveBeenCalledTimes(1)
-    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({ Authorization: 'Bearer dyn' })
+    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({
+      Authorization: 'Bearer dyn'
+    })
   })
 
   it('calls sync header function', async () => {
@@ -131,7 +143,9 @@ describe('HalifaxClient — request headers', () => {
       headers: () => ({ 'X-Tenant': 'acme' })
     })
     await client.resource('users').getOne(1)
-    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({ 'X-Tenant': 'acme' })
+    expect((spy.mock.calls[0]![0] as TransportRequest).headers).toMatchObject({
+      'X-Tenant': 'acme'
+    })
   })
 })
 

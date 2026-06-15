@@ -39,8 +39,10 @@ export function toOrderBy(
  * @returns The route prefix, e.g., 'user-profiles'.
  */
 export function toRoutePrefix(modelName: string): string {
-  const kebab = modelName.replace(/([A-Z])/g, (_match: string, letter: string, offset: number) =>
-    (offset > 0 ? '-' : '') + letter.toLowerCase()
+  const kebab = modelName.replace(
+    /([A-Z])/g,
+    (_match: string, letter: string, offset: number) =>
+      (offset > 0 ? '-' : '') + letter.toLowerCase()
   )
   if (kebab.endsWith('y') && !/[aeiou]y$/.test(kebab)) return kebab.slice(0, -1) + 'ies'
   if (/(?:s|x|z|ch|sh)$/.test(kebab)) return kebab + 'es'

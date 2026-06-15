@@ -14,7 +14,7 @@
 
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core'
 
 import express from 'express'
 import request, { agent as supertestAgent } from 'supertest'
@@ -413,6 +413,103 @@ describe('DrizzleAdapter + Express — HTTP layer', () => {
       expect(qb4.count).toBe(3) // total
       expect(qb4.results).toHaveLength(2) // page
       expect(qb4.results[0].title).toBe('Alpha')
+    })
+  })
+})
+
+// ─── Suite 3: 409 Conflict — full stack through HTTP layer ───────────────────
+
+/**
+ * This table has a UNIQUE constraint on `slug`. The intent is to drive real
+ * SQLite unique constraint errors all the way from DrizzleAdapter → Express →
+ * supertest and confirm that the response is `409 CONFLICT`, not a 500.
+ */
+const slugsTable = sqliteTable(
+  'slugs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    slug: text('slug').notNull(),
+    title: text('title').notNull().default('')
+  },
+  (t) => [unique().on(t.slug)]
+)
+
+type SlugPost = { id: number; slug: string; title: string }
+
+const SLUG_API_KEY = 'slug-key'
+
+describe('409 Conflict — DrizzleAdapter unique constraint through HTTP stack', () => {
+  let sqlite: InstanceType<typeof Database>
+  let agent: ReturnType<typeof supertestAgent>
+
+  beforeAll(() => {
+    sqlite = new Database(':memory:')
+    sqlite.exec(`
+      CREATE TABLE slugs (
+        id    INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug  TEXT    NOT NULL,
+        title TEXT    NOT NULL DEFAULT '',
+        UNIQUE (slug)
+      )
+    `)
+    const db = drizzle(sqlite)
+    const repo = new DrizzleAdapter<SlugPost, Omit<SlugPost, 'id'>, Partial<SlugPost>>(
+      db,
+      slugsTable
+    )
+
+    const resource: ResourceDefinition = {
+      name: 'Slug',
+      routePrefix: 'slugs',
+      fields: [
+        { name: 'id', filterable: true },
+        { name: 'slug', filterable: true, writable: true },
+        { name: 'title', filterable: true, writable: true }
+      ],
+      repository: repo
+    }
+
+    const app = express()
+    app.use(express.json())
+    app.use(
+      '/api',
+      createExpressCrudRouter([resource], { authStrategy: new ApiKeyAuthStrategy(SLUG_API_KEY) })
+    )
+    agent = supertestAgent(app).set('x-api-key', SLUG_API_KEY)
+  })
+
+  afterAll(() => {
+    sqlite.close()
+  })
+
+  it('POST first record with a unique slug → 201 Created', async () => {
+    const res = await agent.post('/api/slugs').send({ slug: 'hello-world', title: 'Hello' })
+    expect(res.status).toBe(201)
+    expect((res.body as SlugPost).slug).toBe('hello-world')
+  })
+
+  it('POST duplicate slug → 409 with code CONFLICT', async () => {
+    await agent.post('/api/slugs').send({ slug: 'conflict-slug', title: 'First' })
+    const res = await agent.post('/api/slugs').send({ slug: 'conflict-slug', title: 'Second' })
+    expect(res.status).toBe(409)
+    expect(res.body.errors[0].code).toBe('CONFLICT')
+  })
+
+  it('PATCH update to an already-taken slug → 409 with code CONFLICT', async () => {
+    await agent.post('/api/slugs').send({ slug: 'taken', title: 'Taken' })
+    const created = await agent.post('/api/slugs').send({ slug: 'free', title: 'Free' })
+    const id = (created.body as SlugPost).id
+    const res = await agent.patch(`/api/slugs/${id}`).send({ slug: 'taken' })
+    expect(res.status).toBe(409)
+    expect(res.body.errors[0].code).toBe('CONFLICT')
+  })
+
+  it('409 response body matches the standard error envelope shape', async () => {
+    await agent.post('/api/slugs').send({ slug: 'envelope-test', title: 'Seed' })
+    const res = await agent.post('/api/slugs').send({ slug: 'envelope-test', title: 'Dupe' })
+    expect(res.status).toBe(409)
+    expect(res.body).toMatchObject({
+      errors: [{ code: 'CONFLICT', message: expect.any(String) }]
     })
   })
 })

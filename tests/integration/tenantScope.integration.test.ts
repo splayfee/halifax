@@ -137,10 +137,9 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
   })
 
   it('createMany stamps every row with the caller tenant', async () => {
-    await repoA.createMany([
-      { name: 'm1' },
-      { name: 'm2', companyId: COMPANY_B }
-    ] as Array<Record<string, unknown>>)
+    await repoA.createMany([{ name: 'm1' }, { name: 'm2', companyId: COMPANY_B }] as Array<
+      Record<string, unknown>
+    >)
     const rows = await prisma.widget.findMany()
     expect(rows).toHaveLength(2)
     expect(rows.every((r) => r.companyId === COMPANY_A)).toBe(true)
@@ -165,7 +164,9 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
       data: { companyId: COMPANY_A, name: 'before' }
     })
 
-    expect(await repoB.updateOne(owned.id, { name: 'hacked' } as Record<string, unknown>)).toBeNull()
+    expect(
+      await repoB.updateOne(owned.id, { name: 'hacked' } as Record<string, unknown>)
+    ).toBeNull()
     const row = await prisma.widget.findUnique({ where: { id: owned.id } })
     expect(row?.name).toBe('before')
   })
@@ -387,7 +388,9 @@ describe.skipIf(!hasDb)('Express tenant scoping — HTTP layer (real DB)', () =>
     expect(res.status).toBe(201)
     expect((res.body as WidgetBody).companyId).toBe(COMPANY_A)
     // Not visible to company B.
-    expect(((await request(app).get('/api/v3/widgets').set(as(COMPANY_B))).body as WidgetListBody).count).toBe(0)
+    expect(
+      ((await request(app).get('/api/v3/widgets').set(as(COMPANY_B))).body as WidgetListBody).count
+    ).toBe(0)
   })
 
   it('PATCH /:id cannot modify another tenant row (404)', async () => {

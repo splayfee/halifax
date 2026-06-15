@@ -140,9 +140,9 @@ describe('astToDrizzleWhere — comparison operators', () => {
 
   it('In with a scalar value (wraps it in array)', () => {
     // value1 is a scalar, not an array — adapter wraps it
-    expect(query({ field: 'name', comparison: SqlComparison.In, value1: 'Bravo' as unknown as string[] })).toEqual([
-      'Bravo'
-    ])
+    expect(
+      query({ field: 'name', comparison: SqlComparison.In, value1: 'Bravo' as unknown as string[] })
+    ).toEqual(['Bravo'])
   })
 
   it('IsNull', () => {
@@ -197,9 +197,13 @@ describe('astToDrizzleWhere — comparison operators', () => {
   })
 
   it('default (unknown operator) falls back to Equal', () => {
-    expect(query({ field: 'name', comparison: 'UNKNOWN_OP' as unknown as SqlComparison, value1: 'Alpha' })).toEqual([
-      'Alpha'
-    ])
+    expect(
+      query({
+        field: 'name',
+        comparison: 'UNKNOWN_OP' as unknown as SqlComparison,
+        value1: 'Alpha'
+      })
+    ).toEqual(['Alpha'])
   })
 })
 

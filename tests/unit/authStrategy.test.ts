@@ -18,7 +18,12 @@ function req(
 }
 
 // Minimal ResourceDefinition stub for authorize() calls
-const resource = { name: 'R', routePrefix: 'r', fields: [], permissions: {} } as unknown as ResourceDefinition
+const resource = {
+  name: 'R',
+  routePrefix: 'r',
+  fields: [],
+  permissions: {}
+} as unknown as ResourceDefinition
 
 describe('AllowAllAuthStrategy', () => {
   it('authenticates every request without inspection', () => {

@@ -26,7 +26,12 @@ import { HalifaxClient } from '@edium/halifax-client'
 const client = new HalifaxClient({ baseUrl: 'https://api.example.com/v1' })
 
 // Typed resource client
-interface Post { id: number; title: string; content: string; published: boolean }
+interface Post {
+  id: number
+  title: string
+  content: string
+  published: boolean
+}
 const posts = client.resource<Post, Omit<Post, 'id'>, Partial<Omit<Post, 'id'>>>('posts')
 
 // CRUD
@@ -51,7 +56,7 @@ const client = new HalifaxClient({
   envelope: 'data',
 
   // Path segment for POST-to-query routes (default: 'query')
-  queryBuilderPath: 'query',
+  queryBuilderPath: 'query'
 
   // Swap the HTTP transport (default: fetch)
   // transport: new AxiosTransport(axiosInstance),
@@ -62,13 +67,13 @@ const client = new HalifaxClient({
 
 The client ships five adapters. Each wraps its library's native request, translating it to the internal `HttpTransport` interface. Pass one via `options.transport`.
 
-| Transport           | Library       | Import                          |
-| ------------------- | ------------- | ------------------------------- |
-| `FetchTransport`    | `fetch` (default) | built-in, no import needed |
-| `AxiosTransport`    | `axios`       | `@edium/halifax-client`         |
-| `KyTransport`       | `ky`          | `@edium/halifax-client`         |
-| `OfetchTransport`   | `ofetch`      | `@edium/halifax-client`         |
-| `SuperagentTransport` | `superagent` | `@edium/halifax-client`        |
+| Transport             | Library           | Import                     |
+| --------------------- | ----------------- | -------------------------- |
+| `FetchTransport`      | `fetch` (default) | built-in, no import needed |
+| `AxiosTransport`      | `axios`           | `@edium/halifax-client`    |
+| `KyTransport`         | `ky`              | `@edium/halifax-client`    |
+| `OfetchTransport`     | `ofetch`          | `@edium/halifax-client`    |
+| `SuperagentTransport` | `superagent`      | `@edium/halifax-client`    |
 
 ```ts
 import axios from 'axios'
@@ -88,7 +93,7 @@ import { HalifaxClient } from '@edium/halifax-client'
 
 const client = new HalifaxClient({
   baseUrl: 'https://api.example.com/v1',
-  fetch: myCustomFetch  // replaces globalThis.fetch inside FetchTransport
+  fetch: myCustomFetch // replaces globalThis.fetch inside FetchTransport
 })
 ```
 
@@ -124,10 +129,9 @@ const q = new QueryBuilder()
 
 ```ts
 // PATCH /posts — update all published posts
-await posts.updateMany(
-  new QueryBuilder().where('published', SqlComparison.Equal, true),
-  { published: false }
-)
+await posts.updateMany(new QueryBuilder().where('published', SqlComparison.Equal, true), {
+  published: false
+})
 
 // DELETE /posts — delete all drafts older than a date
 await posts.deleteMany(
@@ -151,7 +155,12 @@ pnpm add @tanstack/react-query
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { HalifaxClient, QueryBuilder, SqlComparison } from '@edium/halifax-client'
 
-interface Post { id: number; title: string; content: string; published: boolean }
+interface Post {
+  id: number
+  title: string
+  content: string
+  published: boolean
+}
 
 const client = new HalifaxClient({ baseUrl: '/api/v1' })
 const posts = client.resource<Post, Omit<Post, 'id'>, Partial<Omit<Post, 'id'>>>('posts')
@@ -210,14 +219,18 @@ function PaginatedPosts() {
   const [page, setPage] = React.useState(0)
   const PAGE_SIZE = 20
 
-  const { data } = useQuery(
-    posts.getManyOptions({ limit: PAGE_SIZE, offset: page * PAGE_SIZE })
-  )
+  const { data } = useQuery(posts.getManyOptions({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }))
 
   return (
     <>
-      <ul>{data?.results.map((p) => <li key={p.id}>{p.title}</li>)}</ul>
-      <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Prev</button>
+      <ul>
+        {data?.results.map((p) => (
+          <li key={p.id}>{p.title}</li>
+        ))}
+      </ul>
+      <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+        Prev
+      </button>
       <button onClick={() => setPage((p) => p + 1)}>Next</button>
     </>
   )
@@ -245,7 +258,9 @@ function CreatePost() {
       }}
     >
       <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      <button type="submit" disabled={isPending}>Create</button>
+      <button type="submit" disabled={isPending}>
+        Create
+      </button>
     </form>
   )
 }
@@ -273,12 +288,12 @@ function PublishPost({ id }: { id: number }) {
 
 The key factories follow a three-tier hierarchy so broad invalidation is easy:
 
-| Key                              | Returned by         |
-| -------------------------------- | ------------------- |
-| `['posts']`                      | top-level prefix    |
-| `['posts', 'list', params]`      | `listKey(params)`   |
-| `['posts', 'detail', id, params]` | `detailKey(id)`    |
-| `['posts', 'query', queryAST]`   | `queryKey(q)`       |
+| Key                               | Returned by       |
+| --------------------------------- | ----------------- |
+| `['posts']`                       | top-level prefix  |
+| `['posts', 'list', params]`       | `listKey(params)` |
+| `['posts', 'detail', id, params]` | `detailKey(id)`   |
+| `['posts', 'query', queryAST]`    | `queryKey(q)`     |
 
 `queryClient.invalidateQueries({ queryKey: ['posts'] })` busts **all** lists, details, and query results for the resource in one call.
 
@@ -310,7 +325,12 @@ import { ref, computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { HalifaxClient, QueryBuilder, SqlComparison } from '@edium/halifax-client'
 
-interface Post { id: number; title: string; content: string; published: boolean }
+interface Post {
+  id: number
+  title: string
+  content: string
+  published: boolean
+}
 
 const client = new HalifaxClient({ baseUrl: '/api/v1' })
 const posts = client.resource<Post, Omit<Post, 'id'>, Partial<Omit<Post, 'id'>>>('posts')
@@ -350,7 +370,11 @@ import { toRef } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { HalifaxClient } from '@edium/halifax-client'
 
-interface Post { id: number; title: string; content: string }
+interface Post {
+  id: number
+  title: string
+  content: string
+}
 
 const props = defineProps<{ id: number }>()
 
@@ -358,9 +382,7 @@ const client = new HalifaxClient({ baseUrl: '/api/v1' })
 const posts = client.resource<Post>('posts')
 
 // toRef keeps the query key reactive when the prop changes
-const { data: post } = useQuery(
-  computed(() => posts.getOneOptions(props.id))
-)
+const { data: post } = useQuery(computed(() => posts.getOneOptions(props.id)))
 </script>
 
 <template>
@@ -378,7 +400,12 @@ import { ref } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { HalifaxClient } from '@edium/halifax-client'
 
-interface Post { id: number; title: string; content: string; published: boolean }
+interface Post {
+  id: number
+  title: string
+  content: string
+  published: boolean
+}
 
 const client = new HalifaxClient({ baseUrl: '/api/v1' })
 const posts = client.resource<Post, Omit<Post, 'id'>, Partial<Omit<Post, 'id'>>>('posts')
@@ -413,7 +440,11 @@ import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { HalifaxClient, QueryBuilder, SqlComparison, SqlOrder } from '@edium/halifax-client'
 
-interface Post { id: number; title: string; published: boolean }
+interface Post {
+  id: number
+  title: string
+  published: boolean
+}
 
 const client = new HalifaxClient({ baseUrl: '/api/v1' })
 const posts = client.resource<Post>('posts')
@@ -431,9 +462,7 @@ const { data } = useQuery(
 </script>
 
 <template>
-  <label>
-    <input v-model="publishedOnly" type="checkbox" /> Published only
-  </label>
+  <label> <input v-model="publishedOnly" type="checkbox" /> Published only </label>
   <ul>
     <li v-for="p in data?.results" :key="p.id">{{ p.title }}</li>
   </ul>
@@ -451,8 +480,8 @@ try {
   await posts.getOne(999)
 } catch (err) {
   if (err instanceof HalifaxError) {
-    console.log(err.status)           // 404
-    console.log(err.errors[0].code)   // 'NOT_FOUND'
+    console.log(err.status) // 404
+    console.log(err.errors[0].code) // 'NOT_FOUND'
     console.log(err.errors[0].message)
   }
 }
@@ -471,55 +500,55 @@ if (error instanceof HalifaxError && error.status === 404) {
 
 ### `HalifaxClient`
 
-| Method | Description |
-| --- | --- |
+| Method                                          | Description                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------- |
 | `resource<TRecord, TCreate?, TUpdate?>(prefix)` | Returns a typed `ResourceClient` for the given route prefix |
 
 ### `ResourceClient<TRecord, TCreate, TUpdate>`
 
 **CRUD**
 
-| Method | Signature | HTTP |
-| --- | --- | --- |
-| `getOne` | `(id, params?)` | `GET /prefix/:id` |
-| `getMany` | `(params?)` | `GET /prefix` |
-| `createOne` | `(data)` | `POST /prefix` |
-| `createMany` | `(data[])` | `POST /prefix` |
-| `updateOne` | `(id, data)` | `PATCH /prefix/:id` |
-| `updateMany` | `(query, data)` | `PATCH /prefix` |
-| `upsertOne` | `(id, data)` | `PUT /prefix/:id` |
-| `deleteOne` | `(id)` | `DELETE /prefix/:id` |
-| `deleteMany` | `(query)` | `DELETE /prefix` |
-| `query` | `(query)` | `POST /prefix/query` |
+| Method       | Signature       | HTTP                 |
+| ------------ | --------------- | -------------------- |
+| `getOne`     | `(id, params?)` | `GET /prefix/:id`    |
+| `getMany`    | `(params?)`     | `GET /prefix`        |
+| `createOne`  | `(data)`        | `POST /prefix`       |
+| `createMany` | `(data[])`      | `POST /prefix`       |
+| `updateOne`  | `(id, data)`    | `PATCH /prefix/:id`  |
+| `updateMany` | `(query, data)` | `PATCH /prefix`      |
+| `upsertOne`  | `(id, data)`    | `PUT /prefix/:id`    |
+| `deleteOne`  | `(id)`          | `DELETE /prefix/:id` |
+| `deleteMany` | `(query)`       | `DELETE /prefix`     |
+| `query`      | `(query)`       | `POST /prefix/query` |
 
 **Query key helpers**
 
-| Method | Returns |
-| --- | --- |
-| `listKey(params?)` | `['prefix', 'list', params \| {}]` |
+| Method                   | Returns                                  |
+| ------------------------ | ---------------------------------------- |
+| `listKey(params?)`       | `['prefix', 'list', params \| {}]`       |
 | `detailKey(id, params?)` | `['prefix', 'detail', id, params \| {}]` |
-| `queryKey(query)` | `['prefix', 'query', queryAST]` |
+| `queryKey(query)`        | `['prefix', 'query', queryAST]`          |
 
 **TanStack Query option factories**
 
-| Method | Returns |
-| --- | --- |
-| `getManyOptions(params?)` | `{ queryKey, queryFn }` for `useQuery` |
+| Method                       | Returns                                |
+| ---------------------------- | -------------------------------------- |
+| `getManyOptions(params?)`    | `{ queryKey, queryFn }` for `useQuery` |
 | `getOneOptions(id, params?)` | `{ queryKey, queryFn }` for `useQuery` |
-| `queryOptions(query)` | `{ queryKey, queryFn }` for `useQuery` |
+| `queryOptions(query)`        | `{ queryKey, queryFn }` for `useQuery` |
 
 ### `QueryBuilder`
 
-| Method | Description |
-| --- | --- |
-| `where(field, comparison, value1?, value2?)` | First WHERE condition |
-| `and(field, comparison, value1?, value2?)` | Append AND condition |
-| `or(field, comparison, value1?, value2?)` | Append OR condition |
-| `andGroup(field, comparison, value1, fn)` | Parenthesized AND group |
-| `orGroup(field, comparison, value1, fn)` | Parenthesized OR group |
-| `orderBy(field, direction?)` | Add ORDER BY (default ASC) |
-| `limit(n)` | Maximum records to return |
-| `offset(n)` | Records to skip |
-| `select(...fields)` | Project specific fields |
-| `distinct(...fields)` | Deduplicate on these columns |
-| `build()` | Produce the `IQueryOptions` AST |
+| Method                                       | Description                     |
+| -------------------------------------------- | ------------------------------- |
+| `where(field, comparison, value1?, value2?)` | First WHERE condition           |
+| `and(field, comparison, value1?, value2?)`   | Append AND condition            |
+| `or(field, comparison, value1?, value2?)`    | Append OR condition             |
+| `andGroup(field, comparison, value1, fn)`    | Parenthesized AND group         |
+| `orGroup(field, comparison, value1, fn)`     | Parenthesized OR group          |
+| `orderBy(field, direction?)`                 | Add ORDER BY (default ASC)      |
+| `limit(n)`                                   | Maximum records to return       |
+| `offset(n)`                                  | Records to skip                 |
+| `select(...fields)`                          | Project specific fields         |
+| `distinct(...fields)`                        | Deduplicate on these columns    |
+| `build()`                                    | Produce the `IQueryOptions` AST |

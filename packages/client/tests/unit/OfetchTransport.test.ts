@@ -1,6 +1,11 @@
 import { OfetchTransport, type OfetchLike } from '@/transport/OfetchTransport.js'
 
-type OfetchOpts = { method: string; headers?: Record<string, string>; body?: unknown; ignoreResponseError: boolean }
+type OfetchOpts = {
+  method: string
+  headers?: Record<string, string>
+  body?: unknown
+  ignoreResponseError: boolean
+}
 
 function makeOfetchResponse(
   options: {

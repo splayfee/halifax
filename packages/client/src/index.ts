@@ -11,7 +11,11 @@ export { SuperagentTransport } from '@/transport/SuperagentTransport.js'
 
 export type { HalifaxErrorItem } from '@/errors/HalifaxError.js'
 export type { IQueryFilter, QueryScalar, IQueryOptions, ISort } from '@edium/halifax-types'
-export type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
+export type {
+  HttpTransport,
+  TransportRequest,
+  TransportResponse
+} from '@/transport/HttpTransport.js'
 export type { AxiosLike } from '@/transport/AxiosTransport.js'
 export type { KyLike } from '@/transport/KyTransport.js'
 export type { OfetchLike } from '@/transport/OfetchTransport.js'

@@ -298,21 +298,19 @@ describe('validateAdvancedQuery', () => {
 
   it('validates distinct field names (lines 253-254)', () => {
     // validation.ts lines 253-254: if (query.distinct) branch
-    expect(() =>
-      validateAdvancedQuery(resource, { distinct: ['id', 'title'] })
-    ).not.toThrow()
+    expect(() => validateAdvancedQuery(resource, { distinct: ['id', 'title'] })).not.toThrow()
   })
 
   it('throws for an unknown field in distinct (lines 253-254)', () => {
-    expect(() =>
-      validateAdvancedQuery(resource, { distinct: ['nonexistent'] })
-    ).toThrow(UnprocessableEntityError)
+    expect(() => validateAdvancedQuery(resource, { distinct: ['nonexistent'] })).toThrow(
+      UnprocessableEntityError
+    )
   })
 
   it('throws for a non-selectable field in distinct (lines 253-254)', () => {
-    expect(() =>
-      validateAdvancedQuery(resource, { distinct: ['secret'] })
-    ).toThrow(UnprocessableEntityError)
+    expect(() => validateAdvancedQuery(resource, { distinct: ['secret'] })).toThrow(
+      UnprocessableEntityError
+    )
   })
 })
 

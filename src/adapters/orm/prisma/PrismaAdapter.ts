@@ -1,3 +1,4 @@
+import { ConflictError } from '@/errors/ConflictError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import { ServerError } from '@/errors/ServerError.js'
@@ -11,6 +12,16 @@ function isNotFoundError(error: unknown): boolean {
     error !== null &&
     'code' in error &&
     (error as Record<string, unknown>).code === 'P2025'
+  )
+}
+
+/** Returns true for Prisma's P2002 unique constraint violation. */
+function isDuplicateError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as Record<string, unknown>).code === 'P2002'
   )
 }
 import type { IQueryOptions } from '@edium/halifax-types'
@@ -286,7 +297,12 @@ export class PrismaAdapter<
    * @throws ServerError if the Prisma delegate does not support the create method.
    */
   public async createOne(data: TCreate): Promise<TRecord> {
-    return (await this.delegate.create({ data: this.stampTenant(data) })) as TRecord
+    try {
+      return (await this.delegate.create({ data: this.stampTenant(data) })) as TRecord
+    } catch (error) {
+      if (isDuplicateError(error)) throw new ConflictError()
+      throw error
+    }
   }
 
   /**
@@ -301,7 +317,12 @@ export class PrismaAdapter<
       return await Promise.all(data.map((item) => this.createOne(item)))
     }
 
-    await this.delegate.createMany({ data: data.map((item) => this.stampTenant(item)) })
+    try {
+      await this.delegate.createMany({ data: data.map((item) => this.stampTenant(item)) })
+    } catch (error) {
+      if (isDuplicateError(error)) throw new ConflictError()
+      throw error
+    }
     return []
   }
 
@@ -332,6 +353,7 @@ export class PrismaAdapter<
       return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
     } catch (error) {
       if (isNotFoundError(error)) return null
+      if (isDuplicateError(error)) throw new ConflictError()
       throw error
     }
   }
@@ -393,18 +415,28 @@ export class PrismaAdapter<
       if (existing && existing[this.scope.field] !== this.scope.value) {
         throw new NotFoundError()
       }
-      return (await this.delegate.upsert({
-        where: { [this.idField]: id },
-        create: this.stampTenant(data),
-        update: this.stripTenant(data) as TUpdate
-      })) as TRecord
+      try {
+        return (await this.delegate.upsert({
+          where: { [this.idField]: id },
+          create: this.stampTenant(data),
+          update: this.stripTenant(data) as TUpdate
+        })) as TRecord
+      } catch (error) {
+        if (isDuplicateError(error)) throw new ConflictError()
+        throw error
+      }
     }
 
-    return (await this.delegate.upsert({
-      where: { [this.idField]: id },
-      create: data,
-      update: data as TUpdate
-    })) as TRecord
+    try {
+      return (await this.delegate.upsert({
+        where: { [this.idField]: id },
+        create: data,
+        update: data as TUpdate
+      })) as TRecord
+    } catch (error) {
+      if (isDuplicateError(error)) throw new ConflictError()
+      throw error
+    }
   }
 
   /**

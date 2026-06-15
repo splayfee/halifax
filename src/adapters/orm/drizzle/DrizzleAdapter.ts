@@ -1,3 +1,4 @@
+import { ConflictError } from '@/errors/ConflictError.js'
 import { count, eq, getTableColumns, and, inArray, asc, desc } from 'drizzle-orm'
 import type { AnyColumn, SQL, Table } from 'drizzle-orm'
 import type { IQueryOptions, QueryScalar } from '@edium/halifax-types'
@@ -87,6 +88,17 @@ export interface DrizzleAdapterConfig {
    * Set explicitly when using composite PKs or a non-standard naming convention.
    */
   idField?: string
+}
+
+/** Detects unique constraint violations across PostgreSQL (23505), MySQL (1062/ER_DUP_ENTRY), and SQLite. */
+function isDuplicateError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const e = error as Record<string, unknown>
+  if (e['code'] === '23505') return true
+  if (e['errno'] === 1062 || e['code'] === 'ER_DUP_ENTRY') return true
+  if (typeof e['message'] === 'string' && e['message'].includes('UNIQUE constraint failed'))
+    return true
+  return false
 }
 
 function drizzleTypeToOpenApi(col: AnyColumn): { type?: FieldType; format?: string } {
@@ -277,11 +289,16 @@ export class DrizzleAdapter<
   }
 
   async createOne(data: TCreate, _options?: { idempotencyKey?: string }): Promise<TRecord> {
-    const rows = (await this.db
-      .insert(this.table)
-      .values(this.scope ? { ...data, [this.scope.field]: this.scope.value } : data)
-      .returning()) as (TRecord | undefined)[]
-    return rows[0] as TRecord
+    try {
+      const rows = (await this.db
+        .insert(this.table)
+        .values(this.scope ? { ...data, [this.scope.field]: this.scope.value } : data)
+        .returning()) as (TRecord | undefined)[]
+      return rows[0] as TRecord
+    } catch (error) {
+      if (isDuplicateError(error)) throw new ConflictError()
+      throw error
+    }
   }
 
   async createMany(data: TCreate[], _options?: { idempotencyKey?: string }): Promise<TRecord[]> {
@@ -289,19 +306,29 @@ export class DrizzleAdapter<
     const stamped = this.scope
       ? data.map((d) => ({ ...d, [this.scope!.field]: this.scope!.value }))
       : data
-    const rows = (await this.db.insert(this.table).values(stamped).returning()) as TRecord[]
-    return rows
+    try {
+      const rows = (await this.db.insert(this.table).values(stamped).returning()) as TRecord[]
+      return rows
+    } catch (error) {
+      if (isDuplicateError(error)) throw new ConflictError()
+      throw error
+    }
   }
 
   async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     const idWhere = eq(this.columns[this.idField]!, id as QueryScalar)
     const where = this.withScopeWhere(idWhere)
-    const rows = (await this.db
-      .update(this.table)
-      .set(this.stripScope(data as Record<string, unknown>))
-      .where(where)
-      .returning()) as (TRecord | undefined)[]
-    return rows[0] ?? null
+    try {
+      const rows = (await this.db
+        .update(this.table)
+        .set(this.stripScope(data as Record<string, unknown>))
+        .where(where)
+        .returning()) as (TRecord | undefined)[]
+      return rows[0] ?? null
+    } catch (error) {
+      if (isDuplicateError(error)) throw new ConflictError()
+      throw error
+    }
   }
 
   async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {

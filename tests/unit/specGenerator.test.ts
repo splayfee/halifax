@@ -211,6 +211,41 @@ describe('generateOpenApiSpec — route generation by permission', () => {
     expect(spec.paths['/posts/{id}']?.put?.operationId).toBe('upsertPosts')
     expect(spec.paths['/posts/{id}']?.delete?.operationId).toBe('deletePosts')
   })
+
+  it('POST /{resource} includes 409 Conflict response', () => {
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowCreate: true } })
+    ])
+    expect(spec.paths['/posts']?.post?.responses?.['409']).toBeDefined()
+  })
+
+  it('PATCH /{resource} (updateMany) includes 409 Conflict response', () => {
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowUpdateMany: true } })
+    ])
+    expect(spec.paths['/posts']?.patch?.responses?.['409']).toBeDefined()
+  })
+
+  it('PATCH /{resource}/{id} (updateOne) includes 409 Conflict response', () => {
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowUpdateOne: true } })
+    ])
+    expect(spec.paths['/posts/{id}']?.patch?.responses?.['409']).toBeDefined()
+  })
+
+  it('PUT /{resource}/{id} (upsertOne) includes 409 Conflict response', () => {
+    const spec = generateOpenApiSpec([
+      makeResource({ permissions: { ...allOff, allowUpsertOne: true } })
+    ])
+    expect(spec.paths['/posts/{id}']?.put?.responses?.['409']).toBeDefined()
+  })
+
+  it('read-only operations do not include 409 Conflict response', () => {
+    const spec = generateOpenApiSpec([makeResource()])
+    expect(spec.paths['/posts']?.get?.responses?.['409']).toBeUndefined()
+    expect(spec.paths['/posts/{id}']?.get?.responses?.['409']).toBeUndefined()
+    expect(spec.paths['/posts/{id}']?.delete?.responses?.['409']).toBeUndefined()
+  })
 })
 
 // ─── Field type mapping ───────────────────────────────────────────────────────

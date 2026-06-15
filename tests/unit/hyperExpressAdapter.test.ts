@@ -1,6 +1,9 @@
 import { vi, describe, it, expect } from 'vitest'
 import HyperExpress from 'hyper-express'
-import { createHyperExpressCrudRouter, HyperExpressHttpServer } from '@/adapters/http/HyperExpressAdapter.js'
+import {
+  createHyperExpressCrudRouter,
+  HyperExpressHttpServer
+} from '@/adapters/http/HyperExpressAdapter.js'
 import { ApiKeyAuthStrategy } from '@/auth/AuthStrategy.js'
 import { getFreePort } from '../helpers/freePort.js'
 import {
@@ -62,13 +65,15 @@ function makeRouter() {
 }
 
 /** Build a mock HyperExpress request. */
-function makeRequest(overrides: Partial<{
-  method: string
-  path_parameters: Record<string, string>
-  query_parameters: Record<string, string>
-  headers: Record<string, string | string[] | undefined>
-  json: () => Promise<unknown>
-}> = {}) {
+function makeRequest(
+  overrides: Partial<{
+    method: string
+    path_parameters: Record<string, string>
+    query_parameters: Record<string, string>
+    headers: Record<string, string | string[] | undefined>
+    json: () => Promise<unknown>
+  }> = {}
+) {
   return {
     method: 'POST',
     path_parameters: {},

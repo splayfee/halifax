@@ -379,11 +379,7 @@ describe('createExpressCrudRouter — tenant integration', () => {
       // tenant is truthy ({}) but .field is absent — exercises the false branch of
       // `resource.tenant && resource.tenant.field` at crudRouter.ts line 126
       tenant: {} as { field: string },
-      fields: [
-        { name: 'id' },
-        { name: 'companyId' },
-        { name: 'name' }
-      ],
+      fields: [{ name: 'id' }, { name: 'companyId' }, { name: 'name' }],
       repository: new PrismaAdapter<Row>({ delegate })
     }
 
@@ -411,11 +407,7 @@ describe('createExpressCrudRouter — tenant integration', () => {
     const resource: ResourceDefinition = {
       name: 'Widget',
       routePrefix: 'widgets',
-      fields: [
-        { name: 'id' },
-        { name: 'tenant-id' },
-        { name: 'name' }
-      ],
+      fields: [{ name: 'id' }, { name: 'tenant-id' }, { name: 'name' }],
       repository: new PrismaAdapter<Row>({ delegate })
     }
 

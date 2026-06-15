@@ -1,6 +1,11 @@
 import { KyTransport, type KyLike } from '@/transport/KyTransport.js'
 
-type KyOpts = { method: string; headers?: Record<string, string>; throwHttpErrors: boolean; body?: string }
+type KyOpts = {
+  method: string
+  headers?: Record<string, string>
+  throwHttpErrors: boolean
+  body?: string
+}
 
 function makeKyResponse(
   options: { status?: number; ok?: boolean; body?: unknown; text?: string } = {}

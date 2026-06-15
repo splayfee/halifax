@@ -19,23 +19,23 @@ Comparison operators for query filter conditions.
 ```ts
 import { SqlComparison } from '@edium/halifax-types'
 
-SqlComparison.Equal            // '='
-SqlComparison.NotEqual         // '<>'
-SqlComparison.GreaterThan      // '>'
+SqlComparison.Equal // '='
+SqlComparison.NotEqual // '<>'
+SqlComparison.GreaterThan // '>'
 SqlComparison.GreaterThanOrEqual // '>='
-SqlComparison.LessThan         // '<'
-SqlComparison.LessThanOrEqual  // '<='
-SqlComparison.Between          // 'BETWEEN'
-SqlComparison.NotBetween       // 'NOT BETWEEN'
-SqlComparison.In               // 'IN'
-SqlComparison.NotIn            // 'NOT IN'
-SqlComparison.Like             // 'LIKE'
-SqlComparison.NotLike          // 'NOT LIKE'
-SqlComparison.Contains         // 'CONTAINS'
-SqlComparison.StartsWith       // 'STARTS WITH'
-SqlComparison.EndsWith         // 'ENDS WITH'
-SqlComparison.IsNull           // 'IS NULL'
-SqlComparison.IsNotNull        // 'IS NOT NULL'
+SqlComparison.LessThan // '<'
+SqlComparison.LessThanOrEqual // '<='
+SqlComparison.Between // 'BETWEEN'
+SqlComparison.NotBetween // 'NOT BETWEEN'
+SqlComparison.In // 'IN'
+SqlComparison.NotIn // 'NOT IN'
+SqlComparison.Like // 'LIKE'
+SqlComparison.NotLike // 'NOT LIKE'
+SqlComparison.Contains // 'CONTAINS'
+SqlComparison.StartsWith // 'STARTS WITH'
+SqlComparison.EndsWith // 'ENDS WITH'
+SqlComparison.IsNull // 'IS NULL'
+SqlComparison.IsNotNull // 'IS NOT NULL'
 ```
 
 ### `SqlOperator`
@@ -45,8 +45,8 @@ Boolean join operators between filter conditions.
 ```ts
 import { SqlOperator } from '@edium/halifax-types'
 
-SqlOperator.And  // 'AND'
-SqlOperator.Or   // 'OR'
+SqlOperator.And // 'AND'
+SqlOperator.Or // 'OR'
 ```
 
 ### `SqlOrder`
@@ -56,8 +56,8 @@ Sort direction for `orderBy` clauses.
 ```ts
 import { SqlOrder } from '@edium/halifax-types'
 
-SqlOrder.ASC   // 'ASC'
-SqlOrder.DESC  // 'DESC'
+SqlOrder.ASC // 'ASC'
+SqlOrder.DESC // 'DESC'
 ```
 
 ## Interfaces
@@ -69,11 +69,11 @@ Represents a single filter node in the query AST. Nodes can be nested via `child
 ```ts
 interface IQueryFilter {
   field: string
-  comparison: string          // a SqlComparison value
-  operator?: string           // a SqlOperator value — joins this node to the next sibling
+  comparison: string // a SqlComparison value
+  operator?: string // a SqlOperator value — joins this node to the next sibling
   value1?: QueryScalar | QueryScalar[]
-  value2?: string | number    // upper bound for BETWEEN
-  children?: IQueryFilter[]   // nested group
+  value2?: string | number // upper bound for BETWEEN
+  children?: IQueryFilter[] // nested group
 }
 
 type QueryScalar = string | number | boolean | null
@@ -89,8 +89,8 @@ interface IQueryOptions {
   orderBy?: ISort[]
   limit?: number
   offset?: number
-  fields?: string[]    // field projection
-  distinct?: string[]  // deduplicate on these columns
+  fields?: string[] // field projection
+  distinct?: string[] // deduplicate on these columns
 }
 ```
 
@@ -152,7 +152,7 @@ interface DeleteManyResult {
 
 ## Related packages
 
-| Package | Description |
-| --- | --- |
-| [`@edium/halifax`](https://www.npmjs.com/package/@edium/halifax) | Server — auto-generates REST CRUD APIs from Prisma/Drizzle models |
+| Package                                                                        | Description                                                       |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| [`@edium/halifax`](https://www.npmjs.com/package/@edium/halifax)               | Server — auto-generates REST CRUD APIs from Prisma/Drizzle models |
 | [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) | Browser/Node client with query builder and TanStack Query support |

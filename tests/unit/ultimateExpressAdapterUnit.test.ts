@@ -115,7 +115,10 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
       capturedReq = req
     })
 
-    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, (req: unknown, res: unknown) => Promise<void>]
+    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [
+      string,
+      (req: unknown, res: unknown) => Promise<void>
+    ]
     const ueReq = makeUERequest()
     const ueRes = makeUEResponse()
     await cb(ueReq, ueRes)
@@ -134,7 +137,10 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
       capturedRes = res
     })
 
-    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, (req: unknown, res: unknown) => Promise<void>]
+    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [
+      string,
+      (req: unknown, res: unknown) => Promise<void>
+    ]
     const ueRes = makeUEResponse()
     await cb(makeUERequest(), ueRes)
 
@@ -159,7 +165,10 @@ describe('UltimateExpressHttpServer.registerRoute', () => {
       capturedRes = res
     })
 
-    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, (req: unknown, res: unknown) => Promise<void>]
+    const [, cb] = (app.get as ReturnType<typeof vi.fn>).mock.calls[0]! as [
+      string,
+      (req: unknown, res: unknown) => Promise<void>
+    ]
     await cb(makeUERequest(), makeUEResponse())
 
     expect(capturedRes!.status(200)).toBe(capturedRes)

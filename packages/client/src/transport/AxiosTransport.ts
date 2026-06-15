@@ -1,4 +1,8 @@
-import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
+import type {
+  HttpTransport,
+  TransportRequest,
+  TransportResponse
+} from '@/transport/HttpTransport.js'
 
 /**
  * Minimal structural interface for an Axios instance.

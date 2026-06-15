@@ -3,6 +3,7 @@ import { PrismaAdapter, createPrismaResources } from '@/adapters/orm/prisma/inde
 import { toRoutePrefix } from '@/adapters/orm/prisma/helpers.js'
 import type { ModelSchema } from '@/core/types.js'
 import { SqlComparison } from '@edium/halifax-types'
+import { ConflictError } from '@/errors/ConflictError.js'
 
 type Row = { id: number; email: string }
 
@@ -465,7 +466,9 @@ describe('PrismaAdapter — scoped upsertOne', () => {
     const delegate = makeDelegate()
     delete (delegate as Record<string, unknown>).findFirst
     const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
-    await expect(a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })).rejects.toMatchObject({ status: 500 })
+    await expect(
+      a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })
+    ).rejects.toMatchObject({ status: 500 })
   })
 
   it('throws NotFoundError when existing row belongs to different tenant', async () => {
@@ -473,7 +476,9 @@ describe('PrismaAdapter — scoped upsertOne', () => {
       findFirst: vi.fn().mockResolvedValue({ id: 1, email: 'a@t.com', tenantId: 'other-tenant' })
     })
     const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
-    await expect(a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })).rejects.toMatchObject({ status: 404 })
+    await expect(
+      a.upsertOne(1, { email: 'x@t.com' } as Row & { tenantId?: string })
+    ).rejects.toMatchObject({ status: 404 })
   })
 
   it('stamps tenant on create and strips it on update when scoped', async () => {
@@ -640,20 +645,32 @@ describe('prismaTypeToOpenApi — Prisma scalar types map to OpenAPI types', () 
   const typeModel = (fields: { name: string; type: string }[]) => ({
     name: 'Thing',
     dbName: 'things',
-    fields: fields.map((f) => ({ ...f, kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false }))
+    fields: fields.map((f) => ({
+      ...f,
+      kind: 'scalar',
+      isId: false,
+      isReadOnly: false,
+      hasDefault: false
+    }))
   })
 
   function fieldType(prismaType: string): string | undefined {
     const model = typeModel([{ name: 'val', type: prismaType }])
     const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
-    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model])
+    const resources = createPrismaResources(
+      client as unknown as Parameters<typeof createPrismaResources>[0],
+      [model]
+    )
     return resources[0]?.fields?.find((f) => f.name === 'val')?.type
   }
 
   function fieldFormat(prismaType: string): string | undefined {
     const model = typeModel([{ name: 'val', type: prismaType }])
     const client = { thing: makeDelegate(), $queryRawUnsafe: vi.fn() }
-    const resources = createPrismaResources(client as unknown as Parameters<typeof createPrismaResources>[0], [model])
+    const resources = createPrismaResources(
+      client as unknown as Parameters<typeof createPrismaResources>[0],
+      [model]
+    )
     return resources[0]?.fields?.find((f) => f.name === 'val')?.format
   }
 
@@ -692,5 +709,79 @@ describe('prismaTypeToOpenApi — Prisma scalar types map to OpenAPI types', () 
 
   it('unknown type → no type (default case)', () => {
     expect(fieldType('UnknownType')).toBeUndefined()
+  })
+})
+
+// ─── ConflictError on Prisma P2002 ───────────────────────────────────────────
+
+describe('PrismaAdapter — ConflictError on P2002 (unique constraint)', () => {
+  const p2002 = Object.assign(new Error('Unique constraint failed on field: email'), {
+    code: 'P2002'
+  })
+
+  it('createOne throws ConflictError (409) when Prisma throws P2002', async () => {
+    const delegate = makeDelegate({ create: vi.fn().mockRejectedValue(p2002) })
+    const a = new PrismaAdapter({ delegate })
+    const err = await a.createOne({ email: 'dup@test.com' }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConflictError)
+    expect((err as ConflictError).status).toBe(409)
+  })
+
+  it('createOne re-throws non-P2002 errors unchanged', async () => {
+    const connErr = new Error('Connection lost')
+    const delegate = makeDelegate({ create: vi.fn().mockRejectedValue(connErr) })
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.createOne({ email: 'x@test.com' })).rejects.toThrow('Connection lost')
+  })
+
+  it('createMany (delegate path) throws ConflictError when Prisma throws P2002', async () => {
+    const delegate = makeDelegate({ createMany: vi.fn().mockRejectedValue(p2002) })
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.createMany([{ email: 'dup@test.com' }])).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('createMany (serial fallback) throws ConflictError when createOne throws P2002', async () => {
+    const delegate = makeDelegate({ create: vi.fn().mockRejectedValue(p2002) })
+    delete (delegate as Record<string, unknown>).createMany
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.createMany([{ email: 'dup@test.com' }])).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('createMany (returnCreated=true serial path) throws ConflictError when createOne throws P2002', async () => {
+    const delegate = makeDelegate({ create: vi.fn().mockRejectedValue(p2002) })
+    const a = new PrismaAdapter({ delegate, returnCreated: true })
+    await expect(a.createMany([{ email: 'dup@test.com' }])).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('updateOne throws ConflictError (409) when Prisma throws P2002', async () => {
+    const delegate = makeDelegate({ update: vi.fn().mockRejectedValue(p2002) })
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.updateOne(1, { email: 'dup@test.com' })).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('updateOne still returns null for P2025 (not shadowed by P2002 handler)', async () => {
+    const p2025 = Object.assign(new Error('Not found'), { code: 'P2025' })
+    const delegate = makeDelegate({ update: vi.fn().mockRejectedValue(p2025) })
+    const a = new PrismaAdapter({ delegate })
+    expect(await a.updateOne(999, { email: 'x@test.com' })).toBeNull()
+  })
+
+  it('upsertOne (unscoped) throws ConflictError when delegate.upsert throws P2002', async () => {
+    const delegate = makeDelegate({ upsert: vi.fn().mockRejectedValue(p2002) })
+    const a = new PrismaAdapter({ delegate })
+    await expect(a.upsertOne(1, { email: 'dup@test.com' } as Row)).rejects.toMatchObject({
+      status: 409
+    })
+  })
+
+  it('upsertOne (scoped) throws ConflictError when delegate.upsert throws P2002', async () => {
+    const delegate = makeDelegate({
+      findFirst: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockRejectedValue(p2002)
+    })
+    const a = new PrismaAdapter({ delegate, scope: { field: 'tenantId', value: 'tenant-a' } })
+    await expect(
+      a.upsertOne(1, { email: 'dup@test.com' } as Row & { tenantId?: string })
+    ).rejects.toMatchObject({ status: 409 })
   })
 })

@@ -3,12 +3,39 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3]
+
+### Added
+
+- **`ConflictError`** — new `HttpError` subclass with HTTP status `409`. Exported from
+  the main package entry-point so application code can `throw new ConflictError()` in
+  hooks or custom repositories and have it serialised correctly.
+
+### Fixed
+
+- **409 Conflict on duplicate unique-key violations** — `PrismaAdapter` and `DrizzleAdapter`
+  now catch unique-constraint errors from the underlying ORM and re-throw them as
+  `ConflictError` (HTTP 409) instead of letting the raw ORM error propagate as an
+  unhandled 500.
+  - **Prisma**: catches `P2002` (unique constraint failed) on `createOne`, `createMany`,
+    `updateOne`, and both branches of `upsertOne`.
+  - **Drizzle**: catches PostgreSQL `23505`, MySQL `1062` / `ER_DUP_ENTRY`, and SQLite
+    `UNIQUE constraint failed` on `createOne`, `createMany`, and `updateOne`.
+- **`statusCodeMap` now includes `409 → 'CONFLICT'`** — previously, any `HttpError`
+  thrown with status `409` would have been serialised with `code: "INTERNAL_ERROR"`.
+
+### Changed
+
+- **OpenAPI spec** — write operations (`POST /{resource}`, `PATCH /{resource}`,
+  `PATCH /{resource}/{id}`, `PUT /{resource}/{id}`) now include a `409 Conflict` response
+  definition documenting that unique-constraint violations return this status.
+
 ## [2.2.2]
 
 ### Fixed
 
 - Removed the `preinstall` script from both `@edium/halifax` and `@edium/halifax-client`. The
-  script was a developer-convenience guard that enforced pnpm usage inside the monorepo, but because it shipped in the published package it caused npm (v7+) to prompt consumers with an  "approve build scripts" confirmation on every install. End-users no longer need to approve anything to install either package.
+  script was a developer-convenience guard that enforced pnpm usage inside the monorepo, but because it shipped in the published package it caused npm (v7+) to prompt consumers with an "approve build scripts" confirmation on every install. End-users no longer need to approve anything to install either package.
 
 ## [2.2.1]
 

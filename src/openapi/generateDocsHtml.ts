@@ -14,8 +14,7 @@ export function generateDocsHtml(specPath: string, docsPath: string): string {
   const ups = docsDirParts.length - common
   const downs = specDirParts.slice(common)
   const upSegments: string[] = new Array(ups).fill('..') as string[]
-  const relSpecUrl =
-    [...upSegments, ...downs, specFilename].join('/') || specFilename
+  const relSpecUrl = [...upSegments, ...downs, specFilename].join('/') || specFilename
 
   return `<!DOCTYPE html>
 <html lang="en">
