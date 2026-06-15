@@ -1,4 +1,4 @@
-import { QueryBuilder, SqlComparison, SqlOperator, SqlOrder } from '@/QueryBuilder'
+import { QueryBuilder, SqlComparison, SqlOperator, SqlOrder } from '@/QueryBuilder.js'
 
 describe('QueryBuilder', () => {
   describe('build() — empty builder', () => {

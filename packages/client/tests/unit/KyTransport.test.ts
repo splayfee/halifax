@@ -1,4 +1,4 @@
-import { KyTransport, type KyLike } from '@/transport/KyTransport'
+import { KyTransport, type KyLike } from '@/transport/KyTransport.js'
 
 type KyOpts = { method: string; headers?: Record<string, string>; throwHttpErrors: boolean; body?: string }
 

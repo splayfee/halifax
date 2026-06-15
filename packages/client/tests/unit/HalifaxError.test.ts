@@ -1,4 +1,4 @@
-import { HalifaxError } from '@/errors/HalifaxError'
+import { HalifaxError } from '@/errors/HalifaxError.js'
 
 describe('HalifaxError', () => {
   it('sets status, code, message, and errors from a single-item array', () => {

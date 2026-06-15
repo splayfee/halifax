@@ -1,4 +1,4 @@
-import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport'
+import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
 
 /**
  * Minimal structural interface for an ofetch instance.

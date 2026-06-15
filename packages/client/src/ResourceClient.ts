@@ -1,4 +1,4 @@
-import { QueryBuilder } from '@/QueryBuilder'
+import { QueryBuilder } from '@/QueryBuilder.js'
 import type {
   DeleteManyResult,
   GetOneParams,
@@ -6,7 +6,7 @@ import type {
   ListResult,
   QueryResult,
   UpdateManyResult
-} from '@/types'
+} from '@/types.js'
 import type { IQueryOptions } from '@edium/halifax-types'
 
 /** Internal request function injected by HalifaxClient. */

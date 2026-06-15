@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3]
+
+### Fixed
+
+- **ESM output now uses fully-specified relative import paths** (e.g. `./HalifaxClient.js`).
+  The package is `"type": "module"`, but the build previously emitted extensionless
+  specifiers, which Node's native ESM resolver rejects with `ERR_MODULE_NOT_FOUND`.
+  Bundlers (Vite, webpack) tolerated this, so browser builds worked, but Node consumers —
+  SSR, scripts, and test runners such as Vitest that resolve `node_modules` natively —
+  failed to import the package. The build now targets `NodeNext` module resolution, so both
+  source and emitted imports carry the `.js` extension and resolve in plain Node. No public
+  API changes.
+
 ## [2.2.2]
 
 ### Fixed

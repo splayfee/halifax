@@ -43,7 +43,7 @@ export interface HalifaxClientOptions {
    *
    * `transport` takes precedence over `fetch` when both are supplied.
    */
-  transport?: import('@/transport/HttpTransport').HttpTransport
+  transport?: import('@/transport/HttpTransport.js').HttpTransport
   /**
    * Convenience shorthand to customise the underlying `fetch` function without
    * constructing a `FetchTransport` explicitly. Ignored when `transport` is set.

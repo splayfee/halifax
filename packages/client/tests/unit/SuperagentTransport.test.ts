@@ -2,7 +2,7 @@ import {
   SuperagentTransport,
   type SuperagentLike,
   type SuperagentRequest
-} from '@/transport/SuperagentTransport'
+} from '@/transport/SuperagentTransport.js'
 
 function makeRequest(response: {
   status: number

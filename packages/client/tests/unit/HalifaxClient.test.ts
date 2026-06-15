@@ -1,6 +1,6 @@
-import { HalifaxClient } from '@/HalifaxClient'
-import { HalifaxError } from '@/errors/HalifaxError'
-import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport'
+import { HalifaxClient } from '@/HalifaxClient.js'
+import { HalifaxError } from '@/errors/HalifaxError.js'
+import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
 
 function makeResponse(
   options: {

@@ -1,4 +1,4 @@
-import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport'
+import type { HttpTransport, TransportRequest, TransportResponse } from '@/transport/HttpTransport.js'
 
 /**
  * Transport backed by the browser (or Node 18+) `fetch` API.

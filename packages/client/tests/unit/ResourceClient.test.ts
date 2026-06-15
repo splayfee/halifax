@@ -1,5 +1,5 @@
-import { ResourceClient } from '@/ResourceClient'
-import { QueryBuilder } from '@/QueryBuilder'
+import { ResourceClient } from '@/ResourceClient.js'
+import { QueryBuilder } from '@/QueryBuilder.js'
 import { SqlComparison } from '@edium/halifax-types'
 
 function makeRequest() {

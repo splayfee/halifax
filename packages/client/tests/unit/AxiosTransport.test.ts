@@ -1,4 +1,4 @@
-import { AxiosTransport, type AxiosLike } from '@/transport/AxiosTransport'
+import { AxiosTransport, type AxiosLike } from '@/transport/AxiosTransport.js'
 
 function makeAxiosResponse(options: {
   status?: number

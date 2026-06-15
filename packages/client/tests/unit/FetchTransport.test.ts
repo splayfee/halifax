@@ -1,4 +1,4 @@
-import { FetchTransport } from '@/transport/FetchTransport'
+import { FetchTransport } from '@/transport/FetchTransport.js'
 
 /** Minimal mock for a fetch Response. */
 function makeFetchResponse(options: {

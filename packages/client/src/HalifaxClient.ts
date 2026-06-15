@@ -1,8 +1,8 @@
-import { HalifaxError } from '@/errors/HalifaxError'
-import { ResourceClient } from '@/ResourceClient'
-import type { HttpTransport } from '@/transport/HttpTransport'
-import { FetchTransport } from '@/transport/FetchTransport'
-import type { HalifaxClientOptions } from '@/types'
+import { HalifaxError } from '@/errors/HalifaxError.js'
+import { ResourceClient } from '@/ResourceClient.js'
+import type { HttpTransport } from '@/transport/HttpTransport.js'
+import { FetchTransport } from '@/transport/FetchTransport.js'
+import type { HalifaxClientOptions } from '@/types.js'
 
 async function resolveHeaders(
   headers: HalifaxClientOptions['headers']
