@@ -7,8 +7,8 @@ import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import {
   applyHook,
   authorizeRequest,
-  filterReadableFields,
   filterWritableFields,
+  makeReadableFieldFilter,
   type RouteHandlerContext,
   wrap,
   writeSuccess
@@ -52,17 +52,14 @@ export function registerUpdateMany(
         rawResult as UpdateManyResult<Record<string, unknown>>,
         hookCtx
       )
+      const filterRecord = makeReadableFieldFilter(resource, auth)
       await writeSuccess(
         res,
         200,
         {
           ...result,
           ...(result.results
-            ? {
-                results: result.results.map((r) =>
-                  filterReadableFields(resource, r as Record<string, unknown>, auth)
-                )
-              }
+            ? { results: result.results.map((r) => filterRecord(r as Record<string, unknown>)) }
             : {})
         },
         envelope

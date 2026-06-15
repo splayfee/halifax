@@ -1,5 +1,6 @@
 import { AuthenticationError } from '@/errors/AuthenticationError.js'
 import type { HttpRequest } from '@/core/types.js'
+import { checkRequiredPermissions } from './types.js'
 import type { AuthContext, AuthorizeParams, AuthStrategy, SecurityScheme } from './types.js'
 
 /** Minimal structural interface for a Passport.js instance (avoids a hard dependency on `passport`). */
@@ -44,13 +45,6 @@ function defaultMapUser(user: unknown): AuthContext {
   }
   if (userId !== undefined) ctx.userId = userId
   return ctx
-}
-
-function checkPermissions(auth: AuthContext, requiredPermissions: string[]): boolean {
-  if (!requiredPermissions.length) return true
-  const permissions = new Set(auth.permissions ?? [])
-  const roles = new Set(auth.roles ?? [])
-  return requiredPermissions.every((p) => permissions.has(p) || roles.has(p))
 }
 
 /** Delegates authentication to a caller-provided Passport authenticate wrapper. */
@@ -123,7 +117,7 @@ export class PassportJwtStrategy implements AuthStrategy {
    * @returns `true` when all required permissions are satisfied, `false` otherwise.
    */
   public authorize(params: AuthorizeParams): boolean {
-    return checkPermissions(params.auth, params.requiredPermissions)
+    return checkRequiredPermissions(params.auth, params.requiredPermissions)
   }
 
   public openApiScheme(): SecurityScheme {
@@ -171,7 +165,7 @@ export class PassportSessionStrategy implements AuthStrategy {
    * @returns `true` when all required permissions are satisfied, `false` otherwise.
    */
   public authorize(params: AuthorizeParams): boolean {
-    return checkPermissions(params.auth, params.requiredPermissions)
+    return checkRequiredPermissions(params.auth, params.requiredPermissions)
   }
 
   public openApiScheme(): SecurityScheme {

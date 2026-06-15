@@ -28,13 +28,14 @@ Import: `@edium/halifax`
 Reads a request header and compares it against a static shared secret.
 
 ```ts
-new ApiKeyAuthStrategy(expectedApiKey: string, headerName?: string)
+new ApiKeyAuthStrategy(expectedApiKey: string, headerName?: string, roles?: string[])
 ```
 
-| Parameter        | Default       | Description                         |
-| ---------------- | ------------- | ----------------------------------- |
-| `expectedApiKey` | required      | The secret key callers must supply. |
-| `headerName`     | `'x-api-key'` | Header to read the key from.        |
+| Parameter        | Default       | Description                                                              |
+| ---------------- | ------------- | ------------------------------------------------------------------------ |
+| `expectedApiKey` | required      | The secret key callers must supply.                                      |
+| `headerName`     | `'x-api-key'` | Header to read the key from.                                             |
+| `roles`          | `[]`          | Role strings attached to `auth.roles` on every successfully authed call. |
 
 - Missing header → 401 Unauthorized
 - Wrong key → 403 Forbidden
@@ -208,7 +209,12 @@ new PrismaAdapter<TRecord, TCreate, TUpdate>(options: PrismaAdapterOptions)
 
 See `PrismaAdapterOptions` in [README_INTERFACES.md](./README_INTERFACES.md).
 
-**Static method:** `PrismaAdapter` has no static methods. For auto-generating resources from all Prisma models, use `createPrismaResources` (a standalone function).
+**Static methods:**
+
+- `PrismaAdapter.fieldsFromModel(model: ModelSchema): FieldDefinition[]` — derives a Halifax field schema from a Prisma DMMF model. Used internally by the constructor when `options.model` is provided; also callable standalone when you want to inspect or override fields before constructing the adapter.
+- `PrismaAdapter.relationsFromModel(model: ModelSchema): RelationDefinition[]` — derives relation definitions from object-kind fields in the model.
+
+For auto-generating resources from all Prisma models at once, use `createPrismaResources` (a standalone function).
 
 **Capabilities reported:**
 
@@ -314,6 +320,7 @@ Base class for all Halifax HTTP errors. Not instantiated directly.
 | `NotFoundError`             | 404    | Record with the given ID does not exist. Throw from a custom `Repository.getOne`.                              |
 | `MethodNotAllowedError`     | 405    | HTTP method not enabled for this resource. Used internally by Halifax.                                         |
 | `NotAcceptableError`        | 406    | Client `Accept` header excludes `application/json`. Used internally by Halifax.                                |
+| `ConflictError`             | 409    | Write rejected due to a unique constraint violation. Thrown by `PrismaAdapter` and `DrizzleAdapter` automatically; throw it from a custom repository for the same semantics. |
 | `UnsupportedMediaTypeError` | 415    | Body-carrying request with non-JSON `Content-Type`. Used internally by Halifax.                                |
 | `UnprocessableEntityError`  | 422    | Unknown fields in body, missing required filter, empty update payload.                                         |
 | `NotImplementedError`       | 501    | Repository does not support this operation (e.g. `upsertOne` not implemented).                                 |

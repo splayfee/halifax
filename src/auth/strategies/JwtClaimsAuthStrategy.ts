@@ -1,5 +1,6 @@
 import { AuthenticationError } from '@/errors/AuthenticationError.js'
 import type { HttpRequest } from '@/core/types.js'
+import { checkRequiredPermissions } from './types.js'
 import type { AuthContext, AuthorizeParams, AuthStrategy, SecurityScheme } from './types.js'
 
 /** Authenticates via a Bearer JWT and authorises using roles/permissions embedded in its claims. */
@@ -38,14 +39,7 @@ export class JwtClaimsAuthStrategy implements AuthStrategy {
    * @returns `true` when all required permissions are satisfied, `false` otherwise.
    */
   public authorize(params: AuthorizeParams): boolean {
-    if (!params.requiredPermissions.length) {
-      return true
-    }
-    const permissions = new Set(params.auth.permissions ?? [])
-    const roles = new Set(params.auth.roles ?? [])
-    return params.requiredPermissions.every((permission) => {
-      return permissions.has(permission) || roles.has(permission)
-    })
+    return checkRequiredPermissions(params.auth, params.requiredPermissions)
   }
 
   public openApiScheme(): SecurityScheme {

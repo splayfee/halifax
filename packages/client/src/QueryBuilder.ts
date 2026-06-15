@@ -1,6 +1,23 @@
 import { SqlComparison, SqlOperator, SqlOrder } from '@edium/halifax-types'
 import type { IQueryFilter, QueryScalar, IQueryOptions, ISort } from '@edium/halifax-types'
 
+/**
+ * Fluent builder for Halifax query-AST (`IQueryOptions`).
+ *
+ * **Mutability note:** all chaining methods mutate `this` and return `this`.
+ * Do not share a builder instance across branches — instead create a new
+ * `QueryBuilder` for each independent query:
+ * ```ts
+ * // WRONG — both calls mutate the same builder
+ * const base = new QueryBuilder().where('active', '=', true)
+ * const p1 = base.limit(10)   // mutates base
+ * const p2 = base.limit(20)   // also mutates base; p1.limit is now 20
+ *
+ * // CORRECT
+ * const p1 = new QueryBuilder().where('active', '=', true).limit(10)
+ * const p2 = new QueryBuilder().where('active', '=', true).limit(20)
+ * ```
+ */
 export class QueryBuilder {
   private readonly _where: IQueryFilter[] = []
   private _limit?: number
@@ -73,10 +90,16 @@ export class QueryBuilder {
   }
 
   /**
-   * Add an explicitly parenthesized sub-group: `(parentField op parentValue) AND (children)`.
+   * Add a parenthesized sub-group joined to the preceding condition with AND.
    *
-   * The `fn` callback receives a new QueryBuilder for the grouped conditions.
-   * The group is connected to any preceding conditions with AND.
+   * **Why a `field`/`comparison`/`value1` is required:** the Halifax query AST attaches
+   * children to a *parent filter node*, so every group must carry its own condition that
+   * is AND-ed with the group's children. To express a pure group with no parent condition,
+   * pass `SqlComparison.IsNotNull` with `value1 = undefined` for a field you know is
+   * always populated (e.g. the primary-key field) — the parent check is trivially true
+   * and the effective predicate is just the parenthesised children.
+   *
+   * The result is: `…preceding… AND (field op value1 AND (children))`.
    *
    * @example
    * // WHERE status = 'active' AND (role = 'admin' OR role = 'user')
@@ -101,8 +124,15 @@ export class QueryBuilder {
   }
 
   /**
-   * Add an explicitly parenthesized sub-group: `(parentField op parentValue) OR (children)`.
-   * The group is connected to any preceding conditions with AND.
+   * Add a parenthesized sub-group whose *children* are joined to the parent with OR.
+   *
+   * **Why a `field`/`comparison`/`value1` is required:** same AST constraint as
+   * {@link andGroup} — every group node must carry a parent condition. The group is
+   * connected to any preceding sibling with AND (the `orGroup` name describes the
+   * *internal* OR join between the parent condition and the children, not the join to
+   * the rest of the clause).
+   *
+   * The result is: `…preceding… AND (field op value1 OR (children))`.
    *
    * @example
    * // WHERE type = 'post' AND (name CONTAINS 'foo' OR body CONTAINS 'foo')

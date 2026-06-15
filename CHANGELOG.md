@@ -3,6 +3,139 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0]
+
+### Security
+
+- **`PrismaAdapter.upsertOne` cross-tenant write vulnerability eliminated** — the previous scoped
+  upsert path performed `findFirst({ where: { id } })` without a tenant filter, then called
+  `delegate.upsert({ where: { id } })` also without a tenant filter. The application-level
+  ownership check between the two statements created a TOCTOU window: if another tenant's record
+  appeared at that ID between the check and the upsert, Prisma's `upsert` would fire its `update`
+  branch and write into that other tenant's row. The scoped path no longer uses `delegate.upsert`.
+  It now uses a scoped `findFirst(scopedWhere)` to detect existence, `updateMany(scopedWhere)` for
+  the update branch (atomic, same fix applied to `updateOne`), and `create(stampTenant)` for the
+  create branch. The `delegate.upsert` call is retained only for the unscoped path.
+
+- **`PrismaAdapter.updateOne` and `deleteOne` unsafe fallbacks removed** — when `updateMany`
+  (for `updateOne`) or `deleteMany` (for `deleteOne`) were unavailable on the delegate, the code
+  fell back to a two-step scoped-check + unscoped-write sequence. Both halves now throw
+  `ServerError` immediately rather than proceeding with an unsafe path. Standard Prisma delegates
+  always expose both methods, so this only affects non-standard or mock delegates.
+
+- **`requiredPermissions` now uses OR semantics consistently** — all three auth strategies
+  (`JwtClaimsAuthStrategy`, `PassportJwtStrategy`, `PassportSessionStrategy`) previously used
+  `.every()` (ALL permissions required), while the fallback path in `handlerUtils.ts` correctly
+  used `.some()` (ANY single permission grants access). The strategies were wrong. All four paths
+  now delegate to a shared `checkRequiredPermissions()` utility that applies `.some()` semantics:
+  a caller who holds *any one* of the listed permissions is authorized. This matches the documented
+  behavior of `readRoles`/`writeRoles` at the field level and is a consistent read of "required
+  permissions" as an OR list. **If you relied on the undocumented ALL-must-match behavior,
+  tighten your permission model accordingly.**
+
+- **TOCTOU race in `PrismaAdapter.updateOne` under tenant scope eliminated** — the previous
+  scoped-update path did a `findFirst` ownership check and then a separate `update` call. Between
+  the two statements, a concurrent request could transfer the record to a different tenant,
+  allowing the update to land on a record the caller no longer owns. The fix uses
+  `updateMany({ where: scopedWhere })` as the primary path when the Prisma delegate supports it —
+  the tenant field is enforced atomically in a single SQL statement. A safe `findFirst`-then-update
+  fallback remains only for delegates that lack `updateMany`.
+
+### Performance
+
+- **O(n²) → O(n) field validation** — `validateSelectableFields` and `validateSortableFields`
+  previously called `.find()` inside a `.filter()`, giving O(n²) complexity per request. Both now
+  pre-build a `Map` from field names to definitions and do O(1) lookups in the filter pass.
+
+- **`makeReadableFieldFilter` factory for bulk-response field stripping** — `filterReadableFields`
+  previously rebuilt the `fieldMap` `Map` and `userRoles` `Set` for every record in a batch. A
+  new exported factory `makeReadableFieldFilter(resource, auth)` builds both structures once and
+  returns a reusable `(record) => record` function. The `readMany`, `query`, and `updateMany`
+  handlers now call the factory once before `.map()` and pass the compiled function directly,
+  eliminating O(n) redundant Map constructions for responses with up to 5000 records.
+
+- **`parseGetOneOptions` for lean GET /:id parsing** — `readOne` previously called
+  `parseListOptions`, which parses and validates `?fields=`, `?include=`, `?limit=`, `?offset=`,
+  `?order=`, and all filter fields — all of which are irrelevant to a single-record GET. A new
+  exported `parseGetOneOptions(query, resource)` in `queryString.ts` only parses and validates
+  `?fields=` and `?include=`, removing the wasted work and the silent discard of inapplicable
+  parameters on that route.
+
+### Fixed
+
+- **OpenAPI `distinct` type corrected** — the query-builder endpoint's `distinct` parameter was
+  documented as `{ type: 'boolean' }` in the generated spec. The actual type is `string[]` (an
+  array of field names to de-duplicate on). The spec now documents it as
+  `{ type: 'array', items: { type: 'string' } }` with an accurate description.
+
+- **`normalizeEnvelope` and `mergeRelationDefinitions` extracted to `fields.ts`** — both
+  utilities existed in identical form in `crudRouter.ts` and `specGenerator.ts`. They are now
+  exported from `src/core/fields.ts` alongside `mergeFieldDefinitions`, and both files import
+  from there. Behavior is unchanged.
+
+- **`checkRequiredPermissions` extracted to `src/auth/strategies/types.ts`** — the permission
+  check logic was duplicated (with incompatible `.every()` vs `.some()` semantics) across all
+  three strategy files and `handlerUtils.ts`. It is now a single exported function and all four
+  call sites use it. See the Security section above for the semantics fix.
+
+- **`DrizzleAdapter` reports `supportsIncludes: false`** — the adapter has always silently ignored
+  `?include=` requests because Drizzle has no built-in relation eager-loading surface compatible
+  with Halifax's interface. The `capabilities` property now explicitly sets `supportsIncludes:
+  false`, which causes the router to reject `?include=` with `422 Unprocessable Entity` instead
+  of silently returning records with no related data.
+
+- **`InMemoryCacheStore` memory growth bounded** — the store previously only evicted expired
+  entries lazily on reads, so a write-heavy workload with few reads could accumulate stale entries
+  without bound. The `set()` method now runs a full expired-entry sweep every 200 writes
+  (configurable via the `sweepEvery` constructor parameter). No external timers or additional
+  dependencies.
+
+- **`CacheStore.increment` — atomic cache version bumps** — `createCachingRepository` previously
+  incremented the version key with a non-atomic `GET` + `SET`, creating a race window under
+  concurrent writes on Redis. The `CacheStore` interface gains an optional `increment(key):
+  Promise<number> | number` method. `RedisCacheStore` implements it with Redis `INCR` (atomic
+  by design). `InMemoryCacheStore` implements it synchronously (race-free in Node.js's
+  single-threaded event loop). `createCachingRepository` uses `store.increment` when available
+  and falls back to the non-atomic path only for custom stores that do not implement it.
+
+- **`DrizzleAdapter.upsertOne` non-atomicity documented** — the method does a `getOne` check
+  followed by a `createOne` or `updateOne`, which is non-atomic under concurrent load. A JSDoc
+  comment now explains the race condition and recommends implementing a custom repository with a
+  database-native `INSERT … ON CONFLICT` clause when true atomicity is required.
+
+- **`PrismaAdapter` import order** — all imports were moved above function definitions and
+  consolidated into a single, alphabetized block. No behavior change.
+
+- **`parseId` dead code removed** — after `validateId(raw)` narrows `raw` to `string`, the
+  previous `typeof raw === 'string' ? parseInt(raw, 10) : raw` branch was unreachable. The
+  function now calls `parseInt(raw, 10)` directly, and the redundant type guard before the
+  UUID/ObjectId check is also removed.
+
+- **`LIKE` interior-wildcard limitation documented** — `likeToPrisma` in
+  `src/adapters/orm/prisma/astToPrisma.ts` now carries a JSDoc comment explaining that patterns
+  with an interior wildcard (e.g. `'foo%bar'`) cannot be expressed via Prisma's string operators
+  and fall through to an exact `equals` match, not a wildcard match. Use `CONTAINS`, `STARTS
+  WITH`, or `ENDS WITH` comparisons instead of `LIKE` when possible.
+
+### Documentation
+
+- **`QueryBuilder` mutability warning** — the class JSDoc now clearly states that all chaining
+  methods mutate `this` and return the same instance. A before/after code example demonstrates
+  the correct pattern (create a new `QueryBuilder` per branch) and the incorrect pattern (sharing
+  one instance and calling `.limit()` twice).
+
+- **`andGroup` / `orGroup` API design explained** — both methods require a `field`/`comparison`/
+  `value1` parent condition because the Halifax query AST attaches children to a parent filter
+  node. The JSDoc now explains this constraint, describes what the resulting predicate looks like
+  (`cond AND (children)` vs `cond OR (children)`), and suggests a workaround for expressing a
+  pure parenthesized group with no meaningful parent condition.
+
+- **`specGenerator` raw-vs-normalized resource note** — a comment in `generateOpenApiSpec`
+  explains that the function operates on raw `ResourceDefinition` objects (not the normalized
+  forms produced by `crudRouter.normalizeResource`) and therefore re-derives merged fields and
+  relations independently. This is intentional — the spec generator is also usable as a
+  standalone function outside the router.
+
 ## [2.2.3]
 
 ### Added

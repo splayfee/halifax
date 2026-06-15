@@ -24,7 +24,7 @@ Full definition of a Halifax resource. Pass an array of these to `createExpressC
 | `requiredPermissions` | `Partial<Record<CrudAction, string[]>>` | no       | Permission strings per action checked by the auth strategy.                                                                                                                                                                                |
 | `defaultLimit`        | `number`                                | no       | Default page size when caller omits `?limit=`. Defaults to `DEFAULT_PAGE_LIMIT` (5000). `0` disables the default bound.                                                                                                                    |
 | `maxLimit`            | `number`                                | no       | Hard cap on page size. Defaults to `MAX_PAGE_LIMIT` (5000). `0` removes the cap.                                                                                                                                                           |
-| `maxFilterDepth`      | `number`                                | no       | Maximum nesting depth for `where` clause children. Defaults to 3.                                                                                                                                                                          |
+| `maxFilterDepth`      | `number`                                | no       | Maximum nesting depth for `where` clause children. Defaults to 4.                                                                                                                                                                          |
 | `cache`               | `ResourceCacheConfig \| false`          | no       | Per-resource cache TTL. `false` disables caching even when an API-wide default is set.                                                                                                                                                     |
 | `envelope`            | `string \| null`                        | no       | Wraps every success response body under this key (e.g. `'data'`). Overrides the API-wide `envelope` option.                                                                                                                                |
 
@@ -404,11 +404,12 @@ Import: `@edium/halifax`
 
 Contract for pluggable cache backends. Implement this to use Redis, Memcached, or any other store.
 
-| Method   | Signature                                            | Description                                                      |
-| -------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
-| `get`    | `(key: string) => Promise<unknown> \| unknown`       | Read a cached value. Returns `undefined` when absent or expired. |
-| `set`    | `(key, value, ttlSeconds?) => Promise<void> \| void` | Write a value. `ttlSeconds` `0` or omitted means no expiry.      |
-| `delete` | `(key: string) => Promise<void> \| void`             | Delete a cached value.                                           |
+| Method      | Signature                                             | Description                                                                                                          |
+| ----------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `get`       | `(key: string) => Promise<unknown> \| unknown`        | Read a cached value. Returns `undefined` when absent or expired.                                                     |
+| `set`       | `(key, value, ttlSeconds?) => Promise<void> \| void`  | Write a value. `ttlSeconds` `0` or omitted means no expiry.                                                          |
+| `delete`    | `(key: string) => Promise<void> \| void`              | Delete a cached value.                                                                                               |
+| `increment` | `(key: string) => Promise<number> \| number` *(opt.)* | Atomically increment an integer key and return the new value. Implement this for safe concurrent version bumps (e.g. Redis `INCR`). When omitted, Halifax falls back to a non-atomic `get`+`set`. |
 
 ---
 
@@ -433,11 +434,12 @@ Import: `@edium/halifax`
 
 Minimal structural type for a Redis client. `RedisCacheStore` uses this interface so no specific Redis package is a hard dependency. `redis` v4's `get`, `set`, and `del` satisfy it directly.
 
-| Method | Signature                                    | Description                                    |
-| ------ | -------------------------------------------- | ---------------------------------------------- |
-| `get`  | `(key: string) => Promise<string \| null>`   | Read a key.                                    |
-| `set`  | `(key, value, options?) => Promise<unknown>` | Write a key. `options.EX` sets TTL in seconds. |
-| `del`  | `(key: string) => Promise<unknown>`          | Delete a key.                                  |
+| Method | Signature                                          | Description                                                                         |
+| ------ | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `get`  | `(key: string) => Promise<string \| null>`         | Read a key.                                                                         |
+| `set`  | `(key, value, options?) => Promise<unknown>`       | Write a key. `options.EX` sets TTL in seconds.                                      |
+| `del`  | `(key: string) => Promise<unknown>`                | Delete a key.                                                                       |
+| `incr` | `(key: string) => Promise<number>` *(optional)*    | Atomically increment a key. Used by `RedisCacheStore.increment` for version bumps when the client exposes this method. |
 
 ---
 

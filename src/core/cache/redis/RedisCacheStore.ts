@@ -45,4 +45,19 @@ export class RedisCacheStore implements CacheStore {
   public async delete(key: string): Promise<void> {
     await this.client.del(this.prefix + key)
   }
+
+  /**
+   * Atomically increments the integer stored at `key` (using Redis `INCR`) and returns
+   * the new value. Falls back to a non-atomic get-then-set when the underlying client
+   * does not expose `incr` — this should not occur with standard Redis clients.
+   */
+  public async increment(key: string): Promise<number> {
+    if (this.client.incr) {
+      return await this.client.incr(this.prefix + key)
+    }
+    const raw = await this.client.get(this.prefix + key)
+    const next = (raw !== null ? parseInt(raw, 10) : 0) + 1
+    await this.client.set(this.prefix + key, String(next))
+    return next
+  }
 }

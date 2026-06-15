@@ -158,6 +158,8 @@ export class DrizzleAdapter<
 > implements Repository<TRecord, TCreate, TUpdate> {
   public readonly fields: FieldDefinition[]
   public readonly idField: string
+  /** Drizzle uses `.returning()` for inserts/updates, so it always returns created records. */
+  public readonly capabilities = { supportsIncludes: false, supportsCreateManyReturn: true }
 
   private readonly columns: ColumnMap
   private readonly scope: TenantScope | null
@@ -332,6 +334,12 @@ export class DrizzleAdapter<
   }
 
   async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
+    // Non-atomic: the getOne check and the subsequent write are separate statements.
+    // Under concurrent load, two simultaneous upserts for the same absent ID can both
+    // pass the getOne check and then race on createOne — the loser gets a ConflictError.
+    // Drizzle has no single portable INSERT…ON CONFLICT across all databases, so this
+    // is the safest cross-provider implementation. Callers that need true atomicity
+    // should implement a custom repository using a database-specific ON CONFLICT clause.
     const existing = await this.getOne(id)
     if (existing) {
       const updated = await this.updateOne(id, data as unknown as TUpdate)
@@ -392,7 +400,7 @@ export class DrizzleAdapter<
       this.db,
       this.table,
       { idField: this.idField },
-      scope ?? null
+      scope
     )
   }
 }

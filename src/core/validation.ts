@@ -68,9 +68,7 @@ export function validateId(value: string | number | undefined): asserts value is
  * @returns Array of field name strings.
  */
 export function getFieldNames(resource: ResourceDefinition): string[] {
-  return (resource.fields ?? []).map((field) => {
-    return field.name
-  })
+  return (resource.fields ?? []).map((f) => f.name)
 }
 
 /**
@@ -95,10 +93,8 @@ export function validateFields(resource: ResourceDefinition, fields: string[] = 
  * @param fields - Field names to check for selectability.
  */
 export function validateSelectableFields(resource: ResourceDefinition, fields: string[]): void {
-  const nonSelectable = fields.filter((name) => {
-    const field = resource.fields?.find((f) => f.name === name)
-    return field?.selectable === false
-  })
+  const fieldMap = new Map((resource.fields ?? []).map((f) => [f.name, f]))
+  const nonSelectable = fields.filter((name) => fieldMap.get(name)?.selectable === false)
   if (nonSelectable.length) {
     throw new UnprocessableEntityError(`Field(s) not selectable: ${nonSelectable.join(', ')}.`)
   }
@@ -110,10 +106,8 @@ export function validateSelectableFields(resource: ResourceDefinition, fields: s
  * @param fields - Field names to check for sortability.
  */
 export function validateSortableFields(resource: ResourceDefinition, fields: string[]): void {
-  const nonSortable = fields.filter((name) => {
-    const field = resource.fields?.find((f) => f.name === name)
-    return field?.sortable === false
-  })
+  const fieldMap = new Map((resource.fields ?? []).map((f) => [f.name, f]))
+  const nonSortable = fields.filter((name) => fieldMap.get(name)?.sortable === false)
   if (nonSortable.length) {
     throw new UnprocessableEntityError(`Field(s) not sortable: ${nonSortable.join(', ')}.`)
   }

@@ -68,7 +68,15 @@ export function createCachingRepository<TRecord, TCreate, TUpdate>(
     return typeof v === 'number' ? v : 0
   }
   const bumpVersion = async (): Promise<void> => {
-    await store.set(versionKey, (await readVersion()) + 1)
+    // Use store.increment when available (atomic on Redis via INCR; race-free on
+    // InMemoryCacheStore because Node.js is single-threaded). Fall back to a non-atomic
+    // read-then-write only when the store does not expose increment — acceptable for
+    // custom single-process stores where concurrent writes cannot interleave.
+    if (store.increment) {
+      await store.increment(versionKey)
+    } else {
+      await store.set(versionKey, (await readVersion()) + 1)
+    }
   }
   const keyFor = async (op: string, payload: unknown): Promise<string> =>
     `${namespace}:v${await readVersion()}:${op}:${stableStringify(payload)}`

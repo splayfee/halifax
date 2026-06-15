@@ -1,6 +1,6 @@
 import type { HookContext } from '@/core/hooks.js'
 import type { HttpServer } from '@/core/types.js'
-import { parseListOptions } from '@/core/queryString.js'
+import { parseGetOneOptions } from '@/core/queryString.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import {
   applyHook,
@@ -27,11 +27,8 @@ export function registerReadOne(
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }
       if (hooks?.beforeReadOne) await hooks.beforeReadOne(id, hookCtx)
-      const listOptions = parseListOptions(req.query, resource)
-      const rawResult = await repo.getOne(id, {
-        fields: listOptions.fields,
-        include: listOptions.include
-      })
+      const { fields, include } = parseGetOneOptions(req.query, resource)
+      const rawResult = await repo.getOne(id, { fields, include })
       if (!rawResult) throw new NotFoundError()
       const result = await applyHook(
         hooks?.afterReadOne,

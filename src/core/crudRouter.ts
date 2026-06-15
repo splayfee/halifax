@@ -7,7 +7,6 @@ import type {
   FieldDefinition,
   HttpRequest,
   HttpServer,
-  RelationDefinition,
   Repository
 } from '@/core/types.js'
 import { ServerError } from '@/errors/ServerError.js'
@@ -19,7 +18,7 @@ import {
   wantsCacheBust,
   type RouteHandlerContext
 } from '@/core/handlerUtils.js'
-import { mergeFieldDefinitions } from '@/core/fields.js'
+import { mergeFieldDefinitions, mergeRelationDefinitions, normalizeEnvelope } from '@/core/fields.js'
 import { registerCreate } from '@/core/handlers/create.js'
 import { registerReadMany } from '@/core/handlers/readMany.js'
 import { registerReadOne } from '@/core/handlers/readOne.js'
@@ -75,15 +74,6 @@ function resolveFields(resource: ResourceDefinition, idField: string): FieldDefi
   }))
 }
 
-/**
- * Merges the repository's relation schema with the resource's own relations, by name.
- */
-function resolveRelations(resource: ResourceDefinition): RelationDefinition[] {
-  const byName = new Map<string, RelationDefinition>()
-  for (const relation of resource.repository?.relations ?? []) byName.set(relation.name, relation)
-  for (const relation of resource.relations ?? []) byName.set(relation.name, relation)
-  return [...byName.values()]
-}
 
 /**
  * Produces a fully-resolved resource: `name` filled in, and `fields`/`relations` resolved
@@ -96,16 +86,8 @@ function normalizeResource(resource: ResourceDefinition): ResourceDefinition {
     ...resource,
     name: resource.name ?? deriveResourceName(resource.routePrefix),
     fields: resolveFields(resource, idField),
-    relations: resolveRelations(resource)
+    relations: mergeRelationDefinitions(resource)
   }
-}
-
-/**
- * Resolves the effective envelope key. A non-empty string enables wrapping; `null`, `undefined`,
- * and `''` all mean "no envelope".
- */
-function normalizeEnvelope(value: string | null | undefined): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 /**

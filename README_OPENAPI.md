@@ -284,7 +284,7 @@ The query builder endpoint accepts a `QueryOptions` body for full-featured filte
       ]
     }
   ],
-  "orderBy": [{ "field": "createdAt", "direction": "desc" }],
+  "orderBy": [{ "field": "createdAt", "order": "DESC" }],
   "limit": 20,
   "offset": 0,
   "fields": ["id", "title", "createdAt"],

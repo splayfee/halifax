@@ -100,9 +100,9 @@ Each entry in `fields` accepts four optional boolean flags. All default to `true
 
 | Flag         | Effect when `false`                                                   |
 | ------------ | --------------------------------------------------------------------- |
-| `filterable` | Rejects the field as a query-string filter (`?fieldName=value`) → 400 |
-| `sortable`   | Rejects the field in `?order=` and query-builder `orderBy` → 400      |
-| `selectable` | Rejects the field in `?fields=` and query-builder `fields` → 400      |
+| `filterable` | Rejects the field as a query-string filter (`?fieldName=value`) → 422 |
+| `sortable`   | Rejects the field in `?order=` and query-builder `orderBy` → 422      |
+| `selectable` | Rejects the field in `?fields=` and query-builder `fields` → 422      |
 | `writable`   | Silently strips the field from POST / PATCH / PUT request bodies      |
 
 Example — `role` is fully locked down; `createdAt` can be read and sorted but never written or filtered:
@@ -295,7 +295,7 @@ The `?where` / query-builder `children` filter lets callers nest conditions. To 
 }
 ```
 
-Requests that exceed the limit receive **400 VALIDATION_ERROR**.
+Requests that exceed the limit receive **422 UNPROCESSABLE_ENTITY**.
 
 ## Error Response Shape
 
@@ -320,6 +320,7 @@ All errors follow the same envelope — an `errors` array where each item has a 
 | 404    | `NOT_FOUND`              | `NotFoundError`             | Record not found                                                                                     |
 | 405    | `METHOD_NOT_ALLOWED`     | `MethodNotAllowedError`     | HTTP method not enabled for this resource                                                            |
 | 406    | `NOT_ACCEPTABLE`         | `NotAcceptableError`        | `Accept` header excludes `application/json`                                                          |
+| 409    | `CONFLICT`               | `ConflictError`             | Write rejected due to a unique constraint violation                                                  |
 | 415    | `UNSUPPORTED_MEDIA_TYPE` | `UnsupportedMediaTypeError` | Request body is not `application/json`                                                               |
 | 422    | `UNPROCESSABLE_ENTITY`   | `UnprocessableEntityError`  | Semantic validation failure — unknown field, invalid filter, sort/select restriction, depth exceeded |
 | 500    | `INTERNAL_ERROR`         | `ServerError`               | Repository misconfigured or unhandled internal error                                                 |

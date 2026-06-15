@@ -6,7 +6,7 @@ import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import {
   applyHook,
   authorizeRequest,
-  filterReadableFields,
+  makeReadableFieldFilter,
   type RouteHandlerContext,
   wrap,
   writeSuccess
@@ -38,13 +38,11 @@ export function registerQuery(
         rawResult as ListResult<Record<string, unknown>>,
         hookCtx
       )
+      const filterRecord = makeReadableFieldFilter(resource, auth)
       await writeSuccess(
         res,
         200,
-        {
-          ...result,
-          results: result.results.map((r) => filterReadableFields(resource, r, auth))
-        },
+        { ...result, results: result.results.map(filterRecord) },
         envelope
       )
     })

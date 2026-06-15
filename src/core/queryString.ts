@@ -46,6 +46,36 @@ function parseCsv(value: unknown): string[] | undefined {
 }
 
 /**
+ * Parses and validates the query-string for a single-record GET (`GET /resource/:id`).
+ * Only `?fields=` and `?include=` are meaningful for that endpoint — this avoids the wasted
+ * work and silent-discard behaviour of calling the full `parseListOptions` on a by-ID route.
+ *
+ * @param query - The raw query-string object from the HTTP request.
+ * @param resource - The resource definition used for field and relation validation.
+ * @returns Typed projection options ready to pass to `repository.getOne()`.
+ */
+export function parseGetOneOptions(
+  query: Record<string, unknown>,
+  resource: ResourceDefinition
+): Pick<ListOptions, 'fields' | 'include'> {
+  const fields = parseCsv(query.fields)
+  const include = parseCsv(query.include)
+
+  if (fields) {
+    validateFields(resource, fields)
+    validateSelectableFields(resource, fields)
+  }
+  if (include) validateIncludes(resource, include)
+  if (fields && include) {
+    throw new UnprocessableEntityError(
+      'Cannot use both ?fields= and ?include= in the same request.'
+    )
+  }
+
+  return { fields, include }
+}
+
+/**
  * Parses and validates the raw query-string from a GET request into typed {@link ListOptions}.
  *
  * Validates field names, sort fields, includes, and filter keys against the resource schema.

@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0]
+
+### Documentation
+
+- **`QueryBuilder` mutability warning** — the class JSDoc now clearly states that all chaining
+  methods mutate `this` and return the same instance. A before/after code example shows the
+  incorrect pattern (sharing one instance) versus the correct pattern (creating a new
+  `QueryBuilder` per independent query branch).
+
+- **`andGroup` / `orGroup` API design explained** — both methods require a `field`/
+  `comparison`/`value1` parent condition because the Halifax query AST attaches grouped
+  children to a parent filter node (not a standalone parenthesized group). The JSDoc now
+  explains this constraint, clarifies what the resulting predicate looks like (`cond AND
+  (children)` for `andGroup`, `cond OR (children)` for `orGroup`), and includes a workaround
+  for expressing a pure OR group with no meaningful parent condition.
+
 ## [2.2.4]
 
 ### Fixed

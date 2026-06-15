@@ -2,11 +2,14 @@ import {
   defaultCrudPermissions,
   type FieldDefinition,
   type FieldType,
-  type RelationDefinition,
   type ResourceDefinition
 } from '@/core/types.js'
 import type { SecurityScheme } from '@/auth/AuthStrategy.js'
-import { mergeFieldDefinitions } from '@/core/fields.js'
+import {
+  mergeFieldDefinitions,
+  mergeRelationDefinitions,
+  normalizeEnvelope
+} from '@/core/fields.js'
 
 /** Options for OpenAPI spec generation and the built-in docs UI. */
 export interface OpenApiOptions {
@@ -163,23 +166,12 @@ function toPascalCase(routePrefix: string): string {
     .join('')
 }
 
-function normalizeEnvelope(value: string | null | undefined): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
-}
-
 function mergeFields(resource: ResourceDefinition): FieldDefinition[] {
   const idField = resource.repository?.idField ?? 'id'
   return mergeFieldDefinitions(resource).map((f) => ({
     ...f,
     writable: f.name === idField ? f.writable === true : f.writable !== false
   }))
-}
-
-function mergeRelations(resource: ResourceDefinition): RelationDefinition[] {
-  const byName = new Map<string, RelationDefinition>()
-  for (const r of resource.repository?.relations ?? []) byName.set(r.name, r)
-  for (const r of resource.relations ?? []) byName.set(r.name, r)
-  return [...byName.values()]
 }
 
 // Wraps a schema under an envelope key if one is active.
@@ -349,7 +341,7 @@ const sharedSchemas: Record<string, JsonSchema> = {
       '    { "field": "published", "comparison": "=", "value": true },',
       '    { "field": "createdAt", "comparison": ">=", "value": "2024-01-01T00:00:00Z" }',
       '  ],',
-      '  "orderBy": [{ "field": "createdAt", "direction": "desc" }],',
+      '  "orderBy": [{ "field": "createdAt", "order": "DESC" }],',
       '  "limit": 20,',
       '  "offset": 0,',
       '  "fields": ["id", "title", "createdAt"],',
@@ -375,10 +367,10 @@ const sharedSchemas: Record<string, JsonSchema> = {
         description: 'Sort order. Multiple entries produce multi-column sorting.',
         items: {
           type: 'object',
-          required: ['field', 'direction'],
+          required: ['field', 'order'],
           properties: {
             field: { type: 'string', description: 'Field name to sort by (must be sortable).' },
-            direction: { type: 'string', enum: ['asc', 'desc'] }
+            order: { type: 'string', enum: ['ASC', 'DESC'] }
           }
         }
       },
@@ -387,7 +379,11 @@ const sharedSchemas: Record<string, JsonSchema> = {
         items: { type: 'string' },
         description: 'Relation names to eagerly load (if the resource supports includes).'
       },
-      distinct: { type: 'boolean', description: 'When `true`, de-duplicates results.' }
+      distinct: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Field names to de-duplicate results on (maps to SQL DISTINCT ON these columns).'
+      }
     }
   }
 }
@@ -455,10 +451,17 @@ export function generateOpenApiSpec(
     }
   }
 
+  // Note: resources here are the *raw* definitions as passed by the caller — they have NOT
+  // been through crudRouter's `normalizeResource()`. That means `mergeFields` and
+  // `mergeRelationDefinitions` below re-derive the same merged views that the router already
+  // computed at startup. This is intentional: the spec generator is a standalone function
+  // (called outside the router for static generation tooling), so it can't rely on the
+  // router's normalized state. If crudRouter ever caches normalized resources, pass them
+  // here instead to avoid the duplicate merge work.
   for (const resource of resources) {
     const permissions = { ...defaultCrudPermissions, ...resource.permissions }
     const fields = mergeFields(resource)
-    const relations = mergeRelations(resource)
+    const relations = mergeRelationDefinitions(resource)
     const idField = resource.repository?.idField ?? 'id'
     const schemaBase = toPascalCase(resource.routePrefix)
     const tag = resource.name ?? schemaBase
@@ -702,10 +705,10 @@ export function generateOpenApiSpec(
             type: 'array',
             items: {
               type: 'object',
-              required: ['field', 'direction'],
+              required: ['field', 'order'],
               properties: {
                 field: { type: 'string' },
-                direction: { type: 'string', enum: ['asc', 'desc'] }
+                order: { type: 'string', enum: ['ASC', 'DESC'] }
               }
             }
           }

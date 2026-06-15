@@ -8,6 +8,12 @@ export type PrismaWhere = Record<string, unknown>
  * Splits a `LIKE` pattern into a Prisma string operator based on its `%` wildcards.
  * `%x%` → `contains`, `x%` → `startsWith`, `%x` → `endsWith`, and a wildcard-free value
  * collapses to `equals` (matching SQL `LIKE 'x'` semantics).
+ *
+ * **Known limitation:** interior wildcards (`'foo%bar'`) cannot be expressed with Prisma's
+ * string operators — they fall through to `equals`, which is an exact match, not a
+ * wildcard match. Prisma has no `matches`/`glob` operator without raw SQL. Use `CONTAINS`,
+ * `STARTS WITH`, or `ENDS WITH` comparisons instead of `LIKE` when possible.
+ *
  * @param value - The raw LIKE pattern.
  * @returns A Prisma string-filter object.
  */

@@ -186,6 +186,8 @@ A resource always needs a field schema — it's the allow-list that powers filte
 
 Halifax's `peerDependencies` allow `@prisma/client >=6.0.0`, so it runs on **Prisma 6 or Prisma 7**. `PrismaAdapter` is database- and version-agnostic: it imports nothing from `@prisma/client` and only calls standard model-delegate methods (`findMany`, `findUnique`, `findFirst`, `create`, `createMany`, `update`, `updateMany`, `delete`, `deleteMany`, `upsert`, `count`) that behave identically across both majors. **You** construct the client and pass `prisma.<model>` as the `delegate` — Halifax never touches the parts that differ between the versions.
 
+**Tenant-scoped paths require `updateMany` and `deleteMany` on the delegate.** When multi-tenant isolation is active, `updateOne` uses `updateMany(scopedWhere)` for an atomic ownership-enforced write, and `deleteOne` uses `deleteMany(scopedWhere)` for the same reason. If the delegate does not expose these methods, both operations throw `ServerError`. Standard Prisma delegates always expose them; this only affects non-standard or mock delegates.
+
 > **Caveats.** Halifax's CI matrix exercises **Prisma 7 only** — Prisma 6 is supported on the strength of that stable delegate surface, not a dedicated CI leg, so treat it as best-effort and pin/test your own app against it. Prisma 7 is the recommended path; the main reason to stay on (or drop to) Prisma 6 today is **MongoDB**, which Prisma 7 does not yet support. When Prisma 7 restores MongoDB, prefer upgrading over remaining on 6.
 
 What you implement differently on Prisma 6 (everything below is your project's Prisma setup — no Halifax code changes):
@@ -305,6 +307,14 @@ new DrizzleAdapter(db, table, config?, scope?)
 | `table`          | Drizzle `Table`       | Your table schema (e.g. `usersTable`).                                                                                                              |
 | `config.idField` | `string` (optional)   | Primary key field name. Defaults to auto-detecting the first column marked `.primaryKey()`. Set explicitly for composite PKs or non-standard names. |
 | `scope`          | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly.                                                                               |
+
+### Relation includes
+
+`DrizzleAdapter` does **not** support `?include=` (relation eager-loading). It reports
+`capabilities.supportsIncludes: false`, so the router rejects `?include=` requests with
+`422 Unprocessable Entity` rather than silently returning records with no related data.
+If you need related records, fetch them with a second query or use `PrismaAdapter` for
+the resource that requires includes.
 
 ### Multi-tenancy
 

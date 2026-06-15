@@ -6,6 +6,7 @@ import {
   filterReadableFields,
   filterWritableFields,
   getHeaderValue,
+  makeReadableFieldFilter,
   type RouteHandlerContext,
   wrap,
   writeSuccess
@@ -50,12 +51,8 @@ export function registerCreate(
             )
           )
         : (rawResults as Record<string, unknown>[])
-      await writeSuccess(
-        res,
-        201,
-        results.map((r) => filterReadableFields(resource, r, auth)),
-        envelope
-      )
+      const filterRecord = makeReadableFieldFilter(resource, auth)
+      await writeSuccess(res, 201, results.map(filterRecord), envelope)
     })
   )
 }

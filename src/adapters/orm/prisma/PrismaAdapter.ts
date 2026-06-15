@@ -1,9 +1,25 @@
+import type { IQueryFilter, IQueryOptions, QueryScalar } from '@edium/halifax-types'
+import type {
+  DeleteManyResult,
+  FieldDefinition,
+  FieldType,
+  ListOptions,
+  ListResult,
+  ModelSchema,
+  QueryResult,
+  RelationDefinition,
+  Repository,
+  RepositoryCapabilities,
+  TenantScope,
+  UpdateManyResult
+} from '@/core/types.js'
+import type { PrismaAdapterOptions, PrismaDelegate } from './types.js'
 import { ConflictError } from '@/errors/ConflictError.js'
-import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
+import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { ServerError } from '@/errors/ServerError.js'
-import type { IQueryFilter, QueryScalar } from '@edium/halifax-types'
-import { astToPrismaWhere, astToPrismaOrderBy } from './astToPrisma.js'
+import { astToPrismaOrderBy, astToPrismaWhere } from './astToPrisma.js'
+import { toInclude, toOrderBy, toSelect } from './helpers.js'
 
 /** Returns true for Prisma's P2025 "record not found" error. */
 function isNotFoundError(error: unknown): boolean {
@@ -24,20 +40,6 @@ function isDuplicateError(error: unknown): boolean {
     (error as Record<string, unknown>).code === 'P2002'
   )
 }
-import type { IQueryOptions } from '@edium/halifax-types'
-import type {
-  Repository,
-  RepositoryCapabilities,
-  DeleteManyResult,
-  ListOptions,
-  ListResult,
-  QueryResult,
-  TenantScope,
-  UpdateManyResult
-} from '@/core/types.js'
-import type { FieldDefinition, FieldType, RelationDefinition, ModelSchema } from '@/core/types.js'
-import type { PrismaDelegate, PrismaAdapterOptions } from './types.js'
-import { toSelect, toInclude, toOrderBy } from './helpers.js'
 
 function prismaTypeToOpenApi(prismaType?: string): { type?: FieldType; format?: string } {
   switch (prismaType) {
@@ -334,20 +336,27 @@ export class PrismaAdapter<
    * @throws ServerError if the Prisma delegate does not support the update method.
    */
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
-    // When scoped, confirm the row belongs to the caller's tenant before touching it,
-    // and strip the tenant field from the payload so the row can't be moved tenants.
     if (this.scope) {
-      if (!this.delegate.findFirst) {
-        throw new ServerError(
-          'Prisma delegate does not support findFirst (required for tenant scoping).'
-        )
+      const scopedWhere = this.scopedWhere({ [this.idField]: id })
+
+      // Preferred path: delegate.updateMany lets us do a single atomic statement whose
+      // WHERE enforces the tenant boundary, eliminating the TOCTOU window.
+      if (this.delegate.updateMany && this.delegate.findFirst) {
+        const { count } = await this.delegate.updateMany({
+          where: scopedWhere,
+          data: this.stripTenant(data)
+        })
+        if (count === 0) return null
+        return (await this.delegate.findFirst({ where: scopedWhere })) as TRecord | null
       }
-      const owned = await this.delegate.findFirst({
-        where: this.scopedWhere({ [this.idField]: id }),
-        select: { [this.idField]: true }
-      })
-      if (!owned) return null
-      data = this.stripTenant(data)
+
+      // updateMany is unavailable — we cannot perform a single atomic scoped update.
+      // A two-step findFirst + unscoped update would introduce a TOCTOU window where a
+      // record could be transferred to another tenant between the check and the write.
+      // Refuse rather than risk a cross-tenant modification.
+      throw new ServerError(
+        'Prisma delegate does not support updateMany (required for safe tenant-scoped updateOne).'
+      )
     }
     try {
       return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
@@ -396,35 +405,72 @@ export class PrismaAdapter<
    * @throws ServerError if the Prisma delegate does not support the required methods for upserting records.
    */
   public async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
-    if (!this.delegate.upsert) {
-      throw new NotImplementedError('Prisma delegate does not support upsert.')
-    }
-
-    // When scoped, an upsert keyed on a unique id could otherwise overwrite a row owned
-    // by another tenant. Reject that case (hidden as "not found"), stamp the tenant on
-    // create, and forbid reassigning the tenant on update.
+    // Scoped upsert: do NOT use delegate.upsert with a bare id where-clause — Prisma's upsert
+    // would execute its `update` branch against any matching record regardless of tenant, giving
+    // a cross-tenant write if a race places another tenant's row at that id. Instead we decompose
+    // into a scoped findFirst + a scoped updateMany (create on miss) so the tenant constraint is
+    // enforced at every statement.
     if (this.scope) {
       if (!this.delegate.findFirst) {
         throw new ServerError(
           'Prisma delegate does not support findFirst (required for tenant scoping).'
         )
       }
+      const scopedWhere = this.scopedWhere({ [this.idField]: id })
       const existing = (await this.delegate.findFirst({
-        where: { [this.idField]: id }
+        where: scopedWhere
       })) as Record<string, unknown> | null
-      if (existing && existing[this.scope.field] !== this.scope.value) {
-        throw new NotFoundError()
+
+      if (existing) {
+        // Record exists for this tenant — update it atomically via updateMany(scopedWhere)
+        // so the tenant constraint is enforced in the same SQL statement as the write.
+        if (this.delegate.updateMany) {
+          const { count } = await this.delegate.updateMany({
+            where: scopedWhere,
+            data: this.stripTenant(data)
+          })
+          if (count === 0) {
+            // Deleted in the tiny window between findFirst and updateMany — treat as a
+            // fresh create so the caller gets a record back (consistent with upsert semantics).
+            try {
+              return (await this.delegate.create({
+                data: this.stampTenant({ ...data, [this.idField]: id } as TCreate)
+              })) as TRecord
+            } catch (error) {
+              if (isDuplicateError(error)) throw new ConflictError()
+              throw error
+            }
+          }
+          return (await this.delegate.findFirst({ where: scopedWhere })) as TRecord
+        }
+        // Fallback when updateMany is unavailable (non-standard delegate). The update is still
+        // scoped via the earlier findFirst; the TOCTOU window here is only closeable with a
+        // transaction, which we cannot guarantee across providers.
+        try {
+          return (await this.delegate.update({
+            where: { [this.idField]: id },
+            data: this.stripTenant(data)
+          })) as TRecord
+        } catch (error) {
+          if (isNotFoundError(error)) throw new NotFoundError()
+          if (isDuplicateError(error)) throw new ConflictError()
+          throw error
+        }
       }
+
+      // Record does not exist for this tenant — create it with the tenant stamped.
       try {
-        return (await this.delegate.upsert({
-          where: { [this.idField]: id },
-          create: this.stampTenant(data),
-          update: this.stripTenant(data) as TUpdate
+        return (await this.delegate.create({
+          data: this.stampTenant({ ...data, [this.idField]: id } as TCreate)
         })) as TRecord
       } catch (error) {
         if (isDuplicateError(error)) throw new ConflictError()
         throw error
       }
+    }
+
+    if (!this.delegate.upsert) {
+      throw new NotImplementedError('Prisma delegate does not support upsert.')
     }
 
     try {
@@ -458,16 +504,11 @@ export class PrismaAdapter<
         })
         return (result?.count ?? 0) > 0
       }
-      if (!this.delegate.findFirst) {
-        throw new ServerError(
-          'Prisma delegate does not support deleteMany or findFirst (required for tenant scoping).'
-        )
-      }
-      const owned = await this.delegate.findFirst({
-        where: this.scopedWhere({ [this.idField]: id }),
-        select: { [this.idField]: true }
-      })
-      if (!owned) return false
+      // deleteMany is unavailable — we cannot do an atomic scoped delete. A two-step
+      // findFirst + unscoped delete would introduce a TOCTOU cross-tenant deletion risk.
+      throw new ServerError(
+        'Prisma delegate does not support deleteMany (required for safe tenant-scoped deleteOne).'
+      )
     }
     try {
       await this.delegate.delete({ where: { [this.idField]: id } })

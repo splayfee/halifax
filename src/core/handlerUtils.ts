@@ -1,4 +1,5 @@
 import type { AuthContext, AuthStrategy } from '@/auth/AuthStrategy.js'
+import { checkRequiredPermissions } from '@/auth/strategies/types.js'
 import type { CrudHooks, HookContext, MaybePromise } from '@/core/hooks.js'
 import { HttpError } from '@/errors/HttpError.js'
 import { NotAcceptableError } from '@/errors/NotAcceptableError.js'
@@ -84,8 +85,8 @@ export function writeSuccess(
  */
 export function parseId(raw: string | undefined): string | number {
   validateId(raw)
-  if (typeof raw === 'string' && (isValidUuid(raw) || isValidObjectId(raw))) return raw
-  return typeof raw === 'string' ? parseInt(raw, 10) : raw
+  if (isValidUuid(raw) || isValidObjectId(raw)) return raw
+  return parseInt(raw, 10)
 }
 
 /**
@@ -129,18 +130,31 @@ export function filterReadableFields(
   record: Record<string, unknown>,
   auth?: AuthContext
 ): Record<string, unknown> {
+  return makeReadableFieldFilter(resource, auth)(record)
+}
+
+/**
+ * Returns a reusable filter function that strips read-restricted fields.
+ * Build this once per request (outside a `.map()` loop) so the fieldMap and
+ * userRoles Set are not reconstructed for every record in a bulk response.
+ */
+export function makeReadableFieldFilter(
+  resource: ResourceDefinition,
+  auth?: AuthContext
+): (record: Record<string, unknown>) => Record<string, unknown> {
   const fields = resource.fields ?? []
-  if (!fields.some((f) => (f.readRoles?.length ?? 0) > 0)) return record
+  if (!fields.some((f) => (f.readRoles?.length ?? 0) > 0)) return (r) => r
 
   const fieldMap = new Map(fields.map((f) => [f.name, f]))
   const userRoles = new Set([...(auth?.roles ?? []), ...(auth?.permissions ?? [])])
-  return Object.fromEntries(
-    Object.entries(record).filter(([key]) => {
-      const field = fieldMap.get(key)
-      if (!field?.readRoles?.length) return true
-      return field.readRoles.some((r) => userRoles.has(r))
-    })
-  )
+  return (record) =>
+    Object.fromEntries(
+      Object.entries(record).filter(([key]) => {
+        const field = fieldMap.get(key)
+        if (!field?.readRoles?.length) return true
+        return field.readRoles.some((r) => userRoles.has(r))
+      })
+    )
 }
 
 /**
@@ -167,14 +181,7 @@ export async function authorizeRequest(
     return auth
   }
 
-  if (requiredPermissions.length) {
-    const permissions = new Set(auth.permissions ?? [])
-    const roles = new Set(auth.roles ?? [])
-    const allowed = requiredPermissions.some(
-      (permission) => permissions.has(permission) || roles.has(permission)
-    )
-    if (!allowed) throw new AuthorizationError()
-  }
+  if (!checkRequiredPermissions(auth, requiredPermissions)) throw new AuthorizationError()
   return auth
 }
 

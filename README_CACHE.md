@@ -149,6 +149,12 @@ class MyCacheStore implements CacheStore {
   async delete(key: string): Promise<void> {
     /* … */
   }
+  // Optional — implement for atomic version bumps under concurrent writes.
+  // When omitted, Halifax falls back to a non-atomic GET + SET (safe for
+  // single-process stores like InMemoryCacheStore, but not for Redis).
+  async increment(key: string): Promise<number> {
+    /* … return new integer value */
+  }
 }
 ```
 

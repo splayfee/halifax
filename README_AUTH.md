@@ -37,7 +37,7 @@ const authStrategy = new ApiKeyAuthStrategy(process.env.API_KEY ?? '')
 const authStrategy = new ApiKeyAuthStrategy(process.env.API_KEY ?? '', 'x-token')
 ```
 
-Wrong or missing key → 403.
+Missing header → 401 Unauthorized. Wrong key → 403 Forbidden.
 
 ### `JwtClaimsAuthStrategy`
 
@@ -194,7 +194,7 @@ class RoleBasedStrategy implements AuthStrategy {
 
   authorize({ auth, action, resource, requiredPermissions }) {
     if (auth.roles.includes('admin')) return true
-    return requiredPermissions.every((p) => auth.permissions.includes(p) || auth.roles.includes(p))
+    return requiredPermissions.some((p) => auth.permissions.includes(p) || auth.roles.includes(p))
   }
 }
 ```

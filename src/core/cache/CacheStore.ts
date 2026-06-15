@@ -22,4 +22,16 @@ export interface CacheStore {
    * @param key - Cache key to remove.
    */
   delete(key: string): Promise<void> | void
+  /**
+   * Atomically increment an integer counter and return the new value.
+   * When the key does not exist, it is initialised to `0` before incrementing.
+   *
+   * Implementing this method is **strongly recommended** for multi-process stores
+   * (e.g. Redis) — without it, `createCachingRepository` falls back to a non-atomic
+   * read-then-write version-bump that can lose invalidations under concurrent writes.
+   *
+   * Single-process stores (`InMemoryCacheStore`) can implement this synchronously and
+   * are immune to the race regardless, but should still implement it for correctness.
+   */
+  increment?(key: string): Promise<number> | number
 }

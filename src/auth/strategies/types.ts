@@ -38,6 +38,22 @@ export type SecurityScheme =
   | { type: 'http'; scheme: 'bearer'; bearerFormat?: string; description?: string }
   | { type: 'http'; scheme: 'basic'; description?: string }
 
+/**
+ * Checks whether an auth context satisfies `requiredPermissions`.
+ * Semantics: **any single match** in `auth.permissions` OR `auth.roles` grants access
+ * (i.e. the list is an OR — "user must have at least one of these"). This mirrors
+ * the documented behaviour of `FieldDefinition.readRoles` / `writeRoles`.
+ */
+export function checkRequiredPermissions(
+  auth: AuthContext,
+  requiredPermissions: string[]
+): boolean {
+  if (!requiredPermissions.length) return true
+  const permissions = new Set(auth.permissions ?? [])
+  const roles = new Set(auth.roles ?? [])
+  return requiredPermissions.some((p) => permissions.has(p) || roles.has(p))
+}
+
 /** Contract for pluggable authentication and authorisation strategies. */
 export interface AuthStrategy {
   /**
