@@ -1,15 +1,16 @@
 {
   "name": "@edium/halifax-client",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Browser AST client for the halifax autocrud API.",
   "author": "David LaTour <david@edium.com>",
-  "homepage": "https://github.com/splayfee/halifax-client#readme",
+  "homepage": "https://github.com/splayfee/halifax/tree/main/packages/client#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/splayfee/halifax-client.git"
+    "url": "https://github.com/splayfee/halifax.git",
+    "directory": "packages/client"
   },
   "bugs": {
-    "url": "https://github.com/splayfee/halifax-client/issues"
+    "url": "https://github.com/splayfee/halifax/issues"
   },
   "license": "MIT",
   "type": "module",

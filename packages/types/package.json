@@ -25,6 +25,7 @@
   },
   "sideEffects": false,
   "scripts": {
+    "prepublishOnly": "pnpm run build",
     "build": "rm -rf dist && tsc --build",
     "type-check": "tsc --noEmit"
   },

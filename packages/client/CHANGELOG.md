@@ -3,6 +3,14 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.4]
+
+### Fixed
+
+- Corrected `repository`, `homepage`, and `bugs` URLs in `package.json`. They previously
+  pointed to a non-existent `splayfee/halifax-client` repository; they now point to the
+  correct monorepo at `splayfee/halifax` with a `directory` field identifying the package.
+
 ## [2.2.3]
 
 ### Fixed
