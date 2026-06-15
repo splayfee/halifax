@@ -190,7 +190,7 @@ describe.skipIf(!hasDb)('PrismaAdapter.withScope — direct (real DB)', () => {
 
     await expect(
       repoB.upsertOne!(owned.id, { name: 'hijacked' } as Record<string, unknown>)
-    ).rejects.toMatchObject({ status: 404 })
+    ).rejects.toMatchObject({ status: 409 })
 
     const row = await prisma.widget.findUnique({ where: { id: owned.id } })
     expect(row?.name).toBe('owned')
