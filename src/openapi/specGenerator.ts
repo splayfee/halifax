@@ -64,6 +64,12 @@ export interface OpenApiOptions {
    * ```
    */
   securityScheme?: SecurityScheme
+  /**
+   * When `true`, the `/openapi.json` and `/docs` routes require authentication via the
+   * configured `authStrategy` — unauthenticated callers receive 401/403 just like any
+   * other protected route. Defaults to `false` (docs are publicly accessible).
+   */
+  requireAuth?: boolean
 }
 
 // ─── Internal OpenAPI 3.1 types ───────────────────────────────────────────────
@@ -157,15 +163,18 @@ function toPascalCase(routePrefix: string): string {
 }
 
 function normalizeEnvelope(value: string | null | undefined): string | null {
-  if (!value) return null
-  return value
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 function mergeFields(resource: ResourceDefinition): FieldDefinition[] {
+  const idField = resource.repository?.idField ?? 'id'
   const byName = new Map<string, FieldDefinition>()
   for (const f of resource.repository?.fields ?? []) byName.set(f.name, { ...f })
   for (const f of resource.fields ?? []) byName.set(f.name, { ...byName.get(f.name), ...f })
-  return [...byName.values()]
+  return [...byName.values()].map((f) => ({
+    ...f,
+    writable: f.name === idField ? f.writable === true : f.writable !== false
+  }))
 }
 
 function mergeRelations(resource: ResourceDefinition): RelationDefinition[] {

@@ -105,13 +105,13 @@ export function filterWritableFields(
     throw new UnprocessableEntityError(`Unknown field(s): ${unknownFields.join(', ')}.`)
   }
 
-  const userRoles = auth ? new Set([...(auth.roles ?? []), ...(auth.permissions ?? [])]) : null
+  const userRoles = new Set([...(auth?.roles ?? []), ...(auth?.permissions ?? [])])
 
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => {
       const field = fields.find((f) => f.name === key)
       if (field?.writable === false) return false
-      if (userRoles && field?.writeRoles?.length) {
+      if (field?.writeRoles?.length) {
         return field.writeRoles.some((r) => userRoles.has(r))
       }
       return true
@@ -168,7 +168,7 @@ export async function authorizeRequest(
   if (requiredPermissions.length) {
     const permissions = new Set(auth.permissions ?? [])
     const roles = new Set(auth.roles ?? [])
-    const allowed = requiredPermissions.every(
+    const allowed = requiredPermissions.some(
       (permission) => permissions.has(permission) || roles.has(permission)
     )
     if (!allowed) throw new AuthorizationError()

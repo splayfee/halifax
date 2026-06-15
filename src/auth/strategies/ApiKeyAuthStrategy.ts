@@ -8,10 +8,14 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
   /**
    * @param expectedApiKey - The secret key that callers must supply.
    * @param headerName - Header to read the key from (default: `x-api-key`).
+   * @param roles - Roles to attach to every successfully authenticated context.
+   *   Use this when resources define per-field `readRoles`/`writeRoles` and
+   *   all valid API key holders should carry a known set of roles.
    */
   public constructor(
     private readonly expectedApiKey: string,
-    private readonly headerName = 'x-api-key'
+    private readonly headerName = 'x-api-key',
+    private readonly roles: string[] = []
   ) {}
 
   /**
@@ -26,7 +30,7 @@ export class ApiKeyAuthStrategy implements AuthStrategy {
     const apiKey = Array.isArray(header) ? header[0] : header
     if (!apiKey) throw new AuthenticationError('Missing API key')
     if (apiKey !== this.expectedApiKey) throw new AuthorizationError('Invalid API key')
-    return { isAuthenticated: true }
+    return { isAuthenticated: true, roles: this.roles }
   }
 
   public openApiScheme(): SecurityScheme {

@@ -26,7 +26,7 @@ export function registerUpdateOne(
       const repo = await resolveRepo(req, auth)
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }
-      const rawBody = filterWritableFields(resource, req.body as Record<string, unknown>, auth)
+      const rawBody = filterWritableFields(resource, (req.body ?? {}) as Record<string, unknown>, auth)
       const body = hooks?.beforeUpdateOne
         ? ((await hooks.beforeUpdateOne(id, rawBody, hookCtx)) ?? rawBody)
         : rawBody

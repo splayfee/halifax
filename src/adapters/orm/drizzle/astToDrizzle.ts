@@ -24,6 +24,11 @@ import { SqlComparison, SqlOperator, SqlOrder } from '@edium/halifax-types'
 
 export type ColumnMap = Record<string, AnyColumn>
 
+/** Escapes SQL LIKE metacharacters in a literal value so it is treated as a plain string. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&')
+}
+
 function comparisonToDrizzle(filter: IQueryFilter, col: AnyColumn): SQL | undefined {
   const v1 = filter.value1
   const v2 = filter.value2
@@ -55,11 +60,11 @@ function comparisonToDrizzle(filter: IQueryFilter, col: AnyColumn): SQL | undefi
     case SqlComparison.IsNotNull:
       return isNotNull(col)
     case SqlComparison.Contains:
-      return like(col, `%${String(v1 ?? '')}%`)
+      return like(col, `%${escapeLike(String(v1 ?? ''))}%`)
     case SqlComparison.StartsWith:
-      return like(col, `${String(v1 ?? '')}%`)
+      return like(col, `${escapeLike(String(v1 ?? ''))}%`)
     case SqlComparison.EndsWith:
-      return like(col, `%${String(v1 ?? '')}`)
+      return like(col, `%${escapeLike(String(v1 ?? ''))}`)
     case SqlComparison.Like:
       return like(col, String(v1 ?? ''))
     case SqlComparison.NotLike:

@@ -30,8 +30,8 @@ export function registerQuery(
       const hookCtx: HookContext = { auth, resource, req }
       const body = (req.body ?? {}) as Record<string, unknown>
       const parsedQuery = { ...body } as IQueryOptions
-      validateAdvancedQuery(resource, parsedQuery)
       const query = await applyHook(hooks?.beforeQuery, parsedQuery, hookCtx)
+      validateAdvancedQuery(resource, query)
       const rawResult = await repo.executeQuery(query)
       const result = await applyHook(
         hooks?.afterQuery,

@@ -360,14 +360,26 @@ export function registerCrudApi(
     const specJson = JSON.stringify(spec, null, 2)
     const docsHtml = generateDocsHtml(specPath, docsPath)
 
-    server.registerRoute('GET', specPath, (_req, res) => {
-      res.setHeader?.('Content-Type', 'application/json')
-      res.send?.(specJson)
+    const requireAuth = options.openapi.requireAuth === true
+
+    server.registerRoute('GET', specPath, async (req, res) => {
+      try {
+        if (requireAuth) await authStrategy.authenticate(req)
+        res.setHeader?.('Content-Type', 'application/json')
+        res.send?.(specJson)
+      } catch (error) {
+        await sendError(error, res)
+      }
     })
 
-    server.registerRoute('GET', docsPath, (_req, res) => {
-      res.setHeader?.('Content-Type', 'text/html; charset=utf-8')
-      res.send?.(docsHtml)
+    server.registerRoute('GET', docsPath, async (req, res) => {
+      try {
+        if (requireAuth) await authStrategy.authenticate(req)
+        res.setHeader?.('Content-Type', 'text/html; charset=utf-8')
+        res.send?.(docsHtml)
+      } catch (error) {
+        await sendError(error, res)
+      }
     })
   }
 }

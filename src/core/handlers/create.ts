@@ -26,7 +26,7 @@ export function registerCreate(
       const idempotencyKey = getHeaderValue(req, 'idempotency-key')
       const createOptions = idempotencyKey ? { idempotencyKey } : undefined
       const hookCtx: HookContext = { auth, resource, req }
-      const rawItems = (Array.isArray(req.body) ? req.body : [req.body]).map(
+      const rawItems = (Array.isArray(req.body) ? req.body : [req.body ?? {}]).map(
         (item: Record<string, unknown>) => filterWritableFields(resource, item, auth)
       )
       const items = hooks?.beforeCreate
