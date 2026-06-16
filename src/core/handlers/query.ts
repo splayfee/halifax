@@ -24,7 +24,7 @@ export function registerQuery(
     `${basePath}/${queryBuilderPath}`,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'readManyWithQueryBuilder', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'readManyWithQueryBuilder')
       if (!repo.executeQuery)
         throw new NotImplementedError('This resource does not support the query builder.')
       const hookCtx: HookContext = { auth, resource, req }

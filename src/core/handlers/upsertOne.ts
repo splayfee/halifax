@@ -23,7 +23,7 @@ export function registerUpsertOne(
     `${basePath}/:id`,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'upsertOne', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'upsertOne')
       if (!repo.upsertOne) throw new NotImplementedError('This resource does not support upsert.')
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }

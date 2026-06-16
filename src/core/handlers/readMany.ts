@@ -21,7 +21,7 @@ export function registerReadMany(
     basePath,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'readMany', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'readMany')
       const hookCtx: HookContext = { auth, resource, req }
       const parsedOptions = parseListOptions(req.query, resource)
       const listOptions = await applyHook(hooks?.beforeReadMany, parsedOptions, hookCtx)

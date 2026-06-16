@@ -1,8 +1,10 @@
 import { AllowAllAuthStrategy, type AuthContext, type AuthStrategy } from '@/auth/AuthStrategy.js'
+import { checkRequiredPermissions } from '@/auth/strategies/types.js'
 import type { CrudHooks } from '@/core/hooks.js'
 import { createCachingRepository, InMemoryCacheStore, type CacheStore } from '@/core/cache/index.js'
 import { generateOpenApiSpec, generateDocsHtml, type OpenApiOptions } from '@/openapi/index.js'
-import { defaultCrudPermissions, type ResourceDefinition } from '@/core/types.js'
+import { registerGraphqlRoute, type GraphQLOptions } from '@/graphql/index.js'
+import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
 import type {
   FieldDefinition,
   HttpRequest,
@@ -109,6 +111,9 @@ function effectiveTenantField(
 /** Matches a safe SQL identifier — tenant fields are interpolated into SQL on bulk paths. */
 const safeIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
+/** Read-only actions that admin bypass applies to. Writes always enforce tenant scoping. */
+const READ_ACTIONS = new Set<CrudAction>(['readOne', 'readMany', 'readManyWithQueryBuilder'])
+
 /** Context handed to {@link TenantOptions.resolveId} for the current request. */
 export interface TenantResolveContext {
   /** The resolved authentication context for the request. */
@@ -145,6 +150,29 @@ export interface TenantOptions {
    * cross-tenant ("god mode") access for callers with no tenant.
    */
   strict?: boolean
+  /**
+   * Roles or permission slugs whose holders may bypass tenant scoping for **read** operations
+   * (`getOne`, `getMany`, and the query builder), allowing them to see records across all tenants.
+   * Any single match in `auth.roles` or `auth.permissions` grants the bypass.
+   *
+   * When a bypass caller wants to see only one tenant's data they use the normal filter
+   * mechanism — `?companyId=42` on REST or `filter: { companyId: 42 }` in GraphQL.
+   * No special header or query parameter is needed; the tenant field is just another filterable
+   * column from the admin's perspective.
+   *
+   * Write operations (create / update / delete) are **never** bypassed: the tenant value
+   * continues to come from `resolveId`, keeping write provenance tied to auth — never to
+   * client-supplied input. An admin whose token carries no tenant will receive 403 on writes
+   * unless `strict` is `false`.
+   *
+   * Per-resource {@link ResourceDefinition.bypassTenantRoles} takes precedence over this list.
+   *
+   * @example
+   * ```ts
+   * bypassRoles: ['super_admin', 'support:read-all']
+   * ```
+   */
+  bypassRoles?: string[]
 }
 
 /** Options for {@link registerCrudApi} / {@link createExpressCrudRouter}. */
@@ -166,6 +194,20 @@ export interface CrudApiOptions {
    * additional routes: `GET /openapi.json` (raw spec) and `GET /docs` (Swagger UI).
    */
   openapi?: OpenApiOptions
+  /**
+   * Enable a GraphQL endpoint. GraphQL is **disabled by default** — you must set
+   * `enabled: true` to activate it. When enabled, Halifax registers `POST <path>` (execution)
+   * and optionally `GET <path>` (GraphiQL IDE). The schema is auto-generated from all
+   * resources that have `graphql !== false`. Requires the `graphql` peer dependency.
+   *
+   * See [README_GRAPHQL.md](./README_GRAPHQL.md) for full docs and examples.
+   *
+   * @example
+   * ```ts
+   * graphql: { enabled: true, path: '/graphql', graphiql: true }
+   * ```
+   */
+  graphql?: GraphQLOptions
   /**
    * API-wide read-through caching. Provide a `store` (defaults to an in-process
    * {@link InMemoryCacheStore}) and/or a default `ttlSeconds` applied to every resource that
@@ -257,9 +299,17 @@ export function registerCrudApi(
           })
         : repo
 
-    const resolveRepo = async (req: HttpRequest, auth: AuthContext): Promise<Repository> => {
+    const resolveRepo = async (req: HttpRequest, auth: AuthContext, action: CrudAction): Promise<Repository> => {
       const bust = cachingEnabled && wantsCacheBust(req, bustHeader)
       if (!tenantField || !options.tenant) return withCache(repository, 'global', bust)
+
+      // Admin bypass: callers with a privileged role/permission get unscoped reads.
+      // Writes always fall through to resolveId — tenant on writes comes from auth, never bypass.
+      const bypassRoles = resource.bypassTenantRoles ?? options.tenant.bypassRoles ?? []
+      if (READ_ACTIONS.has(action) && bypassRoles.length > 0 && checkRequiredPermissions(auth, bypassRoles)) {
+        return withCache(repository, 'global', bust)
+      }
+
       const value = await options.tenant.resolveId({ auth, req, resource })
       if (value === undefined || value === null || value === '') {
         if (options.tenant.strict !== false)
@@ -323,6 +373,66 @@ export function registerCrudApi(
       })
     }
   })
+
+  // ─── GraphQL endpoint ──────────────────────────────────────────────────────
+
+  if (options.graphql?.enabled === true) {
+    // Build per-resource contexts carrying the already-resolved resolveRepo closures.
+    // We re-iterate resources to capture the closure variables that were set up above.
+    const graphqlContexts = resources.map((rawResource) => {
+      const resource = normalizeResource(rawResource)
+      const repository = rawResource.repository
+
+      const tenantField = effectiveTenantField(resource, options.tenant)
+      const cacheTtl =
+        resource.cache === false
+          ? undefined
+          : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
+      const cachingEnabled = cacheTtl !== undefined
+
+      const withCacheLocal = (repo: Repository, scopeKey: string, bust: boolean): Repository =>
+        cachingEnabled
+          ? createCachingRepository(repo, {
+              store: cacheStore,
+              ttlSeconds: cacheTtl,
+              namespace: `${resource.name}:${scopeKey}`,
+              bust
+            })
+          : repo
+
+      const resolveRepoLocal = async (req: HttpRequest, auth: AuthContext, action: CrudAction): Promise<Repository> => {
+        const bust = cachingEnabled && wantsCacheBust(req, bustHeader)
+        if (!tenantField || !options.tenant) return withCacheLocal(repository, 'global', bust)
+
+        const bypassRoles = resource.bypassTenantRoles ?? options.tenant.bypassRoles ?? []
+        if (READ_ACTIONS.has(action) && bypassRoles.length > 0 && checkRequiredPermissions(auth, bypassRoles)) {
+          return withCacheLocal(repository, 'global', bust)
+        }
+
+        const value = await options.tenant.resolveId({ auth, req, resource })
+        if (value === undefined || value === null || value === '') {
+          if (options.tenant.strict !== false)
+            throw new AuthorizationError('No tenant is associated with this request.')
+          return withCacheLocal(repository, 'global', bust)
+        }
+        return withCacheLocal(
+          repository.withScope!({ field: tenantField, value }),
+          String(value),
+          bust
+        )
+      }
+
+      const hooks = resource.hooks as
+        | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
+        | undefined
+
+      return { resource, authStrategy, hooks, resolveRepo: resolveRepoLocal }
+    })
+
+    registerGraphqlRoute(server, graphqlContexts, options.graphql, authStrategy)
+  }
+
+  // ─── OpenAPI spec + docs ───────────────────────────────────────────────────
 
   if (options.openapi && options.openapi.enabled !== false) {
     const specPath = options.openapi.specPath ?? '/openapi.json'

@@ -8,6 +8,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@types/node@25.9.3'
   - better-sqlite3@12.10.1
+  - graphql@17.0.0
 onlyBuiltDependencies:
   - esbuild
   - prisma

@@ -23,7 +23,7 @@ export function registerDeleteMany(
     basePath,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'deleteMany', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'deleteMany')
       if (!repo.deleteMany)
         throw new NotImplementedError('This resource does not support deleteMany.')
       const hookCtx: HookContext = { auth, resource, req }

@@ -417,6 +417,16 @@ describe('createExpressCrudRouter — tenant integration', () => {
     )
   })
 
+  it('scopes a POST /resource/:id (getOne) to the tenant', async () => {
+    const { app, delegate } = buildApp({ company: { id: 7 } })
+    const res = await request(app).get('/api/v3/widgets/1')
+    expect(res.status).toBe(200)
+    expect(delegate.findUnique).not.toHaveBeenCalled()
+    expect(delegate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, companyId: 7 } })
+    )
+  })
+
   it('throws ServerError when the tenant field name contains unsafe characters', () => {
     // Field name 'tenant-id' fails /^[a-zA-Z_][a-zA-Z0-9_]*$/ → crudRouter.ts line 254
     const delegate = makeDelegate()
@@ -432,5 +442,220 @@ describe('createExpressCrudRouter — tenant integration', () => {
         tenant: { field: 'tenant-id', resolveId: () => 7 }
       })
     ).toThrow(/unsafe tenant field name/)
+  })
+})
+
+// ─── Admin bypass ─────────────────────────────────────────────────────────────
+
+function buildBypassApp(opts: {
+  roles?: string[]
+  permissions?: string[]
+  company?: unknown
+  bypassRoles?: string[]
+  resourceBypassRoles?: string[] | null
+}) {
+  const delegate = makeDelegate()
+  const resources = createPrismaResources({ widget: delegate }, [MODEL], {
+    tenantField: 'companyId'
+  })
+
+  if (opts.resourceBypassRoles !== undefined) {
+    // null means "leave unset"; array (including []) sets the per-resource override
+    if (opts.resourceBypassRoles !== null) {
+      resources[0]!.bypassTenantRoles = opts.resourceBypassRoles
+    }
+  }
+
+  const app = express()
+  app.use(express.json())
+  app.use(
+    '/api/v3',
+    createExpressCrudRouter(resources, {
+      authStrategy: {
+        authenticate(): AuthContext {
+          return {
+            isAuthenticated: true,
+            roles: opts.roles,
+            permissions: opts.permissions,
+            claims: { company: opts.company ?? null }
+          }
+        }
+      },
+      tenant: {
+        resolveId: ({ auth }) => (auth.claims?.company as { id?: number })?.id ?? null,
+        bypassRoles: opts.bypassRoles ?? ['super_admin']
+      }
+    })
+  )
+  return { app, delegate }
+}
+
+describe('createExpressCrudRouter — admin bypass', () => {
+  // ─── Bypass activation ───────────────────────────────────────────────────────
+
+  it('returns unscoped list when caller role matches bypassRoles (auth.roles)', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: null })
+
+    const res = await request(app).get('/api/v3/widgets')
+
+    expect(res.status).toBe(200)
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
+    )
+  })
+
+  it('returns unscoped list when caller permission matches bypassRoles (auth.permissions)', async () => {
+    const { app, delegate } = buildBypassApp({
+      permissions: ['super_admin'],
+      bypassRoles: ['super_admin'],
+      company: null
+    })
+
+    const res = await request(app).get('/api/v3/widgets')
+
+    expect(res.status).toBe(200)
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
+    )
+  })
+
+  it('still scopes list for callers without a bypass role', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['editor'], company: { id: 7 } })
+
+    const res = await request(app).get('/api/v3/widgets')
+
+    expect(res.status).toBe(200)
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 7 } })
+    )
+  })
+
+  it('returns unscoped getOne when caller has bypass role (uses findUnique, not findFirst)', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: null })
+
+    const res = await request(app).get('/api/v3/widgets/1')
+
+    expect(res.status).toBe(200)
+    expect(delegate.findUnique).toHaveBeenCalled()
+    expect(delegate.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('still scopes getOne for callers without a bypass role', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['editor'], company: { id: 7 } })
+
+    const res = await request(app).get('/api/v3/widgets/1')
+
+    expect(res.status).toBe(200)
+    expect(delegate.findUnique).not.toHaveBeenCalled()
+    expect(delegate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, companyId: 7 } })
+    )
+  })
+
+  // ─── Filter-based narrowing ───────────────────────────────────────────────────
+
+  it('bypass admin can narrow to one tenant via query-string filter', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: null })
+
+    const res = await request(app).get('/api/v3/widgets?companyId=42')
+
+    expect(res.status).toBe(200)
+    // Unscoped repo — companyId=42 is treated as a plain equality filter
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: '42' } })
+    )
+  })
+
+  // ─── Writes are never bypassed ────────────────────────────────────────────────
+
+  it('does NOT bypass create — returns 403 when resolveId yields no tenant', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: null })
+
+    const res = await request(app).post('/api/v3/widgets').send({ name: 'test' })
+
+    expect(res.status).toBe(403)
+    expect(delegate.create).not.toHaveBeenCalled()
+  })
+
+  it('does NOT bypass updateOne — returns 403 when resolveId yields no tenant', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: null })
+
+    const res = await request(app).patch('/api/v3/widgets/1').send({ name: 'test' })
+
+    expect(res.status).toBe(403)
+    expect(delegate.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('does NOT bypass deleteOne — returns 403 when resolveId yields no tenant', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: null })
+
+    const res = await request(app).delete('/api/v3/widgets/1')
+
+    expect(res.status).toBe(403)
+    expect(delegate.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('admin with a tenant in their token still scopes writes normally', async () => {
+    const { app, delegate } = buildBypassApp({ roles: ['super_admin'], company: { id: 7 } })
+
+    const res = await request(app).post('/api/v3/widgets').send({ name: 'test' })
+
+    expect(res.status).toBe(201)
+    expect(delegate.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ companyId: 7 }) })
+    )
+  })
+
+  // ─── Per-resource override ────────────────────────────────────────────────────
+
+  it('per-resource bypassTenantRoles:[] prevents bypass even for global bypass roles', async () => {
+    const { app, delegate } = buildBypassApp({
+      roles: ['super_admin'],
+      company: { id: 7 },
+      resourceBypassRoles: []
+    })
+
+    const res = await request(app).get('/api/v3/widgets')
+
+    expect(res.status).toBe(200)
+    // Resource override is empty → bypass never fires → normal tenant scope applied
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 7 } })
+    )
+  })
+
+  it('per-resource bypassTenantRoles overrides the API-wide list', async () => {
+    // 'support' is NOT in the global list but IS in the resource list
+    const { app, delegate } = buildBypassApp({
+      roles: ['support'],
+      bypassRoles: ['super_admin'],
+      company: null,
+      resourceBypassRoles: ['support']
+    })
+
+    const res = await request(app).get('/api/v3/widgets')
+
+    expect(res.status).toBe(200)
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} })
+    )
+  })
+
+  it('global bypassRoles does not grant bypass when role only matches a different resource override', async () => {
+    // Caller has 'super_admin' (in global list), resource override is ['support'] only
+    const { app, delegate } = buildBypassApp({
+      roles: ['super_admin'],
+      bypassRoles: ['super_admin'],
+      company: { id: 7 },
+      resourceBypassRoles: ['support']  // resource override replaces, not extends
+    })
+
+    const res = await request(app).get('/api/v3/widgets')
+
+    expect(res.status).toBe(200)
+    // 'super_admin' is not in the resource override list → normal scoping
+    expect(delegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 7 } })
+    )
   })
 })

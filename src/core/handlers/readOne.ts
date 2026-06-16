@@ -23,7 +23,7 @@ export function registerReadOne(
     `${basePath}/:id`,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'readOne', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'readOne')
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }
       if (hooks?.beforeReadOne) await hooks.beforeReadOne(id, hookCtx)

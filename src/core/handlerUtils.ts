@@ -252,5 +252,5 @@ export interface RouteHandlerContext {
   hooks:
     | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
     | undefined
-  resolveRepo: (req: HttpRequest, auth: AuthContext) => Promise<Repository>
+  resolveRepo: (req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository>
 }

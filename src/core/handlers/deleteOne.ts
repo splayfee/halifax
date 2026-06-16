@@ -20,7 +20,7 @@ export function registerDeleteOne(
     `${basePath}/:id`,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'deleteOne', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'deleteOne')
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }
       if (hooks?.beforeDeleteOne) await hooks.beforeDeleteOne(id, hookCtx)

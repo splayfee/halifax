@@ -440,6 +440,28 @@ export interface ResourceDefinition<
    */
   cache?: ResourceCacheConfig | false
   /**
+   * Controls whether this resource is exposed through the GraphQL endpoint.
+   * Set to `false` to exclude this resource from the generated GraphQL schema entirely.
+   * Defaults to `true` when GraphQL is enabled on the API.
+   */
+  graphql?: boolean
+  /**
+   * Roles or permission slugs whose holders may bypass tenant scoping for **read** operations
+   * on this resource, allowing them to see records across all tenants. Any single match in
+   * `auth.roles` or `auth.permissions` grants the bypass.
+   *
+   * Bypass callers receive all records on reads. To narrow to a single tenant they use the
+   * standard filter mechanism (`?companyId=42` on REST, `filter: { companyId: 42 }` in
+   * GraphQL) — the tenant field is just another filterable column from their perspective.
+   *
+   * Write operations (create / update / delete) are **never** bypassed — tenant value on writes
+   * always comes from `resolveId` (the auth token), not from the bypass path.
+   *
+   * Overrides {@link TenantOptions.bypassRoles} for this resource. Set to `[]` to disable
+   * bypass on this resource even when a global `bypassRoles` is configured.
+   */
+  bypassTenantRoles?: string[]
+  /**
    * Wrap every success response body for this resource under a single key
    * (e.g. `'data'` →
    * `{ "data": <body> }`). Applies uniformly to all success payloads — list

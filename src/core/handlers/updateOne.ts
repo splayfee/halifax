@@ -23,7 +23,7 @@ export function registerUpdateOne(
     `${basePath}/:id`,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'updateOne', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'updateOne')
       const id = parseId(req.params['id'])
       const hookCtx: HookContext = { auth, resource, req }
       const rawBody = filterWritableFields(

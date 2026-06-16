@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Auto-generate type-safe REST CRUD APIs from your data models. Adapter-driven: Express/Fastify/HyperExpress, Prisma (PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, SQLite), JWT/API-key auth, multi-tenancy, a dynamic query builder, and pluggable Redis caching.",
   "author": "David LaTour <david@edium.com>",
   "homepage": "https://github.com/splayfee/halifax#readme",
@@ -56,6 +56,7 @@
     "README_AUTOCRUD.md",
     "README_CACHE.md",
     "README_HTTP_ADAPTERS.md",
+    "README_GRAPHQL.md",
     "README_MULTITENANCY.md",
     "README_QUERYBUILDER.md",
     "README_REPO_ADAPTERS.md",
@@ -95,7 +96,8 @@
     "express": "^4.17.0 || ^5.0.0",
     "fastify": ">=4.0.0",
     "hyper-express": ">=6.0.0",
-    "ultimate-express": ">=2.0.0"
+    "ultimate-express": ">=2.0.0",
+    "graphql": ">=16.0.0"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
@@ -114,6 +116,9 @@
       "optional": true
     },
     "ultimate-express": {
+      "optional": true
+    },
+    "graphql": {
       "optional": true
     }
   },
@@ -149,6 +154,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",
     "ultimate-express": "^2.1.1",
+    "graphql": "^17.0.0",
     "vitest": "^4.1.8"
   },
   "keywords": [

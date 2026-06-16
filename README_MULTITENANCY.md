@@ -84,6 +84,11 @@ interface TenantOptions {
   field?: string
   /** Fail-closed when no tenant resolves. Defaults to true. */
   strict?: boolean
+  /**
+   * Roles or permission slugs whose holders bypass tenant scoping on read operations.
+   * See "Admin bypass" below.
+   */
+  bypassRoles?: string[]
 }
 ```
 
@@ -111,6 +116,88 @@ createPrismaResources(prisma, models, {
     Country: { tenant: false }
   }
 })
+```
+
+## Admin bypass
+
+Sometimes a super-admin or support role needs to read across all tenants — for reporting,
+debugging, or backoffice tooling — without being confined to a single company's data.
+
+### Enabling bypass
+
+Add `bypassRoles` to `TenantOptions`. Any caller whose `auth.roles` **or** `auth.permissions`
+matches at least one entry is granted an unscoped read:
+
+```ts
+createExpressCrudRouter(resources, {
+  tenant: {
+    resolveId: ({ auth }) => auth.claims?.companyId,
+    bypassRoles: ['super_admin', 'support:read-all'],
+  }
+})
+```
+
+Values are matched against both `auth.roles` and `auth.permissions` — either paradigm works.
+
+### What bypass does (and does not do)
+
+| Operation | Behaviour with bypass |
+| --- | --- |
+| `GET /resource` — list | Returns rows from **all** tenants (unscoped) |
+| `GET /resource/:id` | Returns the record regardless of which tenant owns it |
+| `POST /resource/query` (query builder) | Returns rows from all tenants |
+| `POST /resource` (create) | **Not bypassed** — tenant value still comes from `resolveId` |
+| `PATCH`, `PUT`, `DELETE` | **Not bypassed** — tenant value still comes from `resolveId` |
+
+Writes are deliberately excluded. Tenant on writes comes from the authenticated session —
+never from the client and never from the bypass path. An admin writing through the API either has a `companyId` in their token (and writes to that company) or receives 403.
+
+### Narrowing a bypass read to one tenant
+
+When a super-admin wants data for a specific company they use the **normal filter mechanism**
+— the tenant field is just another filterable column from their perspective. No special header or query parameter is needed:
+
+```
+# All tenants (bypass active, no filter)
+GET /orders
+
+# One specific tenant
+GET /orders?companyId=42
+```
+
+In GraphQL:
+
+```graphql
+# All tenants
+{ listOrders { count results { id companyId total } } }
+
+# One tenant
+{ listOrders(filter: { companyId: 42 }) { count results { id companyId total } } }
+```
+
+### Per-resource bypass override
+
+`ResourceDefinition.bypassTenantRoles` overrides the global `bypassRoles` for one resource.
+Set it to `[]` to prevent bypass on a particularly sensitive model:
+
+```ts
+const resources = [
+  {
+    routePrefix: 'orders',
+    repository: orderRepo,
+    // inherits bypassRoles from TenantOptions → super_admin gets all
+  },
+  {
+    routePrefix: 'payment-methods',
+    repository: paymentRepo,
+    bypassTenantRoles: [],           // always scoped — even super_admin sees only their tenant
+  },
+  {
+    routePrefix: 'users',
+    repository: userRepo,
+    bypassTenantRoles: ['super_admin'],  // only super_admin bypasses; support:read-all does not
+  }
+]
 ```
 
 ## Security model

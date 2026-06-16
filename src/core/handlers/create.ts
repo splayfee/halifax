@@ -23,7 +23,7 @@ export function registerCreate(
     basePath,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'create', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'create')
       const idempotencyKey = getHeaderValue(req, 'idempotency-key')
       const createOptions = idempotencyKey ? { idempotencyKey } : undefined
       const hookCtx: HookContext = { auth, resource, req }

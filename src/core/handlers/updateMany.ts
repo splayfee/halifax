@@ -25,7 +25,7 @@ export function registerUpdateMany(
     basePath,
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'updateMany', authStrategy)
-      const repo = await resolveRepo(req, auth)
+      const repo = await resolveRepo(req, auth, 'updateMany')
       if (!repo.updateMany)
         throw new NotImplementedError('This resource does not support updateMany.')
       const hookCtx: HookContext = { auth, resource, req }

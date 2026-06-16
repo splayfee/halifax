@@ -3,6 +3,75 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0]
+
+### Breaking
+
+- **`RouteHandlerContext.resolveRepo` and `GraphQLResourceContext.resolveRepo` now require a
+  third `action: CrudAction` argument** — the resolver function signature has changed from
+  `(req: HttpRequest, auth: AuthContext) => Promise<Repository>` to
+  `(req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository>`. The
+  `action` parameter carries the name of the CRUD operation being performed (e.g. `'readMany'`,
+  `'create'`) so that action-aware logic (such as the new admin bypass) can branch correctly
+  inside the closure. All built-in handlers and resolvers pass the correct action. Custom
+  integrations that construct a `RouteHandlerContext` or `GraphQLResourceContext` directly must
+  update their `resolveRepo` implementation to accept and handle the third argument.
+
+- **`GraphQLOptions.enabled` must now be explicitly set to `true`** — previously, supplying a
+  `graphql: { ... }` object without `enabled: false` activated the endpoint. The new default is
+  off: the endpoint is registered only when `graphql: { enabled: true, ... }` is passed. This
+  makes GraphQL a deliberate opt-in and avoids importing the optional `graphql` peer dependency
+  unless it is actually used. Existing configurations that relied on the implicit default must
+  add `enabled: true`.
+
+### Added
+
+- **GraphQL endpoint** — Halifax can now expose a full GraphQL API alongside REST. The schema
+  is built at startup from the same resource definitions that drive REST: no separate schema
+  file, no annotations. For each resource Halifax generates `get<T>`, `list<T>`, and
+  `query<T>` query fields plus `create<T>`, `createMany<T>`, `update<T>`, `updateMany<T>`,
+  `upsert<T>`, `delete<T>`, and `deleteMany<T>` mutation fields — only those allowed by
+  `resource.permissions` are included. The same auth strategy, tenant scoping, field-level
+  security (`readRoles`/`writeRoles`), lifecycle hooks, and caching that apply to REST apply
+  identically to GraphQL resolvers. Requires the optional `graphql` (≥ 16.0.0) peer dependency.
+
+  ```ts
+  createExpressCrudRouter(resources, {
+    graphql: { enabled: true, path: '/graphql', graphiql: true }
+  })
+  ```
+
+  - `GET /graphql` serves the GraphiQL browser IDE (disable with `graphiql: false`).
+  - `requireAuth: true` gates even introspection behind `authStrategy.authenticate`.
+  - Set `graphql: false` on any `ResourceDefinition` to exclude it from the schema while
+    keeping it on REST.
+  - See [README_GRAPHQL.md](./README_GRAPHQL.md) for full documentation and examples.
+
+- **Admin tenant bypass** — callers whose `auth.roles` or `auth.permissions` matches any entry
+  in `TenantOptions.bypassRoles` receive an unscoped repository for read operations
+  (`readOne`, `readMany`, `readManyWithQueryBuilder`), allowing them to query across all
+  tenants. Write operations (`create`, `updateOne`, `updateMany`, `upsertOne`, `deleteOne`,
+  `deleteMany`) are never bypassed — the tenant value on writes continues to come from
+  `resolveId`, keeping write provenance tied to authentication rather than client input.
+  Admins who want to read a single tenant's data use the standard filter syntax
+  (`?companyId=42` on REST, `filter: { companyId: 42 }` in GraphQL) rather than any special
+  override mechanism.
+
+  ```ts
+  tenant: {
+    resolveId: ({ auth }) => auth.claims?.companyId,
+    bypassRoles: ['super_admin', 'support:read-all'],   // role OR permission slug
+  }
+  ```
+
+  Per-resource override via `ResourceDefinition.bypassTenantRoles` takes precedence over the
+  API-wide list. Set it to `[]` on a resource to prevent bypass entirely for that model even
+  when a global `bypassRoles` is configured.
+
+- **`README_GRAPHQL.md`** — new reference document covering GraphQL opt-in setup, the
+  auto-generated schema (queries, mutations, types), per-resource opt-out, the GraphiQL IDE,
+  authentication, tenant bypass behaviour, and annotated query/mutation examples.
+
 ## [2.3.0]
 
 ### Security
