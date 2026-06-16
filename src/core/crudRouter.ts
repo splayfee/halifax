@@ -11,6 +11,7 @@ import type {
   HttpServer,
   Repository
 } from '@/core/types.js'
+import { toTitleCase } from '@/core/stringUtils.js'
 import { ServerError } from '@/errors/ServerError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
@@ -33,19 +34,6 @@ import { registerDeleteMany } from '@/core/handlers/deleteMany.js'
 
 export { normalizeError }
 
-/**
- * Derives a human-readable resource name from a route prefix when none is given:
- * de-kebabs/de-snakes and title-cases each word (`'blog-posts'` → `'Blog Posts'`).
- */
-function deriveResourceName(routePrefix: string): string {
-  return (
-    routePrefix
-      .split(/[-_/\s]+/)
-      .filter(Boolean)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ') || routePrefix
-  )
-}
 
 /**
  * Resolves the effective field list for a resource. Merges the repository's field schema
@@ -86,7 +74,7 @@ function normalizeResource(resource: ResourceDefinition): ResourceDefinition {
   const idField = resource.repository?.idField ?? 'id'
   return {
     ...resource,
-    name: resource.name ?? deriveResourceName(resource.routePrefix),
+    name: resource.name ?? toTitleCase(resource.routePrefix),
     fields: resolveFields(resource, idField),
     relations: mergeRelationDefinitions(resource)
   }
@@ -113,6 +101,53 @@ const safeIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
 /** Read-only actions that admin bypass applies to. Writes always enforce tenant scoping. */
 const READ_ACTIONS = new Set<CrudAction>(['readOne', 'readMany', 'readManyWithQueryBuilder'])
+
+/**
+ * Builds the `resolveRepo` closure for a resource — shared by REST and GraphQL route registration
+ * so the tenant-scoping and caching logic is defined exactly once.
+ */
+function buildResolveRepo(
+  resource: ResourceDefinition,
+  repository: Repository,
+  tenantField: string | null,
+  options: Pick<CrudApiOptions, 'tenant' | 'cache'>,
+  cacheStore: CacheStore,
+  bustHeader: string
+): (req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository> {
+  const cacheTtl =
+    resource.cache === false
+      ? undefined
+      : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
+  const cachingEnabled = cacheTtl !== undefined
+
+  const withCache = (repo: Repository, scopeKey: string, bust: boolean): Repository =>
+    cachingEnabled
+      ? createCachingRepository(repo, {
+          store: cacheStore,
+          ttlSeconds: cacheTtl!,
+          namespace: `${resource.name}:${scopeKey}`,
+          bust
+        })
+      : repo
+
+  return async (req: HttpRequest, auth: AuthContext, action: CrudAction): Promise<Repository> => {
+    const bust = cachingEnabled && wantsCacheBust(req, bustHeader)
+    if (!tenantField || !options.tenant) return withCache(repository, 'global', bust)
+
+    const bypassRoles = resource.bypassTenantRoles ?? options.tenant.bypassRoles ?? []
+    if (READ_ACTIONS.has(action) && bypassRoles.length > 0 && checkRequiredPermissions(auth, bypassRoles)) {
+      return withCache(repository, 'global', bust)
+    }
+
+    const value = await options.tenant.resolveId({ auth, req, resource })
+    if (value === undefined || value === null || value === '') {
+      if (options.tenant.strict !== false)
+        throw new AuthorizationError('No tenant is associated with this request.')
+      return withCache(repository, 'global', bust)
+    }
+    return withCache(repository.withScope!({ field: tenantField, value }), String(value), bust)
+  }
+}
 
 /** Context handed to {@link TenantOptions.resolveId} for the current request. */
 export interface TenantResolveContext {
@@ -251,6 +286,13 @@ export function registerCrudApi(
   const cacheStore: CacheStore = options.cache?.store ?? new InMemoryCacheStore()
   const bustHeader = options.cache?.bustHeader ?? 'cache-control'
 
+  type GqlCtx = {
+    resource: ResourceDefinition
+    hooks: CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>> | undefined
+    resolveRepo: (req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository>
+  }
+  const gqlContexts: GqlCtx[] = []
+
   resources.forEach((rawResource) => {
     const repository = rawResource.repository
     if (!repository)
@@ -281,43 +323,7 @@ export function registerCrudApi(
         )
     }
 
-    // Effective cache TTL: explicit `cache: false` disables; per-resource config wins over
-    // API-wide default. `0` means "never expire" (so `undefined` = no caching).
-    const cacheTtl =
-      resource.cache === false
-        ? undefined
-        : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
-    const cachingEnabled = cacheTtl !== undefined
-
-    const withCache = (repo: Repository, scopeKey: string, bust: boolean): Repository =>
-      cachingEnabled
-        ? createCachingRepository(repo, {
-            store: cacheStore,
-            ttlSeconds: cacheTtl,
-            namespace: `${resource.name}:${scopeKey}`,
-            bust
-          })
-        : repo
-
-    const resolveRepo = async (req: HttpRequest, auth: AuthContext, action: CrudAction): Promise<Repository> => {
-      const bust = cachingEnabled && wantsCacheBust(req, bustHeader)
-      if (!tenantField || !options.tenant) return withCache(repository, 'global', bust)
-
-      // Admin bypass: callers with a privileged role/permission get unscoped reads.
-      // Writes always fall through to resolveId — tenant on writes comes from auth, never bypass.
-      const bypassRoles = resource.bypassTenantRoles ?? options.tenant.bypassRoles ?? []
-      if (READ_ACTIONS.has(action) && bypassRoles.length > 0 && checkRequiredPermissions(auth, bypassRoles)) {
-        return withCache(repository, 'global', bust)
-      }
-
-      const value = await options.tenant.resolveId({ auth, req, resource })
-      if (value === undefined || value === null || value === '') {
-        if (options.tenant.strict !== false)
-          throw new AuthorizationError('No tenant is associated with this request.')
-        return withCache(repository, 'global', bust)
-      }
-      return withCache(repository.withScope!({ field: tenantField, value }), String(value), bust)
-    }
+    const resolveRepo = buildResolveRepo(resource, repository, tenantField, options, cacheStore, bustHeader)
 
     const permissions = { ...defaultCrudPermissions, ...resource.permissions }
     const basePath = `/${resource.routePrefix}`
@@ -326,6 +332,7 @@ export function registerCrudApi(
       | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
       | undefined
 
+    gqlContexts.push({ resource, hooks, resolveRepo })
     const handlerCtx: RouteHandlerContext = { resource, authStrategy, envelope, hooks, resolveRepo }
 
     if (permissions.allowCreate) registerCreate(server, basePath, handlerCtx)
@@ -377,59 +384,14 @@ export function registerCrudApi(
   // ─── GraphQL endpoint ──────────────────────────────────────────────────────
 
   if (options.graphql?.enabled === true) {
-    // Build per-resource contexts carrying the already-resolved resolveRepo closures.
-    // We re-iterate resources to capture the closure variables that were set up above.
-    const graphqlContexts = resources.map((rawResource) => {
-      const resource = normalizeResource(rawResource)
-      const repository = rawResource.repository
-
-      const tenantField = effectiveTenantField(resource, options.tenant)
-      const cacheTtl =
-        resource.cache === false
-          ? undefined
-          : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
-      const cachingEnabled = cacheTtl !== undefined
-
-      const withCacheLocal = (repo: Repository, scopeKey: string, bust: boolean): Repository =>
-        cachingEnabled
-          ? createCachingRepository(repo, {
-              store: cacheStore,
-              ttlSeconds: cacheTtl,
-              namespace: `${resource.name}:${scopeKey}`,
-              bust
-            })
-          : repo
-
-      const resolveRepoLocal = async (req: HttpRequest, auth: AuthContext, action: CrudAction): Promise<Repository> => {
-        const bust = cachingEnabled && wantsCacheBust(req, bustHeader)
-        if (!tenantField || !options.tenant) return withCacheLocal(repository, 'global', bust)
-
-        const bypassRoles = resource.bypassTenantRoles ?? options.tenant.bypassRoles ?? []
-        if (READ_ACTIONS.has(action) && bypassRoles.length > 0 && checkRequiredPermissions(auth, bypassRoles)) {
-          return withCacheLocal(repository, 'global', bust)
-        }
-
-        const value = await options.tenant.resolveId({ auth, req, resource })
-        if (value === undefined || value === null || value === '') {
-          if (options.tenant.strict !== false)
-            throw new AuthorizationError('No tenant is associated with this request.')
-          return withCacheLocal(repository, 'global', bust)
-        }
-        return withCacheLocal(
-          repository.withScope!({ field: tenantField, value }),
-          String(value),
-          bust
-        )
-      }
-
-      const hooks = resource.hooks as
-        | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
-        | undefined
-
-      return { resource, authStrategy, hooks, resolveRepo: resolveRepoLocal }
-    })
-
-    registerGraphqlRoute(server, graphqlContexts, options.graphql, authStrategy)
+    registerGraphqlRoute(
+      server,
+      gqlContexts.map(({ resource, hooks, resolveRepo }) => ({
+        resource, authStrategy, hooks, resolveRepo
+      })),
+      options.graphql,
+      authStrategy
+    )
   }
 
   // ─── OpenAPI spec + docs ───────────────────────────────────────────────────

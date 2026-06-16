@@ -1,6 +1,3 @@
-import { graphql, parse, validate } from 'graphql'
-import { buildGraphQLSchema } from './schema.js'
-import { generateGraphiQLHtml } from './graphiql.js'
 import type { GraphQLOptions, GraphQLRequestBody, GraphQLResourceContext } from './types.js'
 import type { AuthStrategy } from '@/auth/strategies/types.js'
 import type { HttpServer } from '@/core/types.js'
@@ -10,7 +7,8 @@ import { sendError } from '@/core/handlerUtils.js'
  * Registers the `POST /graphql` execution endpoint and optionally the `GET /graphql`
  * GraphiQL IDE page on the given HTTP server.
  *
- * The schema is built once at registration time from the provided resource contexts.
+ * The schema is built lazily on the first request so that the `graphql` peer dependency
+ * is only loaded when GraphQL is actually used — not at startup.
  */
 export function registerGraphqlRoute(
   server: HttpServer,
@@ -25,8 +23,33 @@ export function registerGraphqlRoute(
   const requireAuth = options.requireAuth === true
   const title = options.title ?? 'Halifax GraphQL'
 
-  const schema = buildGraphQLSchema(contexts)
-  const graphiqlHtml = graphiqlEnabled ? generateGraphiQLHtml(path, title) : null
+  type Ready = {
+    schema: import('graphql').GraphQLSchema
+    graphql: (typeof import('graphql'))['graphql']
+    parse: (typeof import('graphql'))['parse']
+    validate: (typeof import('graphql'))['validate']
+    graphiqlHtml: string | null
+  }
+
+  // Promise is created once and cached — subsequent requests reuse the resolved value.
+  let ready: Promise<Ready> | null = null
+
+  function getReady(): Promise<Ready> {
+    if (!ready) {
+      ready = (async (): Promise<Ready> => {
+        const [{ graphql, parse, validate }, { buildGraphQLSchema }] = await Promise.all([
+          import('graphql'),
+          import('./schema.js')
+        ])
+        const schema = await buildGraphQLSchema(contexts)
+        const graphiqlHtml = graphiqlEnabled
+          ? (await import('./graphiql.js')).generateGraphiQLHtml(path, title)
+          : null
+        return { schema, graphql, parse, validate, graphiqlHtml }
+      })()
+    }
+    return ready
+  }
 
   // ─── POST /graphql — execution endpoint ─────────────────────────────────
 
@@ -34,6 +57,7 @@ export function registerGraphqlRoute(
     try {
       if (requireAuth) await authStrategy.authenticate(req)
 
+      const { schema, graphql, parse, validate } = await getReady()
       const body = (req.body ?? {}) as GraphQLRequestBody
       const source = body.query ?? ''
 
@@ -80,12 +104,13 @@ export function registerGraphqlRoute(
 
   // ─── GET /graphql — GraphiQL IDE ─────────────────────────────────────────
 
-  if (graphiqlEnabled && graphiqlHtml) {
+  if (graphiqlEnabled) {
     server.registerRoute('GET', path, async (req, res) => {
       try {
         if (requireAuth) await authStrategy.authenticate(req)
+        const { graphiqlHtml } = await getReady()
         res.setHeader?.('Content-Type', 'text/html; charset=utf-8')
-        res.send?.(graphiqlHtml)
+        res.send?.(graphiqlHtml!)
       } catch (error) {
         await sendError(error, res)
       }

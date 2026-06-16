@@ -5,7 +5,6 @@ import {
   authorizeRequest,
   filterReadableFields,
   filterWritableFields,
-  getHeaderValue,
   makeReadableFieldFilter,
   type RouteHandlerContext,
   wrap,
@@ -24,8 +23,6 @@ export function registerCreate(
     wrap(async (req, res) => {
       const auth = await authorizeRequest(req, resource, 'create', authStrategy)
       const repo = await resolveRepo(req, auth, 'create')
-      const idempotencyKey = getHeaderValue(req, 'idempotency-key')
-      const createOptions = idempotencyKey ? { idempotencyKey } : undefined
       const hookCtx: HookContext = { auth, resource, req }
       const rawItems = (Array.isArray(req.body) ? req.body : [req.body ?? {}]).map(
         (item: Record<string, unknown>) => filterWritableFields(resource, item, auth)
@@ -34,7 +31,7 @@ export function registerCreate(
         ? await Promise.all(rawItems.map((d) => applyHook(hooks.beforeCreate, d, hookCtx)))
         : rawItems
       if (items.length === 1) {
-        const rawResult = await repo.createOne(items[0] as never, createOptions)
+        const rawResult = await repo.createOne(items[0] as never)
         const result = await applyHook(
           hooks?.afterCreate,
           rawResult as Record<string, unknown>,
@@ -43,7 +40,7 @@ export function registerCreate(
         await writeSuccess(res, 201, filterReadableFields(resource, result, auth), envelope)
         return
       }
-      const rawResults = await repo.createMany(items as never[], createOptions)
+      const rawResults = await repo.createMany(items as never[])
       const results = hooks?.afterCreate
         ? await Promise.all(
             rawResults.map((r) =>

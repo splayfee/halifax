@@ -12,7 +12,7 @@ import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import { ConflictError } from '@/errors/ConflictError.js'
 import type { ResourceDefinition } from '@/core/types.js'
-import type { Repository, ListResult, CreateOptions } from '@/core/types.js'
+import type { Repository, ListResult } from '@/core/types.js'
 
 type User = { id: number; email: string }
 
@@ -642,73 +642,6 @@ describe('createExpressCrudRouter — X-Correlation-ID', () => {
   it('does not set X-Correlation-ID when the header is absent', async () => {
     const res = await request(createApp()).get('/api/v1/users').set('x-api-key', 'secret')
     expect(res.headers['x-correlation-id']).toBeUndefined()
-  })
-})
-
-describe('createExpressCrudRouter — Idempotency-Key', () => {
-  function createIdempotencyApp() {
-    const app = express()
-    app.use(express.json())
-
-    let capturedKey: string | undefined
-
-    const repo: Repository<User, Partial<User>, Partial<User>> = {
-      async getOne() {
-        return null
-      },
-      async getMany() {
-        return { count: 0, results: [] }
-      },
-      async createOne(data: Partial<User>, options?: CreateOptions) {
-        capturedKey = options?.idempotencyKey
-        return { id: 1, email: (data as User).email ?? '' }
-      },
-      async createMany(data: Partial<User>[], options?: CreateOptions) {
-        capturedKey = options?.idempotencyKey
-        return data.map((d) => ({ id: 1, email: (d as User).email ?? '' }))
-      },
-      async updateOne() {
-        return null
-      },
-      async deleteOne() {
-        return false
-      }
-    }
-
-    const resource: ResourceDefinition = {
-      name: 'User',
-      routePrefix: 'users',
-      fields: [{ name: 'id' }, { name: 'email', writable: true }],
-      repository: repo
-    }
-
-    app.use('/api/v1', createExpressCrudRouter([resource]))
-
-    return { app, getKey: () => capturedKey }
-  }
-
-  it('passes Idempotency-Key to repository createOne', async () => {
-    const { app, getKey } = createIdempotencyApp()
-    await request(app)
-      .post('/api/v1/users')
-      .send({ email: 'x@x.com' })
-      .set('Idempotency-Key', 'key-abc-123')
-    expect(getKey()).toBe('key-abc-123')
-  })
-
-  it('passes Idempotency-Key to repository createMany', async () => {
-    const { app, getKey } = createIdempotencyApp()
-    await request(app)
-      .post('/api/v1/users')
-      .send([{ email: 'a@x.com' }, { email: 'b@x.com' }])
-      .set('Idempotency-Key', 'batch-key-456')
-    expect(getKey()).toBe('batch-key-456')
-  })
-
-  it('passes undefined options when Idempotency-Key is absent', async () => {
-    const { app, getKey } = createIdempotencyApp()
-    await request(app).post('/api/v1/users').send({ email: 'x@x.com' })
-    expect(getKey()).toBeUndefined()
   })
 })
 

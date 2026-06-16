@@ -1,8 +1,7 @@
-import type { IQueryFilter, IQueryOptions, QueryScalar } from '@edium/halifax-types'
+import type { IQueryOptions } from '@edium/halifax-types'
 import type {
   DeleteManyResult,
   FieldDefinition,
-  FieldType,
   ListOptions,
   ListResult,
   ModelSchema,
@@ -20,64 +19,13 @@ import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { ServerError } from '@/errors/ServerError.js'
 import { astToPrismaOrderBy, astToPrismaWhere } from './astToPrisma.js'
 import { toInclude, toOrderBy, toSelect } from './helpers.js'
-
-/** Returns true for Prisma's P2025 "record not found" error. */
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as Record<string, unknown>).code === 'P2025'
-  )
-}
-
-/** Returns true for Prisma's P2002 unique constraint violation. */
-function isDuplicateError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as Record<string, unknown>).code === 'P2002'
-  )
-}
-
-/**
- * Returns true for SQL Server's "IDENTITY_INSERT is set to OFF" error (code 544).
- * MSSQL IDENTITY columns reject any explicit-value INSERT via the driver adapter rather
- * than surfacing a P2002 duplicate — so this must be caught separately.
- */
-function isIdentityInsertError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false
-  const cause = (error as Record<string, unknown>).cause
-  return (
-    typeof cause === 'object' &&
-    cause !== null &&
-    (cause as Record<string, unknown>).code === 544
-  )
-}
-
-function prismaTypeToOpenApi(prismaType?: string): { type?: FieldType; format?: string } {
-  switch (prismaType) {
-    case 'Int':
-      return { type: 'integer', format: 'int32' }
-    case 'BigInt':
-      return { type: 'integer', format: 'int64' }
-    case 'Float':
-      return { type: 'number', format: 'float' }
-    case 'Decimal':
-      return { type: 'number', format: 'double' }
-    case 'Boolean':
-      return { type: 'boolean' }
-    case 'DateTime':
-      return { type: 'string', format: 'date-time' }
-    case 'Json':
-      return { type: 'object' }
-    case 'Bytes':
-      return { type: 'string', format: 'binary' }
-    default:
-      return {}
-  }
-}
+import {
+  isNotFoundError,
+  isDuplicateError,
+  isIdentityInsertError,
+  prismaTypeToOpenApi
+} from './prismaUtils.js'
+import { scopedWhere, stripTenant, stampTenant, resolveScopedQuery } from './tenantScoping.js'
 
 /**
  * PrismaAdapter is a generic repository implementation that uses Prisma delegates to perform
@@ -142,77 +90,6 @@ export class PrismaAdapter<
   }
 
   /**
-   * Merges the bound tenant constraint into a Prisma `where` object. The scope is spread
-   * last so it always wins over any caller-supplied value for the same key.
-   * @param where - The caller-derived where clause (may be undefined).
-   * @returns A where object with the tenant constraint applied, or `where` when unscoped.
-   */
-  private scopedWhere(where?: Record<string, unknown>): Record<string, unknown> | undefined {
-    if (!this.scope) return where
-    return { ...(where ?? {}), [this.scope.field]: this.scope.value }
-  }
-
-  /**
-   * Removes the tenant field from a write payload so callers can never reassign a row
-   * to another tenant via create/update/upsert bodies. No-op when unscoped.
-   * @param data - The write payload to sanitise.
-   * @returns A copy of `data` without the tenant field, or `data` when unscoped.
-   */
-  private stripTenant<T>(data: T): T {
-    if (!this.scope) return data
-    if (data === null || typeof data !== 'object') return data
-    const copy = { ...(data as Record<string, unknown>) }
-    delete copy[this.scope.field]
-    return copy as T
-  }
-
-  /**
-   * Stamps the bound tenant value onto a create payload, overriding any caller-supplied
-   * value for the tenant field. No-op when unscoped.
-   * @param data - The create payload.
-   * @returns A copy of `data` with the tenant field forced to the scope value.
-   */
-  private stampTenant<T>(data: T): T {
-    if (!this.scope) return data
-    return { ...(data as Record<string, unknown>), [this.scope.field]: this.scope.value } as T
-  }
-
-  /**
-   * AND-s the bound tenant constraint into a query-builder WHERE clause. The caller's filters
-   * are nested as a child group beneath the tenant condition, so a caller-supplied `OR` can
-   * never break out of the tenant boundary once the AST is compiled to a Prisma `where`.
-   * @param where - The caller-supplied filter list (may be undefined/empty).
-   * @returns A new filter list with the tenant condition enforced, or `where` when unscoped.
-   */
-  private scopedFilters(where?: IQueryFilter[]): IQueryFilter[] | undefined {
-    if (!this.scope) return where
-    const tenantNode: IQueryFilter = {
-      field: this.scope.field,
-      comparison: '=',
-      value1: this.scope.value as QueryScalar
-    }
-    if (where?.length) {
-      tenantNode.operator = 'AND'
-      tenantNode.children = where
-    }
-    return [tenantNode]
-  }
-
-  /**
-   * Resolves a query-builder AST for the tenant-scoped paths: applies the tenant constraint
-   * via {@link PrismaAdapter.scopedFilters}. The `where` key is only set when defined (to
-   * satisfy `exactOptionalPropertyTypes`).
-   * @param query - The incoming query AST.
-   * @returns A new AST with the tenant scope applied.
-   */
-  private resolveScopedQuery(query: IQueryOptions): IQueryOptions {
-    const resolved: IQueryOptions = { ...query }
-    const where = this.scopedFilters(query.where)
-    if (where) resolved.where = where
-    return resolved
-  }
-
-  /**
    * Extracts field definitions from a Prisma model schema.
    * @param model - The Prisma model schema.
    * @returns An array of field definitions.
@@ -253,7 +130,7 @@ export class PrismaAdapter<
   ): Promise<TRecord | null> {
     const select = toSelect(options?.fields)
     const include = toInclude(options?.include)
-    const args: Record<string, unknown> = { where: this.scopedWhere({ [this.idField]: id }) }
+    const args: Record<string, unknown> = { where: scopedWhere(this.scope, { [this.idField]: id }) }
     if (select) args.select = select
     else if (include) args.include = include
 
@@ -289,7 +166,7 @@ export class PrismaAdapter<
   public async getMany(options: ListOptions = {}): Promise<ListResult<TRecord>> {
     const select = toSelect(options.fields)
     const include = toInclude(options.include)
-    const where = this.scopedWhere(options.where)
+    const where = scopedWhere(this.scope, options.where)
     const args: Record<string, unknown> = {
       where,
       orderBy: toOrderBy(options.orderBy),
@@ -315,7 +192,7 @@ export class PrismaAdapter<
    */
   public async createOne(data: TCreate): Promise<TRecord> {
     try {
-      return (await this.delegate.create({ data: this.stampTenant(data) })) as TRecord
+      return (await this.delegate.create({ data: stampTenant(this.scope, data) })) as TRecord
     } catch (error) {
       if (isDuplicateError(error)) throw new ConflictError()
       throw error
@@ -335,7 +212,7 @@ export class PrismaAdapter<
     }
 
     try {
-      await this.delegate.createMany({ data: data.map((item) => this.stampTenant(item)) })
+      await this.delegate.createMany({ data: data.map((item) => stampTenant(this.scope, item)) })
     } catch (error) {
       if (isDuplicateError(error)) throw new ConflictError()
       throw error
@@ -352,17 +229,17 @@ export class PrismaAdapter<
    */
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     if (this.scope) {
-      const scopedWhere = this.scopedWhere({ [this.idField]: id })
+      const whereClause = scopedWhere(this.scope, { [this.idField]: id })
 
       // Preferred path: delegate.updateMany lets us do a single atomic statement whose
       // WHERE enforces the tenant boundary, eliminating the TOCTOU window.
       if (this.delegate.updateMany && this.delegate.findFirst) {
         const { count } = await this.delegate.updateMany({
-          where: scopedWhere,
-          data: this.stripTenant(data)
+          where: whereClause,
+          data: stripTenant(this.scope, data)
         })
         if (count === 0) return null
-        return (await this.delegate.findFirst({ where: scopedWhere })) as TRecord | null
+        return (await this.delegate.findFirst({ where: whereClause })) as TRecord | null
       }
 
       // updateMany is unavailable — we cannot perform a single atomic scoped update.
@@ -401,12 +278,12 @@ export class PrismaAdapter<
     if (!this.delegate.updateMany) {
       throw new NotImplementedError('This repository does not support updateMany.')
     }
-    const where = astToPrismaWhere(this.resolveScopedQuery(query).where)
+    const where = astToPrismaWhere(resolveScopedQuery(this.scope, query).where)
     const rows = (await this.delegate.findMany({
       where,
       select: { [this.idField]: true }
     })) as Array<Record<string, unknown>>
-    await this.delegate.updateMany({ where, data: this.stripTenant(data) })
+    await this.delegate.updateMany({ where, data: stripTenant(this.scope, data) })
     return { updated: rows.map((item) => item[this.idField]) }
   }
 
@@ -431,43 +308,43 @@ export class PrismaAdapter<
           'Prisma delegate does not support findFirst (required for tenant scoping).'
         )
       }
-      const scopedWhere = this.scopedWhere({ [this.idField]: id })
+      const whereClause = scopedWhere(this.scope, { [this.idField]: id })
       const existing = (await this.delegate.findFirst({
-        where: scopedWhere
+        where: whereClause
       })) as Record<string, unknown> | null
 
-      // Defense-in-depth: even though scopedWhere already filters by tenant, verify the
+      // Defense-in-depth: even though whereClause already filters by tenant, verify the
       // returned record actually belongs to this tenant before treating it as owned.
       if (existing && existing[this.scope.field] !== this.scope.value) {
         throw new NotFoundError()
       }
 
       if (existing) {
-        // Record exists for this tenant — update it atomically via updateMany(scopedWhere)
+        // Record exists for this tenant — update it atomically via updateMany(whereClause)
         // so the tenant constraint is enforced in the same SQL statement as the write.
         if (this.delegate.updateMany) {
           const { count } = await this.delegate.updateMany({
-            where: scopedWhere,
-            data: this.stripTenant(data)
+            where: whereClause,
+            data: stripTenant(this.scope, data)
           })
           if (count === 0) {
             // Deleted in the tiny window between findFirst and updateMany — treat as a
             // fresh create so the caller gets a record back (consistent with upsert semantics).
             try {
               return (await this.delegate.create({
-                data: this.stampTenant({ ...data, [this.idField]: id } as TCreate)
+                data: stampTenant(this.scope, { ...data, [this.idField]: id } as TCreate)
               })) as TRecord
             } catch (error) {
               if (isDuplicateError(error)) throw new ConflictError()
               if (isIdentityInsertError(error)) {
                 const anyMatch = await this.delegate.findFirst!({ where: { [this.idField]: id } })
                 if (anyMatch) throw new ConflictError()
-                return (await this.delegate.create({ data: this.stampTenant(data as TCreate) })) as TRecord
+                return (await this.delegate.create({ data: stampTenant(this.scope, data as TCreate) })) as TRecord
               }
               throw error
             }
           }
-          return (await this.delegate.findFirst({ where: scopedWhere })) as TRecord
+          return (await this.delegate.findFirst({ where: whereClause })) as TRecord
         }
         // Fallback when updateMany is unavailable (non-standard delegate). The update is still
         // scoped via the earlier findFirst; the TOCTOU window here is only closeable with a
@@ -475,7 +352,7 @@ export class PrismaAdapter<
         try {
           return (await this.delegate.update({
             where: { [this.idField]: id },
-            data: this.stripTenant(data)
+            data: stripTenant(this.scope, data)
           })) as TRecord
         } catch (error) {
           if (isNotFoundError(error)) throw new NotFoundError()
@@ -487,7 +364,7 @@ export class PrismaAdapter<
       // Record does not exist for this tenant — create it with the tenant stamped.
       try {
         return (await this.delegate.create({
-          data: this.stampTenant({ ...data, [this.idField]: id } as TCreate)
+          data: stampTenant(this.scope, { ...data, [this.idField]: id } as TCreate)
         })) as TRecord
       } catch (error) {
         if (isDuplicateError(error)) throw new ConflictError()
@@ -497,7 +374,7 @@ export class PrismaAdapter<
           // genuinely new row (let the DB assign the ID instead).
           const anyMatch = await this.delegate.findFirst!({ where: { [this.idField]: id } })
           if (anyMatch) throw new ConflictError()
-          return (await this.delegate.create({ data: this.stampTenant(data as TCreate) })) as TRecord
+          return (await this.delegate.create({ data: stampTenant(this.scope, data as TCreate) })) as TRecord
         }
         throw error
       }
@@ -534,7 +411,7 @@ export class PrismaAdapter<
     if (this.scope) {
       if (this.delegate.deleteMany) {
         const result = await this.delegate.deleteMany({
-          where: this.scopedWhere({ [this.idField]: id })
+          where: scopedWhere(this.scope, { [this.idField]: id })
         })
         return (result?.count ?? 0) > 0
       }
@@ -569,7 +446,7 @@ export class PrismaAdapter<
     if (!this.delegate.deleteMany) {
       throw new NotImplementedError('This repository does not support deleteMany.')
     }
-    const where = astToPrismaWhere(this.resolveScopedQuery(query).where)
+    const where = astToPrismaWhere(resolveScopedQuery(this.scope, query).where)
     const rows = (await this.delegate.findMany({
       where,
       select: { [this.idField]: true }
@@ -594,7 +471,7 @@ export class PrismaAdapter<
    * @returns A count-and-results envelope for the matching rows.
    */
   public async executeQuery(query: IQueryOptions): Promise<QueryResult<TRecord>> {
-    const resolved = this.resolveScopedQuery(query)
+    const resolved = resolveScopedQuery(this.scope, query)
     const where = astToPrismaWhere(resolved.where)
 
     const args: Record<string, unknown> = { where }

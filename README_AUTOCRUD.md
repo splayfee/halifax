@@ -274,17 +274,6 @@ X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000
 X-Correlation-ID: 550e8400-e29b-41d4-a716-446655440000
 ```
 
-### Idempotency-Key (POST create)
-
-Pass an `Idempotency-Key` header on POST create requests. The key is forwarded to the repository via `CreateOptions.idempotencyKey` — repositories that support idempotent creation can use it to deduplicate concurrent or retried requests.
-
-```
-POST /api/v1/posts
-Idempotency-Key: my-client-generated-uuid
-```
-
-The router itself does not enforce uniqueness; deduplication is the repository's responsibility.
-
 ## Filter Depth Controls
 
 The `?where` / query-builder `children` filter lets callers nest conditions. To prevent abuse, nesting is capped at depth **4** by default. Set `maxFilterDepth` on the resource to override:

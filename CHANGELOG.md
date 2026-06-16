@@ -3,6 +3,51 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0]
+
+### Breaking
+
+- **`CreateOptions` type and `idempotencyKey` removed** — the `CreateOptions` interface and the
+  `options?: CreateOptions` parameter on `Repository.createOne` / `Repository.createMany` have
+  been removed. The `idempotencyKey` field was never implemented by any built-in adapter; it
+  existed only as a forward-looking placeholder. The `Idempotency-Key` HTTP header is no longer
+  forwarded to repositories. Remove any references to `CreateOptions` or `idempotencyKey` from
+  custom repository implementations.
+
+- **`buildGraphQLSchema` is now `async`** — the function signature changed from
+  `(contexts: GraphQLResourceContext[]) => GraphQLSchema` to
+  `(contexts: GraphQLResourceContext[]) => Promise<GraphQLSchema>`. This is a change to an
+  advanced low-level export; `registerCrudApi` / `createExpressCrudRouter` are unaffected.
+  Direct callers must add `await`.
+
+### Fixed
+
+- **GraphQL peer dependency eagerly loaded at startup** — importing Halifax (even without
+  enabling GraphQL) would crash the process when the optional `graphql` peer dependency was
+  not installed. All `graphql` package imports in `schema.ts` and `registerGraphqlRoute.ts`
+  are now dynamic (`await import('graphql')`) and only execute on the first GraphQL request.
+  Applications that do not enable `graphql: { enabled: true }` are fully unaffected and
+  never load the `graphql` module.
+
+- **`graphiql.js` imported unnecessarily when GraphiQL is disabled** — the internal lazy-init
+  block previously imported `./graphiql.js` unconditionally. It is now only imported when
+  `graphiql` is `true` (the default), so disabling GraphiQL avoids loading the module entirely.
+
+### Changed
+
+- **Internal source reorganised into focused modules** — large files split for readability with
+  no public API changes. `src/core/types.ts` remains a re-export barrel; all existing import
+  paths are unaffected. New internal modules: `src/core/types/{http,field,repository,resource,prisma}.ts`,
+  `src/openapi/{types,sharedSchemas,operations}.ts`, `src/graphql/{schemaHelpers,resourceResolvers}.ts`,
+  `src/adapters/orm/prisma/{prismaUtils,tenantScoping}.ts`, `src/core/stringUtils.ts`. No file
+  exceeds 500 lines.
+
+- **`statusCodeMap` exported from `handlerUtils`** — previously private; GraphQL schema builder
+  reuses it instead of maintaining a parallel copy, eliminating a REST/GraphQL error-code drift risk.
+
+- **`src/graphql/scalars.ts` removed** — orphaned when the `GraphQLJSON` scalar was moved into
+  `buildSchemaHelpers`. No longer shipped.
+
 ## [2.4.0]
 
 ### Breaking

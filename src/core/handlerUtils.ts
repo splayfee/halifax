@@ -11,7 +11,7 @@ import type { HttpRequest, HttpResponse, Repository } from '@/core/types.js'
 import { validateId, isValidUuid, isValidObjectId } from '@/core/validation.js'
 
 /** Maps HTTP status codes to machine-readable error code strings. */
-const statusCodeMap: Record<number, string> = {
+export const statusCodeMap: Record<number, string> = {
   400: 'BAD_REQUEST',
   401: 'UNAUTHORIZED',
   403: 'FORBIDDEN',

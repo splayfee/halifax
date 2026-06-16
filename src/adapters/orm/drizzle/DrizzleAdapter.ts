@@ -290,7 +290,7 @@ export class DrizzleAdapter<
     return { count: total, results: rows }
   }
 
-  async createOne(data: TCreate, _options?: { idempotencyKey?: string }): Promise<TRecord> {
+  async createOne(data: TCreate): Promise<TRecord> {
     try {
       const rows = (await this.db
         .insert(this.table)
@@ -303,7 +303,7 @@ export class DrizzleAdapter<
     }
   }
 
-  async createMany(data: TCreate[], _options?: { idempotencyKey?: string }): Promise<TRecord[]> {
+  async createMany(data: TCreate[]): Promise<TRecord[]> {
     if (!data.length) return []
     const stamped = this.scope
       ? data.map((d) => ({ ...d, [this.scope!.field]: this.scope!.value }))

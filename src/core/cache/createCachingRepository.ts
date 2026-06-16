@@ -1,5 +1,4 @@
 import type {
-  CreateOptions,
   ListOptions,
   ListResult,
   QueryResult,
@@ -102,13 +101,13 @@ export function createCachingRepository<TRecord, TCreate, TUpdate>(
     getMany(listOptions?: ListOptions): Promise<ListResult<TRecord>> {
       return cachedRead('getMany', listOptions ?? {}, () => repo.getMany(listOptions))
     },
-    async createOne(data: TCreate, createOptions?: CreateOptions) {
-      const result = await repo.createOne(data, createOptions)
+    async createOne(data: TCreate) {
+      const result = await repo.createOne(data)
       await bumpVersion()
       return result
     },
-    async createMany(data: TCreate[], createOptions?: CreateOptions) {
-      const result = await repo.createMany(data, createOptions)
+    async createMany(data: TCreate[]) {
+      const result = await repo.createMany(data)
       await bumpVersion()
       return result
     },

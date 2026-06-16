@@ -387,18 +387,6 @@ Options passed to `Repository.getMany`.
 
 ---
 
-### `CreateOptions`
-
-Import: `@edium/halifax`
-
-Options passed to `Repository.createOne` and `Repository.createMany`.
-
-| Property         | Type     | Description                                                                      |
-| ---------------- | -------- | -------------------------------------------------------------------------------- |
-| `idempotencyKey` | `string` | When provided, the adapter may de-duplicate repeated requests with the same key. |
-
----
-
 ## Cache
 
 ### `CacheStore`
