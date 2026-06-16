@@ -17,9 +17,10 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🗄️ **Two ORM adapters, six databases** — `PrismaAdapter` covers PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, and SQLite; `DrizzleAdapter` (sub-path `@edium/halifax/drizzle`) covers PostgreSQL, MySQL, SQLite, and LibSQL. Both compile to ORM calls (never raw SQL) so the same query behaves identically across engines.
 - 🔎 **Dynamic query-builder endpoint** — let the front-end compose rich filtered/sorted/paginated queries "for free" (`AND`/`OR`/nesting, `IN`, `BETWEEN`, `CONTAINS`, …) without hand-writing endpoints. Fully validated — bad fields/operators return structured `4xx` errors, never leaked DB internals.
 - 📄 **OpenAPI 3.1 generation** — zero-annotation spec generated from your resource definitions at startup. Prisma and Drizzle types are introspected automatically; custom repos annotate individual fields. Swagger UI at `/docs`, raw spec at `/openapi.json`. Disable with `enabled: false` for zero production overhead.
-- 🏢 **Multi-tenancy built in** — per-resource tenant scoping with fail-closed guarantees; one tenant can never read or write another's rows.
+- 🏢 **Multi-tenancy built in** — per-resource tenant scoping with fail-closed guarantees; one tenant can never read or write another's rows. Privileged roles (admin, super-admin) can optionally bypass scoping to read across all tenants, with per-resource granularity. See [README_MULTITENANCY.md](./README_MULTITENANCY.md).
 - ⚡ **Pluggable read-through caching** — in-memory or Redis, per-resource TTLs, never-expire mode, automatic write-invalidation, tenant-safe keys, and a `Cache-Control` bust header.
-- 🔐 **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action permissions; `filterable`/`sortable`/`selectable`/`writable` field flags; and per-field `readRoles`/`writeRoles` for role-based column visibility.
+- 🔐 **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action permissions (matched against roles OR permission slugs); `filterable`/`sortable`/`selectable`/`writable` field flags; and per-field `readRoles`/`writeRoles` for role-based column visibility.
+- 🔷 **GraphQL endpoint** — opt-in GraphQL API auto-generated from the same resource definitions as REST. Every query, mutation, filter, sort, and field-level permission works identically. Includes a GraphiQL IDE, per-resource opt-out, and full tenant bypass support. See [README_GRAPHQL.md](./README_GRAPHQL.md).
 - 🪝 **Lifecycle hooks** — inject custom logic before or after any CRUD operation per resource (`beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, …). Stamp audit fields, emit events, enforce ownership, or transform results without writing a custom repository. See [README_HOOKS.md](./README_HOOKS.md).
 - 📦 **Companion browser client** — [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is a typed, zero-dependency client with a fluent query builder and built-in TanStack Query helpers (queries + mutation auto-invalidation). Bring your own HTTP library (fetch, axios, ky, ofetch, superagent).
 - 🧪 **Type-safe & battle-tested** — strict TypeScript, ESM, ships full `.d.ts`; hundreds of unit tests plus the full integration suite run against six real databases + Redis in CI.
@@ -30,9 +31,10 @@ The package is split into small, replaceable layers — nothing is imported into
 | -------------- | -------------------------------------------------------------------------------------------------------------------- |
 | HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                                                                 |
 | ORM / database | Prisma 6 or 7 (Postgres, MySQL, MariaDB, SQL Server, CockroachDB, SQLite); Drizzle (Postgres, MySQL, SQLite, LibSQL) |
-| Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`                                              |
+| Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`; role or permission slug                     |
 | Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)                                                  |
 | API docs       | OpenAPI 3.1 spec + Swagger UI (optional, zero overhead when disabled)                                                |
+| GraphQL        | Auto-generated schema from resource definitions; opt-in; GraphiQL IDE; requires `graphql` ≥ 16 peer dep             |
 
 Every HTTP adapter is interchangeable and behaves identically — same routes, status codes,
 error-body shape, and content negotiation — so you can switch frameworks without touching
