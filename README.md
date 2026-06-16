@@ -100,7 +100,7 @@ const { results: published } = await posts.query(q)
 const { data } = useQuery(posts.getManyOptions({ limit: 20 }))
 ```
 
-Full docs: [README_CLIENT.md](./README_CLIENT.md) · [npm](https://www.npmjs.com/package/@edium/halifax-client)
+Full docs: [README_CLIENT.md](./README_CLIENT.md)
 
 ---
 
@@ -161,7 +161,7 @@ app.listen(3000)
 
 | Guide                                                                                               | Contents                                                                                                 |
 | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [README_CLIENT.md](./README_CLIENT.md) · [npm](https://www.npmjs.com/package/@edium/halifax-client) | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples        |
+| [README_CLIENT.md](./README_CLIENT.md)                                                              | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples        |
 | [README_AUTOCRUD.md](./README_AUTOCRUD.md)                                                          | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
 | [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)                                                | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, capabilities, custom repositories             |
 | [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md)                                                | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |
