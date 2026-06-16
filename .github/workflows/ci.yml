@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # Lint, type-check, and unit-test against BOTH Express 4 and Express 5 to guarantee
   # the Express adapter stays seamless across both majors. The peer-dependency range is
