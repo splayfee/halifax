@@ -240,7 +240,7 @@ The body combines `QueryOptions` fields (to select records) with an `update` key
 
 ```json
 {
-  "where": [{ "field": "status", "comparison": "=", "value": "draft" }],
+  "where": [{ "field": "status", "comparison": "=", "value1": "draft" }],
   "update": { "status": "archived" }
 }
 ```
@@ -274,13 +274,13 @@ The query builder endpoint accepts a `QueryOptions` body for full-featured filte
 ```json
 {
   "where": [
-    { "field": "published", "comparison": "=", "value": true },
-    { "field": "createdAt", "comparison": ">=", "value": "2024-01-01T00:00:00Z" },
+    { "field": "published", "comparison": "=", "value1": true },
+    { "field": "createdAt", "comparison": ">=", "value1": "2024-01-01T00:00:00Z" },
     {
       "operator": "OR",
       "children": [
-        { "field": "title", "comparison": "CONTAINS", "value": "Halifax" },
-        { "field": "title", "comparison": "STARTS WITH", "value": "Hello" }
+        { "field": "title", "comparison": "CONTAINS", "value1": "Halifax" },
+        { "field": "title", "comparison": "STARTS WITH", "value1": "Hello" }
       ]
     }
   ],
@@ -318,12 +318,12 @@ Flat `where` arrays use **AND-precedence over OR** (same as SQL). Use `children`
 ```json
 {
   "where": [
-    { "field": "active", "comparison": "=", "value": true },
+    { "field": "active", "comparison": "=", "value1": true },
     {
       "operator": "OR",
       "children": [
-        { "field": "role", "comparison": "=", "value": "admin" },
-        { "field": "role", "comparison": "=", "value": "moderator" }
+        { "field": "role", "comparison": "=", "value1": "admin" },
+        { "field": "role", "comparison": "=", "value1": "moderator" }
       ]
     }
   ]

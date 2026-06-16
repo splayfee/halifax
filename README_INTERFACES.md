@@ -27,6 +27,8 @@ Full definition of a Halifax resource. Pass an array of these to `createExpressC
 | `maxFilterDepth`      | `number`                                | no       | Maximum nesting depth for `where` clause children. Defaults to 4.                                                                                                                                                                          |
 | `cache`               | `ResourceCacheConfig \| false`          | no       | Per-resource cache TTL. `false` disables caching even when an API-wide default is set.                                                                                                                                                     |
 | `envelope`            | `string \| null`                        | no       | Wraps every success response body under this key (e.g. `'data'`). Overrides the API-wide `envelope` option.                                                                                                                                |
+| `graphql`             | `boolean`                               | no       | When `false`, excludes this resource from the auto-generated GraphQL schema while keeping it on REST. Defaults to `true` when GraphQL is enabled.                                                                                           |
+| `bypassTenantRoles`   | `string[]`                              | no       | Roles or permission slugs whose holders bypass tenant scoping for read operations on this resource. Overrides `TenantOptions.bypassRoles`. Set to `[]` to prevent bypass on this resource even when a global list is configured.            |
 
 ---
 
@@ -232,9 +234,10 @@ Configures multi-tenant isolation API-wide. Set on `CrudApiOptions.tenant`.
 
 | Property    | Type                                                         | Default      | Description                                                                                                                                                         |
 | ----------- | ------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resolveId` | `(ctx: TenantResolveContext) => unknown \| Promise<unknown>` | required     | Resolves the tenant key from the auth context and request. Must come from the token/session — never from client input. Return `null`/`undefined` when none applies. |
-| `field`     | `string`                                                     | `'tenantId'` | Default column name for auto-detection: resources with a field of this name are automatically scoped on it.                                                         |
-| `strict`    | `boolean`                                                    | `true`       | When `true`, a tenant-scoped resource whose `resolveId` returns no value rejects with 403 rather than serving unscoped.                                             |
+| `resolveId`   | `(ctx: TenantResolveContext) => unknown \| Promise<unknown>` | required     | Resolves the tenant key from the auth context and request. Must come from the token/session — never from client input. Return `null`/`undefined` when none applies. |
+| `field`       | `string`                                                     | `'tenantId'` | Default column name for auto-detection: resources with a field of this name are automatically scoped on it.                                                         |
+| `strict`      | `boolean`                                                    | `true`       | When `true`, a tenant-scoped resource whose `resolveId` returns no value rejects with 403 rather than serving unscoped.                                             |
+| `bypassRoles` | `string[]`                                                   | —            | Roles or permission slugs (matched against `auth.roles` OR `auth.permissions`) whose holders receive unscoped reads across all tenants. Writes are never bypassed. Per-resource `ResourceDefinition.bypassTenantRoles` takes precedence. |
 
 ---
 
