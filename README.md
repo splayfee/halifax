@@ -56,7 +56,7 @@ CockroachDB, and SQLite — in CI (one matrix leg per engine) to keep that hones
 > the CI matrix unchanged, with no API changes for you. Need MongoDB today? It still works on
 > **Prisma 6**, which Halifax also supports — see [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md).
 >
-> **Roadmap** — community-written adapters for Drizzle, Sequelize, etc. are also welcome.
+> **Roadmap** — community-written adapters for Sequelize, etc. are also welcome.
 
 ## Monorepo packages
 
