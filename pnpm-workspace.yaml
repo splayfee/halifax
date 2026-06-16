@@ -1,5 +1,7 @@
 packages:
   - 'packages/*'
+# ultimate-express and hyper-express depend on uWebSockets.js (git-only, not on npm registry).
+blockExoticSubdeps: false
 allowBuilds:
   '@prisma/engines': true
   better-sqlite3: true

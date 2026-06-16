@@ -148,8 +148,7 @@ const OrderByInput = new GraphQLInputObjectType({
 })
 
 // Recursive input — must use a thunk to satisfy GraphQL's circular-ref requirement.
-let QueryFilterInput: GraphQLInputObjectType
-QueryFilterInput = new GraphQLInputObjectType({
+const QueryFilterInput = new GraphQLInputObjectType({
   name: 'QueryFilterInput',
   description:
     'A single filter condition (leaf) or a group of nested conditions. ' +

@@ -11,9 +11,6 @@ importers:
       '@edium/halifax-types':
         specifier: workspace:*
         version: link:packages/types
-      graphql:
-        specifier: 17.0.0
-        version: 17.0.0
       uuid:
         specifier: ^14.0.0
         version: 14.0.0
@@ -78,6 +75,9 @@ importers:
       globals:
         specifier: ^17.6.0
         version: 17.6.0
+      graphql:
+        specifier: ^17.0.0
+        version: 17.0.0
       hyper-express:
         specifier: ^6.17.3
         version: 6.17.3

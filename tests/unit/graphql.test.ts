@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { graphql, getIntrospectionQuery, buildClientSchema } from 'graphql'
+import { describe, it, expect } from 'vitest'
+import { getIntrospectionQuery } from 'graphql'
 import { registerCrudApi } from '@/core/crudRouter.js'
 import type {
   HttpServer,
