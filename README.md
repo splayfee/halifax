@@ -232,7 +232,3 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/halifax_test"
 ```bash
 pnpm test:integration
 ```
-
-> MongoDB is not in the matrix yet — Prisma 7 dropped MongoDB support (coming soon in v7). The
-> schema and ObjectId-aware suite are already in place and rejoin the matrix unchanged once
-> Prisma supports it.
