@@ -22,8 +22,16 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🔐 **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action permissions (matched against roles OR permission slugs); `filterable`/`sortable`/`selectable`/`writable` field flags; and per-field `readRoles`/`writeRoles` for role-based column visibility.
 - 🔷 **GraphQL endpoint** — opt-in GraphQL API auto-generated from the same resource definitions as REST. Every query, mutation, filter, sort, and field-level permission works identically. Includes a GraphiQL IDE, per-resource opt-out, and full tenant bypass support. See [README_GRAPHQL.md](./README_GRAPHQL.md).
 - 🪝 **Lifecycle hooks** — inject custom logic before or after any CRUD operation per resource (`beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, …). Stamp audit fields, emit events, enforce ownership, or transform results without writing a custom repository. See [README_HOOKS.md](./README_HOOKS.md).
+- 🛠️ **Custom endpoints with full Halifax context** — `registerCrudApi()` returns a `HalifaxApi` singleton. Call `api.addCustomEndpoint(method, path, roles, handler, openapi?)` to register any route — aggregates (`GROUP BY` / `HAVING`), complex joins, business actions, external-service calls — while inheriting auth, role enforcement, error serialization, content negotiation, and live OpenAPI documentation automatically. Or disable all auto-CRUD on a resource and roll every route yourself. See [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md).
 - 📦 **Companion browser client** — [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is a typed, zero-dependency client with a fluent query builder and built-in TanStack Query helpers (queries + mutation auto-invalidation). Bring your own HTTP library (fetch, axios, ky, ofetch, superagent).
 - 🧪 **Type-safe & battle-tested** — strict TypeScript, ESM, ships full `.d.ts`; hundreds of unit tests plus the full integration suite run against six real databases + Redis in CI.
+
+> [!NOTE]
+> **New in 2.6 — Custom Endpoints:** `registerCrudApi()` now returns a `HalifaxApi` singleton.
+> Use `api.addCustomEndpoint(method, path, roles, handler)` to register business-logic routes,
+> aggregates, and complex joins that inherit Halifax's full auth and error-handling pipeline —
+> with automatic OpenAPI spec updates and duplicate-route detection.
+> See [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md) for full docs and examples.
 
 ## Current Support
 
@@ -170,6 +178,7 @@ app.listen(3000)
 | [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)                                                  | Query-builder payload, comparisons, nested filters, portable execution                                   |
 | [README_CACHE.md](./README_CACHE.md)                                                                | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                          |
 | [README_HOOKS.md](./README_HOOKS.md)                                                                | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook    |
+| [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md)                                          | Custom endpoints: `HalifaxApi`, `addCustomEndpoint`, aggregate queries, business actions, disabling CRUD |
 | [README_GRAPHQL.md](./README_GRAPHQL.md)                                                            | GraphQL endpoint: opt-in setup, auto-generated schema, GraphiQL IDE, auth, tenant bypass for admins      |
 | [README_OPENAPI.md](./README_OPENAPI.md)                                                            | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use          |
 | [README_TYPES.md](./README_TYPES.md)                                                                | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants             |

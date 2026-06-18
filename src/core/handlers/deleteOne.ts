@@ -1,13 +1,8 @@
 import type { HookContext } from '@/core/hooks.js'
 import type { HttpServer } from '@/core/types.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
-import {
-  authorizeRequest,
-  parseId,
-  type RouteHandlerContext,
-  wrap,
-  writeSuccess
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { parseId, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerDeleteOne(
   server: HttpServer,

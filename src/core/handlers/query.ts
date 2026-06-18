@@ -3,14 +3,9 @@ import type { HookContext } from '@/core/hooks.js'
 import type { HttpServer, ListResult } from '@/core/types.js'
 import { validateAdvancedQuery } from '@/core/validation.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
-import {
-  applyHook,
-  authorizeRequest,
-  makeReadableFieldFilter,
-  type RouteHandlerContext,
-  wrap,
-  writeSuccess
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { makeReadableFieldFilter } from '@/core/fieldUtils.js'
+import { applyHook, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerQuery(
   server: HttpServer,

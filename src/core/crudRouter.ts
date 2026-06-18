@@ -3,11 +3,15 @@ import { checkRequiredPermissions } from '@/auth/strategies/types.js'
 import type { CrudHooks } from '@/core/hooks.js'
 import { createCachingRepository, InMemoryCacheStore, type CacheStore } from '@/core/cache/index.js'
 import { generateOpenApiSpec, generateDocsHtml, type OpenApiOptions } from '@/openapi/index.js'
+import type { OpenApiSpec, OpenApiOperation } from '@/openapi/types.js'
 import { registerGraphqlRoute, type GraphQLOptions } from '@/graphql/index.js'
 import { defaultCrudPermissions, type CrudAction, type ResourceDefinition } from '@/core/types.js'
 import type {
   FieldDefinition,
+  HttpMethod,
   HttpRequest,
+  HttpResponse,
+  HttpRouteHandler,
   HttpServer,
   Repository
 } from '@/core/types.js'
@@ -15,12 +19,8 @@ import { toTitleCase } from '@/core/stringUtils.js'
 import { ServerError } from '@/errors/ServerError.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import { MethodNotAllowedError } from '@/errors/MethodNotAllowedError.js'
-import {
-  normalizeError,
-  sendError,
-  wantsCacheBust,
-  type RouteHandlerContext
-} from '@/core/handlerUtils.js'
+import { normalizeError, sendError } from '@/core/errorUtils.js'
+import { wantsCacheBust, wrap, type RouteHandlerContext } from '@/core/handlerUtils.js'
 import { mergeFieldDefinitions, mergeRelationDefinitions, normalizeEnvelope } from '@/core/fields.js'
 import { registerCreate } from '@/core/handlers/create.js'
 import { registerReadMany } from '@/core/handlers/readMany.js'
@@ -34,6 +34,155 @@ import { registerDeleteMany } from '@/core/handlers/deleteMany.js'
 
 export { normalizeError }
 
+// ─── Custom endpoint types ────────────────────────────────────────────────────
+
+/** Resolved context passed as the third argument to every custom endpoint handler. */
+export interface CustomEndpointContext {
+  /** The authenticated caller's identity, resolved by the configured auth strategy. */
+  auth: AuthContext
+}
+
+/**
+ * Handler function for a custom endpoint registered via {@link HalifaxApi.addCustomEndpoint}.
+ * Receives the raw request, response, and a pre-resolved auth context.
+ * Throw any {@link HttpError} subclass to get a structured JSON error response automatically.
+ */
+export type CustomEndpointHandler = (
+  req: HttpRequest,
+  res: HttpResponse,
+  ctx: CustomEndpointContext
+) => Promise<void> | void
+
+/**
+ * Optional OpenAPI 3.1 metadata for a custom endpoint. When provided and the API was
+ * configured with `openapi: { enabled: true }`, the operation is merged into the live spec
+ * so it appears in `/openapi.json` and the Swagger UI immediately after registration.
+ */
+export interface CustomEndpointOpenApi extends Omit<OpenApiOperation, 'responses'> {
+  /** HTTP response descriptions. Defaults to `{ '200': { description: 'OK' } }` when omitted. */
+  responses?: OpenApiOperation['responses']
+}
+
+// ─── Internal tracking wrapper ────────────────────────────────────────────────
+
+/** Wraps an {@link HttpServer} to record every registered route in a shared Set. */
+class TrackingHttpServer implements HttpServer {
+  constructor(
+    private readonly inner: HttpServer,
+    private readonly routes: Set<string>
+  ) {}
+
+  registerRoute(method: HttpMethod, path: string, handler: HttpRouteHandler): void {
+    // Wildcard catch-all fallbacks (405 handlers) are not real endpoints — skip them.
+    if (method !== '*') this.routes.add(`${method}:${path}`)
+    this.inner.registerRoute(method, path, handler)
+  }
+
+  start(port: number, host?: string): Promise<void> | void {
+    return this.inner.start(port, host)
+  }
+}
+
+// ─── HalifaxApi ───────────────────────────────────────────────────────────────
+
+/**
+ * The object returned by {@link registerCrudApi}. Holds a reference to the live server
+ * and spec so custom endpoints can be added after initial registration.
+ *
+ * @example
+ * ```ts
+ * const api = registerCrudApi(server, resources, options)
+ *
+ * api.addCustomEndpoint(
+ *   'GET',
+ *   '/reports/sales-summary',
+ *   ['analyst'],
+ *   async (req, res, ctx) => {
+ *     const data = await buildReport(ctx.auth)
+ *     await res.status(200).json(data)
+ *   },
+ *   { summary: 'Sales summary report', tags: ['Reports'] }
+ * )
+ * ```
+ */
+export class HalifaxApi {
+  private readonly registeredRoutes: Set<string>
+  private readonly liveSpec: OpenApiSpec | null
+
+  /**
+   * @internal — constructed exclusively by {@link registerCrudApi}.
+   */
+  constructor(
+    private readonly server: HttpServer,
+    private readonly authStrategy: AuthStrategy,
+    registeredRoutes: Set<string>,
+    liveSpec: OpenApiSpec | null
+  ) {
+    this.registeredRoutes = registeredRoutes
+    this.liveSpec = liveSpec
+  }
+
+  /**
+   * Registers a custom route that participates in Halifax's auth, error handling,
+   * and (optionally) OpenAPI documentation.
+   *
+   * @param method - HTTP verb (`'GET'`, `'POST'`, `'PUT'`, `'PATCH'`, `'DELETE'`).
+   * @param path - Route path, e.g. `'/reports/sales-summary'` or `'/orders/:id/invoice'`.
+   * @param roles - Required roles/permissions (OR logic — any single match grants access).
+   *   Pass an empty array `[]` to allow any authenticated caller.
+   * @param handler - Your business logic. Receives the request, response, and `ctx.auth`.
+   *   Throw any {@link HttpError} subclass for structured error responses.
+   * @param openapi - Optional OpenAPI metadata merged into the live spec immediately.
+   * @returns `this` for chaining.
+   * @throws {@link ServerError} when `method + path` is already registered.
+   */
+  addCustomEndpoint(
+    method: Exclude<HttpMethod, '*'>,
+    path: string,
+    roles: string[],
+    handler: CustomEndpointHandler,
+    openapi?: CustomEndpointOpenApi
+  ): this {
+    const key = `${method}:${path}`
+    if (this.registeredRoutes.has(key)) {
+      throw new ServerError(
+        `Cannot register custom endpoint — ${method} ${path} is already registered.`
+      )
+    }
+    this.registeredRoutes.add(key)
+
+    const { authStrategy } = this
+    this.server.registerRoute(
+      method,
+      path,
+      wrap(async (req, res) => {
+        const auth = await authStrategy.authenticate(req)
+        if (roles.length > 0 && !checkRequiredPermissions(auth, roles)) {
+          throw new AuthorizationError()
+        }
+        await handler(req, res, { auth })
+      })
+    )
+
+    if (this.liveSpec && openapi) {
+      const httpMethod = method.toLowerCase() as 'get' | 'post' | 'put' | 'patch' | 'delete'
+      this.liveSpec.paths[path] ??= {}
+      this.liveSpec.paths[path]![httpMethod] = {
+        ...(openapi.operationId !== undefined ? { operationId: openapi.operationId } : {}),
+        ...(openapi.summary !== undefined ? { summary: openapi.summary } : {}),
+        ...(openapi.description !== undefined ? { description: openapi.description } : {}),
+        ...(openapi.tags !== undefined ? { tags: openapi.tags } : {}),
+        ...(openapi.parameters !== undefined ? { parameters: openapi.parameters } : {}),
+        ...(openapi.requestBody !== undefined ? { requestBody: openapi.requestBody } : {}),
+        responses: openapi.responses ?? { '200': { description: 'OK' } }
+      }
+    }
+
+    return this
+  }
+}
+
+// ─── Internal resource helpers ────────────────────────────────────────────────
 
 /**
  * Resolves the effective field list for a resource. Merges the repository's field schema
@@ -265,32 +414,110 @@ export interface CrudApiOptions {
   }
 }
 
+// ─── Shared type for per-resource GraphQL context ─────────────────────────────
+
+type GqlCtx = {
+  resource: ResourceDefinition
+  hooks: CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>> | undefined
+  resolveRepo: (req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository>
+}
+
+// ─── OpenAPI wiring ────────────────────────────────────────────────────────────
+
+function setupOpenApi(
+  tracker: TrackingHttpServer,
+  resources: ResourceDefinition[],
+  options: CrudApiOptions,
+  authStrategy: AuthStrategy
+): OpenApiSpec | null {
+  if (!options.openapi || options.openapi.enabled === false) return null
+
+  const specPath = options.openapi.specPath ?? '/openapi.json'
+  const docsPath = options.openapi.docsPath ?? '/docs'
+  const resolvedEnvelope = options.openapi.envelope ?? options.envelope ?? null
+  const resolvedScheme = options.openapi.securityScheme ?? authStrategy.openApiScheme?.()
+  const openApiOpts = {
+    ...options.openapi,
+    envelope: resolvedEnvelope,
+    ...(resolvedScheme ? { securityScheme: resolvedScheme } : {})
+  }
+  // Keep spec as a live object so addCustomEndpoint can mutate it; serialize on each request
+  // rather than once at startup so custom endpoints registered after this point appear in docs.
+  const spec = generateOpenApiSpec(resources, openApiOpts)
+  const docsHtml = generateDocsHtml(specPath, docsPath)
+  const requireAuth = options.openapi.requireAuth === true
+
+  tracker.registerRoute('GET', specPath, async (req, res) => {
+    try {
+      if (requireAuth) await authStrategy.authenticate(req)
+      res.setHeader?.('Content-Type', 'application/json')
+      res.send?.(JSON.stringify(spec, null, 2))
+    } catch (error) {
+      await sendError(error, res)
+    }
+  })
+
+  tracker.registerRoute('GET', docsPath, async (req, res) => {
+    try {
+      if (requireAuth) await authStrategy.authenticate(req)
+      res.setHeader?.('Content-Type', 'text/html; charset=utf-8')
+      res.send?.(docsHtml)
+    } catch (error) {
+      await sendError(error, res)
+    }
+  })
+
+  return spec
+}
+
+// ─── GraphQL wiring ────────────────────────────────────────────────────────────
+
+function setupGraphql(
+  tracker: TrackingHttpServer,
+  gqlContexts: GqlCtx[],
+  options: CrudApiOptions,
+  authStrategy: AuthStrategy
+): void {
+  if (options.graphql?.enabled !== true) return
+  registerGraphqlRoute(
+    tracker,
+    gqlContexts.map(({ resource, hooks, resolveRepo }) => ({
+      resource,
+      authStrategy,
+      hooks,
+      resolveRepo
+    })),
+    options.graphql,
+    authStrategy
+  )
+}
+
 /**
- * Registers all CRUD routes for every resource on the given HTTP server.
+ * Registers all CRUD routes for every resource on the given HTTP server and returns a
+ * {@link HalifaxApi} instance. Use the returned instance to add custom endpoints that
+ * participate in Halifax's auth, error handling, and OpenAPI documentation.
  *
  * Routes are controlled by `resource.permissions` merged with {@link defaultCrudPermissions}.
  *
  * @param server - The HTTP server adapter to register routes on.
  * @param resources - Resource definitions to wire up as CRUD endpoints.
  * @param options - Auth strategy, tenant config, envelope, caching, and OpenAPI overrides.
+ * @returns A {@link HalifaxApi} singleton for the registered API.
  */
 export function registerCrudApi(
   server: HttpServer,
   resources: ResourceDefinition[],
   options: CrudApiOptions = {}
-): void {
+): HalifaxApi {
   const authStrategy: AuthStrategy = options.authStrategy ?? new AllowAllAuthStrategy()
+  const registeredRoutes = new Set<string>()
+  const tracker = new TrackingHttpServer(server, registeredRoutes)
   const queryBuilderPath = options.queryBuilderPath ?? 'query'
   // One shared cache store for the whole API (created lazily only if any resource caches),
   // so version-based invalidation is consistent across requests and resources.
   const cacheStore: CacheStore = options.cache?.store ?? new InMemoryCacheStore()
   const bustHeader = options.cache?.bustHeader ?? 'cache-control'
 
-  type GqlCtx = {
-    resource: ResourceDefinition
-    hooks: CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>> | undefined
-    resolveRepo: (req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository>
-  }
   const gqlContexts: GqlCtx[] = []
 
   resources.forEach((rawResource) => {
@@ -335,16 +562,16 @@ export function registerCrudApi(
     gqlContexts.push({ resource, hooks, resolveRepo })
     const handlerCtx: RouteHandlerContext = { resource, authStrategy, envelope, hooks, resolveRepo }
 
-    if (permissions.allowCreate) registerCreate(server, basePath, handlerCtx)
-    if (permissions.allowReadMany) registerReadMany(server, basePath, handlerCtx)
+    if (permissions.allowCreate) registerCreate(tracker, basePath, handlerCtx)
+    if (permissions.allowReadMany) registerReadMany(tracker, basePath, handlerCtx)
     if (permissions.allowReadManyWithQueryBuilder)
-      registerQuery(server, basePath, queryBuilderPath, handlerCtx)
-    if (permissions.allowReadOne) registerReadOne(server, basePath, handlerCtx)
-    if (permissions.allowUpdateOne) registerUpdateOne(server, basePath, handlerCtx)
-    if (permissions.allowUpdateMany) registerUpdateMany(server, basePath, handlerCtx)
-    if (permissions.allowUpsertOne) registerUpsertOne(server, basePath, handlerCtx)
-    if (permissions.allowDeleteOne) registerDeleteOne(server, basePath, handlerCtx)
-    if (permissions.allowDeleteMany) registerDeleteMany(server, basePath, handlerCtx)
+      registerQuery(tracker, basePath, queryBuilderPath, handlerCtx)
+    if (permissions.allowReadOne) registerReadOne(tracker, basePath, handlerCtx)
+    if (permissions.allowUpdateOne) registerUpdateOne(tracker, basePath, handlerCtx)
+    if (permissions.allowUpdateMany) registerUpdateMany(tracker, basePath, handlerCtx)
+    if (permissions.allowUpsertOne) registerUpsertOne(tracker, basePath, handlerCtx)
+    if (permissions.allowDeleteOne) registerDeleteOne(tracker, basePath, handlerCtx)
+    if (permissions.allowDeleteMany) registerDeleteMany(tracker, basePath, handlerCtx)
 
     // 405 fallbacks — only registered when at least one method exists for the path
     const baseMethods: string[] = [
@@ -354,7 +581,7 @@ export function registerCrudApi(
       ...(permissions.allowDeleteMany ? ['DELETE'] : [])
     ]
     if (baseMethods.length) {
-      server.registerRoute('*', basePath, async (req, res) => {
+      tracker.registerRoute('*', basePath, async (req, res) => {
         res.setHeader?.('Allow', baseMethods.join(', '))
         await sendError(new MethodNotAllowedError(), res)
       })
@@ -367,69 +594,22 @@ export function registerCrudApi(
       ...(permissions.allowDeleteOne ? ['DELETE'] : [])
     ]
     if (idMethods.length) {
-      server.registerRoute('*', `${basePath}/:id`, async (req, res) => {
+      tracker.registerRoute('*', `${basePath}/:id`, async (req, res) => {
         res.setHeader?.('Allow', idMethods.join(', '))
         await sendError(new MethodNotAllowedError(), res)
       })
     }
 
     if (permissions.allowReadManyWithQueryBuilder) {
-      server.registerRoute('*', `${basePath}/${queryBuilderPath}`, async (req, res) => {
+      tracker.registerRoute('*', `${basePath}/${queryBuilderPath}`, async (req, res) => {
         res.setHeader?.('Allow', 'POST')
         await sendError(new MethodNotAllowedError(), res)
       })
     }
   })
 
-  // ─── GraphQL endpoint ──────────────────────────────────────────────────────
+  setupGraphql(tracker, gqlContexts, options, authStrategy)
+  const liveSpec = setupOpenApi(tracker, resources, options, authStrategy)
 
-  if (options.graphql?.enabled === true) {
-    registerGraphqlRoute(
-      server,
-      gqlContexts.map(({ resource, hooks, resolveRepo }) => ({
-        resource, authStrategy, hooks, resolveRepo
-      })),
-      options.graphql,
-      authStrategy
-    )
-  }
-
-  // ─── OpenAPI spec + docs ───────────────────────────────────────────────────
-
-  if (options.openapi && options.openapi.enabled !== false) {
-    const specPath = options.openapi.specPath ?? '/openapi.json'
-    const docsPath = options.openapi.docsPath ?? '/docs'
-    const resolvedEnvelope = options.openapi.envelope ?? options.envelope ?? null
-    const resolvedScheme = options.openapi.securityScheme ?? authStrategy.openApiScheme?.()
-    const openApiOpts = {
-      ...options.openapi,
-      envelope: resolvedEnvelope,
-      ...(resolvedScheme ? { securityScheme: resolvedScheme } : {})
-    }
-    const spec = generateOpenApiSpec(resources, openApiOpts)
-    const specJson = JSON.stringify(spec, null, 2)
-    const docsHtml = generateDocsHtml(specPath, docsPath)
-
-    const requireAuth = options.openapi.requireAuth === true
-
-    server.registerRoute('GET', specPath, async (req, res) => {
-      try {
-        if (requireAuth) await authStrategy.authenticate(req)
-        res.setHeader?.('Content-Type', 'application/json')
-        res.send?.(specJson)
-      } catch (error) {
-        await sendError(error, res)
-      }
-    })
-
-    server.registerRoute('GET', docsPath, async (req, res) => {
-      try {
-        if (requireAuth) await authStrategy.authenticate(req)
-        res.setHeader?.('Content-Type', 'text/html; charset=utf-8')
-        res.send?.(docsHtml)
-      } catch (error) {
-        await sendError(error, res)
-      }
-    })
-  }
+  return new HalifaxApi(server, authStrategy, registeredRoutes, liveSpec)
 }

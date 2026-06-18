@@ -1,7 +1,7 @@
 import type { GraphQLOptions, GraphQLRequestBody, GraphQLResourceContext } from './types.js'
 import type { AuthStrategy } from '@/auth/strategies/types.js'
 import type { HttpServer } from '@/core/types.js'
-import { sendError } from '@/core/handlerUtils.js'
+import { sendError } from '@/core/errorUtils.js'
 
 /**
  * Registers the `POST /graphql` execution endpoint and optionally the `GET /graphql`

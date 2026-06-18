@@ -39,3 +39,14 @@ model Widget {
 
   @@map("widgets")
 }
+
+// Used by the custom-endpoint integration test to exercise GROUP BY + HAVING via a
+// custom endpoint registered with HalifaxApi.addCustomEndpoint.
+model SaleRecord {
+  id        Int      @id @default(autoincrement())
+  category  String
+  amount    Float
+  createdAt DateTime @default(now())
+
+  @@map("sale_records")
+}

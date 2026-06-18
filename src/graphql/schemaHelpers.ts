@@ -9,7 +9,7 @@ import type {
 } from 'graphql'
 import type { FieldType } from '@/core/types.js'
 import { HttpError } from '@/errors/HttpError.js'
-import { statusCodeMap } from '@/core/handlerUtils.js'
+import { statusCodeMap } from '@/core/errorUtils.js'
 
 type GqlModule = typeof import('graphql')
 

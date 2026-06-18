@@ -1,16 +1,9 @@
 import type { HookContext } from '@/core/hooks.js'
 import type { HttpServer } from '@/core/types.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
-import {
-  applyHook,
-  authorizeRequest,
-  filterReadableFields,
-  filterWritableFields,
-  parseId,
-  type RouteHandlerContext,
-  wrap,
-  writeSuccess
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { filterReadableFields, filterWritableFields } from '@/core/fieldUtils.js'
+import { applyHook, parseId, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerUpsertOne(
   server: HttpServer,

@@ -2,15 +2,9 @@ import type { HookContext } from '@/core/hooks.js'
 import type { HttpServer } from '@/core/types.js'
 import { parseGetOneOptions } from '@/core/queryString.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
-import {
-  applyHook,
-  authorizeRequest,
-  filterReadableFields,
-  parseId,
-  type RouteHandlerContext,
-  wrap,
-  writeSuccess
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { filterReadableFields } from '@/core/fieldUtils.js'
+import { applyHook, parseId, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerReadOne(
   server: HttpServer,

@@ -3,6 +3,46 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0]
+
+### Added
+
+- **`HalifaxApi` class and `addCustomEndpoint`** — `registerCrudApi()` now returns a `HalifaxApi`
+  instance instead of `void`. Existing code that ignores the return value is unaffected.
+  The instance exposes `addCustomEndpoint(method, path, roles, handler, openapi?)` to register
+  any route that inherits Halifax's full middleware stack: authentication, role enforcement
+  (OR logic — any single match in `auth.roles` or `auth.permissions` grants access), content-type
+  negotiation, structured error serialization, and `X-Correlation-ID` echo-back. The method can
+  be called anywhere after `registerCrudApi()` — at startup or lazily from another module — and
+  returns `this` for chaining. See [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md).
+
+- **Duplicate endpoint detection** — `addCustomEndpoint` throws `ServerError` when the
+  `method + path` combination is already registered, whether by Halifax's own generated CRUD
+  routes or by a previous `addCustomEndpoint` call. This prevents silent route shadowing with
+  a clear error message naming the conflicting method and path.
+
+- **Live OpenAPI spec** — the `/openapi.json` spec is now serialized on each request
+  (previously frozen as a string at startup), so endpoints added via `addCustomEndpoint`
+  appear in the spec and Swagger UI immediately after registration. The optional `openapi`
+  argument to `addCustomEndpoint` merges the full `OpenApiOperation` into the live spec
+  with no restart and no additional configuration.
+
+- **`SaleRecord` model in all integration test schemas** — a `sale_records` table
+  (`id`, `category`, `amount`, `createdAt`) is added to all six Prisma integration schemas
+  (Postgres, MySQL/MariaDB, SQL Server, CockroachDB, SQLite) to support the new custom-endpoint
+  integration test suite, which exercises a real `GROUP BY category HAVING SUM(amount) >= ?`
+  aggregate query via Prisma `groupBy` + `having`.
+
+### Changed
+
+- **`registerCrudApi` return type** — changed from `void` to `HalifaxApi`. All callers that
+  ignored the return value continue to work without modification. Callers that assigned the
+  return to a variable typed as `void` will need a minor type update.
+
+- **`createExpressCrudRouter` unchanged** — this convenience wrapper continues to return an
+  Express `Router` for backward compatibility. Users who need `addCustomEndpoint` should
+  use `registerCrudApi(new ExpressHttpServer(router), resources, options)` directly.
+
 ## [2.5.0]
 
 ### Breaking

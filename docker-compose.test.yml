@@ -13,6 +13,7 @@
 services:
   postgres:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -27,6 +28,7 @@ services:
 
   mysql:
     image: mysql:8
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: halifax_test
@@ -40,6 +42,7 @@ services:
 
   mariadb:
     image: mariadb:11
+    restart: unless-stopped
     environment:
       MARIADB_ROOT_PASSWORD: root
       MARIADB_DATABASE: halifax_test
@@ -54,6 +57,7 @@ services:
 
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
     environment:
       ACCEPT_EULA: 'Y'
       # SQL Server enforces password complexity: 8+ chars with upper, lower, digit, symbol.
@@ -73,6 +77,7 @@ services:
 
   cockroachdb:
     image: cockroachdb/cockroach:latest-v24.3
+    restart: unless-stopped
     # Insecure single-node cluster — root, no password. Fine for throwaway test data.
     command: start-single-node --insecure
     ports:
@@ -106,6 +111,7 @@ services:
 
   redis:
     image: redis:7
+    restart: unless-stopped
     ports:
       - '6379:6379'
     healthcheck:

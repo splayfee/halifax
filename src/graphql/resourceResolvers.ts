@@ -15,14 +15,9 @@ import {
 import { toPascalCase } from '@/core/stringUtils.js'
 import type { IQueryFilter, IQueryOptions, ISort } from '@edium/halifax-types'
 import { SqlOrder } from '@edium/halifax-types'
-import {
-  applyHook,
-  authorizeRequest,
-  filterReadableFields,
-  filterWritableFields,
-  makeReadableFieldFilter,
-  parseId
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { filterReadableFields, filterWritableFields, makeReadableFieldFilter } from '@/core/fieldUtils.js'
+import { applyHook, parseId } from '@/core/handlerUtils.js'
 import { validateAdvancedQuery, validateIncludes } from '@/core/validation.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'

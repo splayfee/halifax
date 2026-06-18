@@ -4,13 +4,8 @@ import type { HttpServer } from '@/core/types.js'
 import { validateAdvancedQuery } from '@/core/validation.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
-import {
-  applyHook,
-  authorizeRequest,
-  type RouteHandlerContext,
-  wrap,
-  writeSuccess
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { applyHook, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerDeleteMany(
   server: HttpServer,

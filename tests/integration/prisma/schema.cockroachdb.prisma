@@ -46,3 +46,12 @@ model Widget {
 
   @@map("widgets")
 }
+
+model SaleRecord {
+  id        Int      @id @default(sequence())
+  category  String
+  amount    Float
+  createdAt DateTime @default(now())
+
+  @@map("sale_records")
+}

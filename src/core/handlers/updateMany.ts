@@ -4,15 +4,9 @@ import type { HttpServer, UpdateManyResult } from '@/core/types.js'
 import { validateAdvancedQuery } from '@/core/validation.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
-import {
-  applyHook,
-  authorizeRequest,
-  filterWritableFields,
-  makeReadableFieldFilter,
-  type RouteHandlerContext,
-  wrap,
-  writeSuccess
-} from '@/core/handlerUtils.js'
+import { authorizeRequest } from '@/core/authUtils.js'
+import { filterWritableFields, makeReadableFieldFilter } from '@/core/fieldUtils.js'
+import { applyHook, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerUpdateMany(
   server: HttpServer,

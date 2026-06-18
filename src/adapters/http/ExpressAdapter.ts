@@ -152,6 +152,9 @@ export type ExpressCrudRouterOptions = CrudApiOptions
 /**
  * Creates a fully-wired Express `Router` with CRUD routes for every resource.
  *
+ * To also obtain a {@link HalifaxApi} instance for registering custom endpoints, use
+ * {@link registerCrudApi} directly with an {@link ExpressHttpServer} adapter instead.
+ *
  * @param resources - Resource definitions to register (use {@link createPrismaResources} to generate these).
  * @param options - Auth strategy, query-builder path overrides, etc.
  * @returns An Express `Router` ready to mount with `app.use('/api', router)`.
