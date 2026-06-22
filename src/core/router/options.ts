@@ -2,6 +2,7 @@ import type { AuthContext, AuthStrategy } from '@/auth/AuthStrategy.js'
 import type { CacheStore } from '@/core/cache/index.js'
 import type { OpenApiOptions } from '@/openapi/index.js'
 import type { GraphQLOptions } from '@/graphql/index.js'
+import type { ExecuteOptions } from '@/core/execute.js'
 import type { HttpRequest, ResourceDefinition } from '@/core/types.js'
 
 /** Context handed to {@link TenantOptions.resolveId} for the current request. */
@@ -98,6 +99,21 @@ export interface CrudApiOptions {
    * ```
    */
   graphql?: GraphQLOptions
+  /**
+   * Enable a `POST /execute` endpoint for calling **whitelisted** database routines (stored
+   * procedures / functions). **Off by default** — the route exists only when this is supplied.
+   * Provide an `executor` ({@link PrismaSqlExecutor} / {@link DrizzleSqlExecutor}) and a `procedures`
+   * allow-list. See [README_EXECUTE.md](./README_EXECUTE.md).
+   *
+   * @example
+   * ```ts
+   * execute: {
+   *   executor: new PrismaSqlExecutor(prisma),
+   *   procedures: ['report_summary', 'recalc_balances']
+   * }
+   * ```
+   */
+  execute?: ExecuteOptions
   /**
    * API-wide read-through caching. Provide a `store` (defaults to an in-process
    * {@link InMemoryCacheStore}) and/or a default `ttlSeconds` applied to every resource that

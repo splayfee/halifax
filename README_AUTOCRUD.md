@@ -52,8 +52,9 @@ export const postResource: ResourceDefinition = {
   ],
   relations: [{ name: 'author', includable: true }], // default: includable when listed
   permissions: {
-    // All nine actions default to `true` — list only the ones you DISABLE.
-    allowDeleteMany: false
+    // Every single-record verb + the query-builder default to `true`; only the bulk writes
+    // `allowUpdateMany` and `allowDeleteMany` default to `false` — opt them in here when needed.
+    allowDeleteMany: true
   },
   requiredPermissions: {
     readMany: ['posts.read'],
@@ -82,7 +83,7 @@ Each `permissions` flag enables one route:
 | `allowDeleteMany`               | `DELETE` | `../posts`       |
 | `allowReadManyWithQueryBuilder` | `POST`   | `../posts/query` |
 
-All endpoint flags default to `true` — only set them explicitly to `false` to restrict access.
+All endpoint flags default to `true` **except the bulk writes `allowUpdateMany` and `allowDeleteMany`, which default to `false`** (changed in 3.0.0 — a single bad filter on a mass write can mutate or destroy a whole table). Set a flag to `false` to restrict a single-record verb, or to `true` to opt into a bulk write.
 
 ## The `:id` Parameter
 

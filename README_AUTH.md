@@ -212,7 +212,9 @@ hierarchy where a higher role implicitly satisfies a lower-role requirement — 
 
 ```ts
 class RoleHierarchyStrategy implements AuthStrategy {
-  authenticate(req) { /* … → { roles, permissions, claims: { roleValue } } … */ }
+  authenticate(req) {
+    /* … → { roles, permissions, claims: { roleValue } } … */
+  }
 
   // Auto-CRUD: caller passes when their role value is at or below the required threshold.
   authorize({ auth, requiredPermissions }) {

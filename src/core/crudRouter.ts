@@ -7,6 +7,7 @@ import { HalifaxApi } from '@/core/router/halifaxApi.js'
 import { prepareResource, registerResourceRoutes } from '@/core/router/resourceRoutes.js'
 import { setupGraphql, type GqlCtx } from '@/core/router/graphqlRoutes.js'
 import { setupOpenApi } from '@/core/router/openApiRoutes.js'
+import { registerExecuteEndpoint } from '@/core/execute.js'
 import type { CrudApiOptions } from '@/core/router/options.js'
 
 // `normalizeError` is re-exported for consumers that serialize Halifax errors outside a router.
@@ -15,19 +16,18 @@ export { normalizeError }
 // The public router surface is composed from focused modules under `@/core/router/` and
 // re-exported here so the long-standing `@/core/crudRouter.js` import path is unchanged.
 export { HalifaxApi } from '@/core/router/halifaxApi.js'
-export type {
-  CrudApiOptions,
-  TenantOptions,
-  TenantResolveContext
-} from '@/core/router/options.js'
+export type { CrudApiOptions, TenantOptions, TenantResolveContext } from '@/core/router/options.js'
 export type {
   CustomEndpointContext,
   CustomEndpointHandler,
   CustomEndpointAuthorizer,
   CustomEndpointOpenApi,
   CustomEndpointOptions,
+  CustomEndpointSchemas,
   CustomEndpointMethod
 } from '@/core/customEndpoint.js'
+export { registerExecuteEndpoint } from '@/core/execute.js'
+export type { SqlExecutor, ExecuteOptions, ExecuteProcedure } from '@/core/execute.js'
 
 /**
  * Registers all CRUD routes for every resource on the given HTTP server and returns a
@@ -68,5 +68,10 @@ export function registerCrudApi(
   setupGraphql(tracker, gqlContexts, options, authStrategy)
   const liveSpec = setupOpenApi(tracker, resources, options, authStrategy)
 
-  return new HalifaxApi(server, authStrategy, registeredRoutes, liveSpec)
+  const api = new HalifaxApi(server, authStrategy, registeredRoutes, liveSpec)
+
+  // Off by default (like GraphQL): the execute route is registered only when configured.
+  if (options.execute) registerExecuteEndpoint(api, options.execute)
+
+  return api
 }

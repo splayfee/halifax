@@ -1,6 +1,10 @@
 export * from '@/adapters/http/ExpressAdapter.js'
 export * from '@/openapi/index.js'
-export type { GraphQLOptions, GraphQLResourceContext, GraphQLResolverContext } from '@/graphql/index.js'
+export type {
+  GraphQLOptions,
+  GraphQLResourceContext,
+  GraphQLResolverContext
+} from '@/graphql/index.js'
 export * from '@/adapters/orm/prisma/index.js'
 export * from '@/auth/AuthStrategy.js'
 export * from '@/core/cache/index.js'

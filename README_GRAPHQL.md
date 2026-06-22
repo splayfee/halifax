@@ -42,21 +42,21 @@ import { createExpressCrudRouter } from '@edium/halifax'
 
 const app = createExpressCrudRouter(resources, {
   graphql: {
-    enabled: true,          // required — GraphQL is off by default
-    path: '/graphql',       // default: '/graphql'
-    graphiql: true,         // default: true — serve the GraphiQL IDE at GET /graphql
-    requireAuth: false,     // default: false — set true to require auth before any operation
-    title: 'My API'         // browser tab title in GraphiQL
+    enabled: true, // required — GraphQL is off by default
+    path: '/graphql', // default: '/graphql'
+    graphiql: true, // default: true — serve the GraphiQL IDE at GET /graphql
+    requireAuth: false, // default: false — set true to require auth before any operation
+    title: 'My API' // browser tab title in GraphiQL
   }
 })
 ```
 
 Two routes are registered:
 
-| Route | Purpose |
-|---|---|
-| `POST /graphql` | Execute GraphQL queries and mutations |
-| `GET /graphql` | GraphiQL browser IDE (disable with `graphiql: false`) |
+| Route           | Purpose                                               |
+| --------------- | ----------------------------------------------------- |
+| `POST /graphql` | Execute GraphQL queries and mutations                 |
+| `GET /graphql`  | GraphiQL browser IDE (disable with `graphiql: false`) |
 
 ---
 
@@ -66,23 +66,23 @@ For every resource Halifax generates:
 
 **Query fields**
 
-| Field | REST equivalent | Description |
-|---|---|---|
-| `get<Resource>(id: ID!)` | `GET /<resource>/:id` | Fetch one record by ID |
-| `list<Resource>(filter, limit, offset, orderBy, include)` | `GET /<resource>` | Paginated list with equality filters |
+| Field                                                                       | REST equivalent          | Description                                 |
+| --------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
+| `get<Resource>(id: ID!)`                                                    | `GET /<resource>/:id`    | Fetch one record by ID                      |
+| `list<Resource>(filter, limit, offset, orderBy, include)`                   | `GET /<resource>`        | Paginated list with equality filters        |
 | `query<Resource>(where, fields, distinct, limit, offset, orderBy, include)` | `POST /<resource>/query` | Advanced query with full filter expressions |
 
 **Mutation fields**
 
-| Field | REST equivalent | Description |
-|---|---|---|
-| `create<Resource>(input)` | `POST /<resource>` | Create one record |
-| `createMany<Resource>(input)` | `POST /<resource>` (array body) | Create multiple records |
-| `update<Resource>(id, input)` | `PATCH /<resource>/:id` | Partial update |
-| `updateMany<Resource>(where, update)` | `PATCH /<resource>` | Bulk update |
-| `upsert<Resource>(id, input)` | `PUT /<resource>/:id` | Create or replace |
-| `delete<Resource>(id)` | `DELETE /<resource>/:id` | Delete one record |
-| `deleteMany<Resource>(where)` | `DELETE /<resource>` | Bulk delete |
+| Field                                 | REST equivalent                 | Description             |
+| ------------------------------------- | ------------------------------- | ----------------------- |
+| `create<Resource>(input)`             | `POST /<resource>`              | Create one record       |
+| `createMany<Resource>(input)`         | `POST /<resource>` (array body) | Create multiple records |
+| `update<Resource>(id, input)`         | `PATCH /<resource>/:id`         | Partial update          |
+| `updateMany<Resource>(where, update)` | `PATCH /<resource>`             | Bulk update             |
+| `upsert<Resource>(id, input)`         | `PUT /<resource>/:id`           | Create or replace       |
+| `delete<Resource>(id)`                | `DELETE /<resource>/:id`        | Delete one record       |
+| `deleteMany<Resource>(where)`         | `DELETE /<resource>`            | Bulk delete             |
 
 Only operations allowed by `resource.permissions` are included. If `allowDeleteMany: false`, no `deleteMany<Resource>` mutation is generated.
 
@@ -96,13 +96,13 @@ Set `graphql: false` on any resource to exclude it from the GraphQL schema entir
 const resources = [
   {
     routePrefix: 'users',
-    repository: userRepo,
+    repository: userRepo
     // visible in REST and GraphQL (default)
   },
   {
     routePrefix: 'audit-logs',
     repository: auditRepo,
-    graphql: false,  // REST only — excluded from GraphQL
+    graphql: false // REST only — excluded from GraphQL
   }
 ]
 ```
@@ -147,7 +147,7 @@ Admins who need to query across all tenants can be granted bypass access by list
 createExpressCrudRouter(resources, {
   tenant: {
     resolveId: (ctx) => ctx.auth.claims?.companyId,
-    bypassRoles: ['super_admin', 'support:read-all'],  // role OR permission slug
+    bypassRoles: ['super_admin', 'support:read-all'] // role OR permission slug
   }
 })
 ```
@@ -164,20 +164,44 @@ When an admin wants to see just one tenant's data, they use the same filter mech
 
 ```graphql
 # All tenants (bypass active, no filter)
-{ listOrders { count results { id companyId total } } }
+{
+  listOrders {
+    count
+    results {
+      id
+      companyId
+      total
+    }
+  }
+}
 
 # One specific tenant — admin narrows with a filter
-{ listOrders(filter: { companyId: 42 }) { count results { id companyId total } } }
+{
+  listOrders(filter: { companyId: 42 }) {
+    count
+    results {
+      id
+      companyId
+      total
+    }
+  }
+}
 
 # Or with the full query builder
 {
-  queryOrders(where: [
-    { field: "companyId", comparison: "=", value1: 42 }
-  ]) { count results { id companyId total } }
+  queryOrders(where: [{ field: "companyId", comparison: "=", value1: 42 }]) {
+    count
+    results {
+      id
+      companyId
+      total
+    }
+  }
 }
 ```
 
 On REST it works the same way:
+
 ```
 # All tenants
 GET /orders
@@ -196,18 +220,18 @@ Override the global `bypassRoles` for a single resource — or disable bypass en
 const resources = [
   {
     routePrefix: 'orders',
-    repository: orderRepo,
+    repository: orderRepo
     // inherits bypassRoles from TenantOptions
   },
   {
     routePrefix: 'payment-methods',
     repository: paymentRepo,
-    bypassTenantRoles: [],           // no one bypasses tenant on this resource
+    bypassTenantRoles: [] // no one bypasses tenant on this resource
   },
   {
     routePrefix: 'users',
     repository: userRepo,
-    bypassTenantRoles: ['super_admin'],  // only super_admin, not support:read-all
+    bypassTenantRoles: ['super_admin'] // only super_admin, not support:read-all
   }
 ]
 ```
@@ -254,8 +278,8 @@ query {
 query {
   queryUsers(
     where: [
-      { field: "status", comparison: "IN", value1: ["active", "trial"] },
-      { operator: "AND" },
+      { field: "status", comparison: "IN", value1: ["active", "trial"] }
+      { operator: "AND" }
       { field: "createdAt", comparison: ">=", value1: "2025-01-01" }
     ]
     orderBy: [{ field: "name", direction: asc }]
@@ -277,12 +301,16 @@ query {
 query ListActiveUsers($status: String!, $limit: Int) {
   listUsers(filter: { status: $status }, limit: $limit) {
     count
-    results { id name }
+    results {
+      id
+      name
+    }
   }
 }
 ```
 
 Variables payload:
+
 ```json
 { "status": "active", "limit": 10 }
 ```
@@ -339,11 +367,11 @@ mutation {
 
 ## Types reference
 
-| Type | Description |
-|---|---|
-| `GraphQLOptions` | Configuration object passed to `registerCrudApi` / `createExpressCrudRouter` |
-| `GraphQLResourceContext` | Internal per-resource context (available if building custom integrations) |
-| `GraphQLResolverContext` | The `contextValue` available in every resolver: `{ req: HttpRequest }` |
+| Type                     | Description                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `GraphQLOptions`         | Configuration object passed to `registerCrudApi` / `createExpressCrudRouter` |
+| `GraphQLResourceContext` | Internal per-resource context (available if building custom integrations)    |
+| `GraphQLResolverContext` | The `contextValue` available in every resolver: `{ req: HttpRequest }`       |
 
 All types are re-exported from `@edium/halifax`:
 

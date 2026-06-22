@@ -41,7 +41,11 @@ function addGet(rc: ResolverContext, queryFields: QueryFields): void {
     type: types.OutputType,
     description: `Fetch a single ${typeName} by ID.`,
     args: { id: { type: new GraphQLNonNull(GraphQLID), description: 'Record ID.' } },
-    async resolve(_parent, args: { id: string }, context: GraphQLResolverContext): Promise<unknown> {
+    async resolve(
+      _parent,
+      args: { id: string },
+      context: GraphQLResolverContext
+    ): Promise<unknown> {
       try {
         const auth = await authorizeRequest(context.req, resource, 'readOne', authStrategy)
         const repo = await resolveRepo(context.req, auth, 'readOne')
@@ -50,9 +54,15 @@ function addGet(rc: ResolverContext, queryFields: QueryFields): void {
         if (hooks?.beforeReadOne) await hooks.beforeReadOne(id, hookCtx)
         const rawResult = await repo.getOne(id)
         if (!rawResult) throw new NotFoundError()
-        const result = await applyHook(hooks?.afterReadOne, rawResult as Record<string, unknown>, hookCtx)
+        const result = await applyHook(
+          hooks?.afterReadOne,
+          rawResult as Record<string, unknown>,
+          hookCtx
+        )
         return filterReadableFields(resource, result, auth)
-      } catch (e) { helpers.toGraphQLError(e) }
+      } catch (e) {
+        helpers.toGraphQLError(e)
+      }
     }
   }
 }
@@ -68,12 +78,24 @@ function addList(rc: ResolverContext, queryFields: QueryFields): void {
       filter: { type: types.FilterInputType, description: 'Per-field equality filters.' },
       limit: { type: GraphQLInt, description: 'Maximum records to return.' },
       offset: { type: GraphQLInt, description: 'Records to skip.' },
-      orderBy: { type: new GraphQLList(new GraphQLNonNull(helpers.OrderByInput)), description: 'Sort order.' },
-      include: { type: new GraphQLList(new GraphQLNonNull(GraphQLString)), description: 'Relation names to eagerly load.' }
+      orderBy: {
+        type: new GraphQLList(new GraphQLNonNull(helpers.OrderByInput)),
+        description: 'Sort order.'
+      },
+      include: {
+        type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
+        description: 'Relation names to eagerly load.'
+      }
     },
     async resolve(
       _parent,
-      args: { filter?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: Array<{ field: string; direction: string }>; include?: string[] },
+      args: {
+        filter?: Record<string, unknown>
+        limit?: number
+        offset?: number
+        orderBy?: Array<{ field: string; direction: string }>
+        include?: string[]
+      },
       context: GraphQLResolverContext
     ): Promise<unknown> {
       try {
@@ -91,15 +113,24 @@ function addList(rc: ResolverContext, queryFields: QueryFields): void {
           where,
           limit: applyPageLimits(resource, args.limit),
           offset: args.offset,
-          orderBy: args.orderBy?.map((o) => ({ field: o.field, direction: o.direction as 'asc' | 'desc' })),
+          orderBy: args.orderBy?.map((o) => ({
+            field: o.field,
+            direction: o.direction as 'asc' | 'desc'
+          })),
           include: args.include
         }
         const processedOptions = await applyHook(hooks?.beforeReadMany, listOptions, hookCtx)
         const rawResult = await repo.getMany(processedOptions)
-        const result = await applyHook(hooks?.afterReadMany, rawResult as { count: number; results: Record<string, unknown>[] }, hookCtx)
+        const result = await applyHook(
+          hooks?.afterReadMany,
+          rawResult as { count: number; results: Record<string, unknown>[] },
+          hookCtx
+        )
         const filterRecord = makeReadableFieldFilter(resource, auth)
         return { count: result.count, results: result.results.map(filterRecord) }
-      } catch (e) { helpers.toGraphQLError(e) }
+      } catch (e) {
+        helpers.toGraphQLError(e)
+      }
     }
   }
 }
@@ -112,27 +143,56 @@ function addQuery(rc: ResolverContext, queryFields: QueryFields): void {
     type: new GraphQLNonNull(types.ListResultType),
     description: `Advanced query for ${typeName} with full filter expressions, sorting, and pagination. Mirrors the REST \`POST /${resource.routePrefix}/query\` endpoint.`,
     args: {
-      where: { type: new GraphQLList(new GraphQLNonNull(helpers.QueryFilterInput)), description: 'Filter conditions. Supports all operators (=, IN, LIKE, BETWEEN, …).' },
-      fields: { type: new GraphQLList(new GraphQLNonNull(GraphQLString)), description: 'Field names to include. Omit for all selectable fields.' },
-      distinct: { type: new GraphQLList(new GraphQLNonNull(GraphQLString)), description: 'Fields to de-duplicate on (SQL DISTINCT ON).' },
+      where: {
+        type: new GraphQLList(new GraphQLNonNull(helpers.QueryFilterInput)),
+        description: 'Filter conditions. Supports all operators (=, IN, LIKE, BETWEEN, …).'
+      },
+      fields: {
+        type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
+        description: 'Field names to include. Omit for all selectable fields.'
+      },
+      distinct: {
+        type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
+        description: 'Fields to de-duplicate on (SQL DISTINCT ON).'
+      },
       limit: { type: GraphQLInt, description: 'Maximum records to return.' },
       offset: { type: GraphQLInt, description: 'Records to skip.' },
-      orderBy: { type: new GraphQLList(new GraphQLNonNull(helpers.OrderByInput)), description: 'Sort order.' },
-      include: { type: new GraphQLList(new GraphQLNonNull(GraphQLString)), description: 'Relation names to eagerly load.' }
+      orderBy: {
+        type: new GraphQLList(new GraphQLNonNull(helpers.OrderByInput)),
+        description: 'Sort order.'
+      },
+      include: {
+        type: new GraphQLList(new GraphQLNonNull(GraphQLString)),
+        description: 'Relation names to eagerly load.'
+      }
     },
     async resolve(
       _parent,
-      args: { where?: Record<string, unknown>[]; fields?: string[]; distinct?: string[]; limit?: number; offset?: number; orderBy?: Array<{ field: string; direction: string }>; include?: string[] },
+      args: {
+        where?: Record<string, unknown>[]
+        fields?: string[]
+        distinct?: string[]
+        limit?: number
+        offset?: number
+        orderBy?: Array<{ field: string; direction: string }>
+        include?: string[]
+      },
       context: GraphQLResolverContext
     ): Promise<unknown> {
       try {
-        const auth = await authorizeRequest(context.req, resource, 'readManyWithQueryBuilder', authStrategy)
+        const auth = await authorizeRequest(
+          context.req,
+          resource,
+          'readManyWithQueryBuilder',
+          authStrategy
+        )
         const repo = await resolveRepo(context.req, auth, 'readManyWithQueryBuilder')
-        if (!repo.executeQuery) throw new NotImplementedError('This resource does not support the query builder.')
+        if (!repo.executeQuery)
+          throw new NotImplementedError('This resource does not support the query builder.')
         const hookCtx = { auth, resource, req: context.req }
         const queryOrderBy: ISort[] | undefined = args.orderBy?.map((o) => ({
           field: o.field,
-          order: (o.direction.toUpperCase() === 'DESC' ? SqlOrder.DESC : SqlOrder.ASC)
+          order: o.direction.toUpperCase() === 'DESC' ? SqlOrder.DESC : SqlOrder.ASC
         }))
         const query: IQueryOptions = {
           ...(args.where !== undefined ? { where: args.where as unknown as IQueryFilter[] } : {}),
@@ -146,10 +206,19 @@ function addQuery(rc: ResolverContext, queryFields: QueryFields): void {
         const processedQuery = await applyHook(hooks?.beforeQuery, query, hookCtx)
         validateAdvancedQuery(resource, processedQuery)
         const rawResult = await repo.executeQuery(processedQuery)
-        const result = await applyHook(hooks?.afterQuery, rawResult as { count?: number; results: Record<string, unknown>[] }, hookCtx)
+        const result = await applyHook(
+          hooks?.afterQuery,
+          rawResult as { count?: number; results: Record<string, unknown>[] },
+          hookCtx
+        )
         const filterRecord = makeReadableFieldFilter(resource, auth)
-        return { count: result.count ?? result.results.length, results: result.results.map(filterRecord) }
-      } catch (e) { helpers.toGraphQLError(e) }
+        return {
+          count: result.count ?? result.results.length,
+          results: result.results.map(filterRecord)
+        }
+      } catch (e) {
+        helpers.toGraphQLError(e)
+      }
     }
   }
 }

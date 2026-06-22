@@ -50,9 +50,7 @@ export function buildResolveRepo(
   bustHeader: string
 ): ResolveRepo {
   const cacheTtl =
-    resource.cache === false
-      ? undefined
-      : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
+    resource.cache === false ? undefined : (resource.cache?.ttlSeconds ?? options.cache?.ttlSeconds)
   const cachingEnabled = cacheTtl !== undefined
 
   const withCache = (repo: Repository, scopeKey: string, bust: boolean): Repository =>
@@ -70,7 +68,11 @@ export function buildResolveRepo(
     if (!tenantField || !options.tenant) return withCache(repository, 'global', bust)
 
     const bypassRoles = resource.bypassTenantRoles ?? options.tenant.bypassRoles ?? []
-    if (READ_ACTIONS.has(action) && bypassRoles.length > 0 && checkRequiredPermissions(auth, bypassRoles)) {
+    if (
+      READ_ACTIONS.has(action) &&
+      bypassRoles.length > 0 &&
+      checkRequiredPermissions(auth, bypassRoles)
+    ) {
       return withCache(repository, 'global', bust)
     }
 

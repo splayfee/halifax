@@ -1,7 +1,11 @@
 import type { HookContext } from '@/core/hooks.js'
 import type { HttpServer } from '@/core/types.js'
 import { authorizeRequest } from '@/core/authUtils.js'
-import { filterReadableFields, filterWritableFields, makeReadableFieldFilter } from '@/core/fieldUtils.js'
+import {
+  filterReadableFields,
+  filterWritableFields,
+  makeReadableFieldFilter
+} from '@/core/fieldUtils.js'
 import { applyHook, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
 
 export function registerCreate(

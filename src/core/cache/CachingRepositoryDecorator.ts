@@ -1,10 +1,4 @@
-import type {
-  ListOptions,
-  ListResult,
-  QueryResult,
-  Repository,
-  TenantScope
-} from '@/core/types.js'
+import type { ListOptions, ListResult, QueryResult, Repository, TenantScope } from '@/core/types.js'
 import type { IQueryOptions } from '@edium/halifax-types'
 import type { CacheStore } from './CacheStore.js'
 

@@ -9,6 +9,11 @@ import { wrap } from '@/core/handlerUtils.js'
 import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import { ServerError } from '@/errors/ServerError.js'
 import type { OpenApiOperation, OpenApiSpec } from '@/openapi/types.js'
+import { runValidation } from '@/core/customEndpointValidation.js'
+import type { CustomEndpointSchemas } from '@/core/customEndpointValidation.js'
+import { mergeCustomEndpointOpenApi } from '@/core/customEndpointOpenApi.js'
+
+export type { CustomEndpointSchemas }
 
 /** HTTP verbs a custom endpoint may use (excludes the `'*'` catch-all). */
 export type CustomEndpointMethod = Exclude<HttpMethod, '*'>
@@ -83,7 +88,14 @@ export interface CustomEndpointOptions {
   consumes?: string[]
   /** Response `Content-Type`s negotiated against the `Accept` header. Defaults to `['application/json']`. */
   produces?: string[]
-  /** OpenAPI metadata merged into the live spec. */
+  /**
+   * Validator-agnostic schemas for the request `body`, `query`, and/or `params`. Each is validated
+   * (and coerced) before the handler runs; on failure the request is rejected with `422`. When a
+   * schema can produce a JSON Schema it also auto-documents the endpoint in OpenAPI. See
+   * {@link CustomEndpointSchemas}.
+   */
+  validate?: CustomEndpointSchemas
+  /** OpenAPI metadata merged into the live spec. Explicit metadata wins over schema-derived docs. */
   openapi?: CustomEndpointOpenApi
 }
 
@@ -95,6 +107,7 @@ interface ResolvedCustomEndpoint {
   useStrategyAuthorize: boolean
   consumes: string[]
   produces: string[]
+  validate: CustomEndpointSchemas | undefined
   openapi: CustomEndpointOpenApi | undefined
 }
 
@@ -127,6 +140,7 @@ export function resolveCustomEndpoint(
     useStrategyAuthorize: opts.useStrategyAuthorize !== false,
     consumes: opts.consumes ?? DEFAULT_CONTENT_TYPES,
     produces: opts.produces ?? DEFAULT_CONTENT_TYPES,
+    validate: positional ? undefined : opts.validate,
     openapi: positional ? openapi : opts.openapi
   }
 }
@@ -149,7 +163,10 @@ async function enforceAuthorization(
     return
   }
   if (endpoint.useStrategyAuthorize && strategy.authorizeCustom) {
-    const allowed = await strategy.authorizeCustom({ ...params, requiredPermissions: endpoint.roles })
+    const allowed = await strategy.authorizeCustom({
+      ...params,
+      requiredPermissions: endpoint.roles
+    })
     if (!allowed) throw new AuthorizationError()
     return
   }
@@ -187,30 +204,12 @@ export function registerCustomEndpoint(
           auth = await authStrategy.authenticate(req)
           await enforceAuthorization(authStrategy, endpoint, { auth, method, path, req })
         }
+        if (endpoint.validate) await runValidation(endpoint.validate, req)
         await handler(req, res, { auth })
       },
       { consumes: endpoint.consumes, produces: endpoint.produces }
     )
   )
 
-  mergeOpenApi(deps.liveSpec, method, path, endpoint)
-}
-
-/** Merges a custom endpoint's metadata into the live OpenAPI spec (no-op when spec/metadata absent). */
-function mergeOpenApi(
-  spec: OpenApiSpec | null,
-  method: CustomEndpointMethod,
-  path: string,
-  endpoint: ResolvedCustomEndpoint
-): void {
-  const meta = endpoint.openapi
-  if (!spec || !meta) return
-  const httpMethod = method.toLowerCase() as 'get' | 'post' | 'put' | 'patch' | 'delete'
-  spec.paths[path] ??= {}
-  spec.paths[path]![httpMethod] = {
-    ...meta,
-    responses: meta.responses ?? { '200': { description: 'OK' } },
-    // A public endpoint advertises "no security" so docs/Swagger don't render a lock for it.
-    ...(endpoint.isPublic ? { security: [] } : {})
-  }
+  mergeCustomEndpointOpenApi(deps.liveSpec, method, path, endpoint)
 }

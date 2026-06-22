@@ -53,8 +53,8 @@ Combines several strategies and adopts the **first** that authenticates a reques
 new CompositeAuthStrategy(strategies: AuthStrategy[])
 ```
 
-| Parameter    | Default  | Description                                          |
-| ------------ | -------- | ---------------------------------------------------- |
+| Parameter    | Default  | Description                                                               |
+| ------------ | -------- | ------------------------------------------------------------------------- |
 | `strategies` | required | Strategies to try, in priority order (first match wins). Throws if empty. |
 
 - Tries each strategy in order; the first to resolve wins. If none authenticate, the last error is thrown.
@@ -278,6 +278,40 @@ Derives a Halifax field schema from a Drizzle table without constructing a full 
 
 ---
 
+## SQL executors (stored-procedure endpoints)
+
+Used with the `execute` option to back stored-procedure endpoints (see [README_EXECUTE.md](./README_EXECUTE.md)). Both implement the `SqlExecutor` interface — `call(name, params): Promise<unknown[]>` — calling a database routine by name with positional, parameter-bound arguments and returning its rows (empty for void routines).
+
+### `PrismaSqlExecutor`
+
+Import: `@edium/halifax`
+
+Backs stored-procedure endpoints with a Prisma client. Issues `CALL name(?, …)` on MySQL, `EXEC name @P1, …` on SQL Server, and `SELECT * FROM name($1, …)` on PostgreSQL — transparently falling back to `CALL` for PG `PROCEDURE`s (SQLSTATE 42809) and caching the classification per name. SQLite throws (no stored routines). `@prisma/client` is a peer dependency when used.
+
+```ts
+import { PrismaSqlExecutor } from '@edium/halifax'
+
+new PrismaSqlExecutor(client: PrismaRawClient, options?: { dialect?: 'postgres' | 'mysql' | 'mssql' })
+```
+
+The dialect is auto-detected from the client's active provider when omitted (`postgresql`/`cockroachdb` → `postgres`, `mysql` → `mysql`, `sqlserver` → `mssql`). See `PrismaRawClient` / `PrismaSqlExecutorOptions` in [README_INTERFACES.md](./README_INTERFACES.md).
+
+### `DrizzleSqlExecutor`
+
+Import: `@edium/halifax/drizzle`
+
+Backs stored-procedure endpoints with a Drizzle database, binding parameters through Drizzle's `sql` tagged template. Same PostgreSQL function/procedure handling as `PrismaSqlExecutor`; return-shape normalization is best-effort across drivers. Supports `postgres` and `mysql` only — Drizzle has no SQL Server driver (use `PrismaSqlExecutor` for SQL Server). `drizzle-orm` is a peer dependency when used.
+
+```ts
+import { DrizzleSqlExecutor } from '@edium/halifax/drizzle'
+
+new DrizzleSqlExecutor(db: DrizzleDb, options?: { dialect?: 'postgres' | 'mysql' })
+```
+
+See `DrizzleDb` / `DrizzleSqlExecutorOptions` in [README_INTERFACES.md](./README_INTERFACES.md).
+
+---
+
 ## Cache stores
 
 Both implement `CacheStore`. Pass to `CrudApiOptions.cache.store`.
@@ -338,18 +372,18 @@ Base class for all Halifax HTTP errors. Not instantiated directly.
 
 ### Error subclasses
 
-| Class                       | Status | When to throw                                                                                                  |
-| --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| `AuthenticationError`       | 401    | Missing or invalid credentials. Throw from `AuthStrategy.authenticate`.                                        |
-| `AuthorizationError`        | 403    | Valid credentials but insufficient permissions. Throw from `AuthStrategy.authenticate` or `authorize`.         |
-| `BadRequestError`           | 400    | Malformed input — invalid ID format, bad query params, bad body structure.                                     |
-| `NotFoundError`             | 404    | Record with the given ID does not exist. Throw from a custom `Repository.getOne`.                              |
-| `MethodNotAllowedError`     | 405    | HTTP method not enabled for this resource. Used internally by Halifax.                                         |
-| `NotAcceptableError`        | 406    | Client `Accept` header excludes `application/json`. Used internally by Halifax.                                |
+| Class                       | Status | When to throw                                                                                                                                                                |
+| --------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AuthenticationError`       | 401    | Missing or invalid credentials. Throw from `AuthStrategy.authenticate`.                                                                                                      |
+| `AuthorizationError`        | 403    | Valid credentials but insufficient permissions. Throw from `AuthStrategy.authenticate` or `authorize`.                                                                       |
+| `BadRequestError`           | 400    | Malformed input — invalid ID format, bad query params, bad body structure.                                                                                                   |
+| `NotFoundError`             | 404    | Record with the given ID does not exist. Throw from a custom `Repository.getOne`.                                                                                            |
+| `MethodNotAllowedError`     | 405    | HTTP method not enabled for this resource. Used internally by Halifax.                                                                                                       |
+| `NotAcceptableError`        | 406    | Client `Accept` header excludes `application/json`. Used internally by Halifax.                                                                                              |
 | `ConflictError`             | 409    | Write rejected due to a unique constraint violation. Thrown by `PrismaAdapter` and `DrizzleAdapter` automatically; throw it from a custom repository for the same semantics. |
-| `UnsupportedMediaTypeError` | 415    | Body-carrying request with non-JSON `Content-Type`. Used internally by Halifax.                                |
-| `UnprocessableEntityError`  | 422    | Unknown fields in body, missing required filter, empty update payload.                                         |
-| `NotImplementedError`       | 501    | Repository does not support this operation (e.g. `upsertOne` not implemented).                                 |
-| `ServerError`               | 500    | Unexpected internal error. Halifax uses this as a catch-all; throw it from a custom adapter for explicit 500s. |
+| `UnsupportedMediaTypeError` | 415    | Body-carrying request with non-JSON `Content-Type`. Used internally by Halifax.                                                                                              |
+| `UnprocessableEntityError`  | 422    | Unknown fields in body, missing required filter, empty update payload.                                                                                                       |
+| `NotImplementedError`       | 501    | Repository does not support this operation (e.g. `upsertOne` not implemented).                                                                                               |
+| `ServerError`               | 500    | Unexpected internal error. Halifax uses this as a catch-all; throw it from a custom adapter for explicit 500s.                                                               |
 
 All constructors accept `(message: string, details?: unknown)`.

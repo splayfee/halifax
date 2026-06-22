@@ -48,7 +48,9 @@ export function addReadManyPath(ctx: ResourceSpecCtx): void {
     responses: {
       '200': {
         description: 'OK',
-        content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } } }
+        content: {
+          'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } }
+        }
       },
       '400': badRequestError,
       ...commonErrors
@@ -126,7 +128,8 @@ export function addUpdateManyPath(ctx: ResourceSpecCtx): void {
     properties: {
       update: {
         $ref: `#/components/schemas/${schemaBase}Update`,
-        description: 'Fields to apply to every matched record. At least one writable field required.'
+        description:
+          'Fields to apply to every matched record. At least one writable field required.'
       } as JsonSchema,
       where: {
         type: 'array',
@@ -166,7 +169,10 @@ export function addUpdateManyPath(ctx: ResourceSpecCtx): void {
     summary: `Bulk-update ${tag}`,
     tags: [tag],
     parameters: [correlationIdHeader],
-    requestBody: { required: true, content: { 'application/json': { schema: updateManyBodySchema } } },
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: updateManyBodySchema } }
+    },
     responses: {
       '200': {
         description: 'OK',
@@ -202,14 +208,19 @@ export function addDeleteManyPath(ctx: ResourceSpecCtx): void {
   const deleteManyResponseBody: JsonSchema = {
     type: 'object',
     required: ['deleted'],
-    properties: { deleted: { type: 'array', items: {}, description: 'IDs or records of the deleted rows.' } }
+    properties: {
+      deleted: { type: 'array', items: {}, description: 'IDs or records of the deleted rows.' }
+    }
   }
   spec.paths[basePath]!.delete = {
     operationId: `deleteMany${schemaBase}`,
     summary: `Bulk-delete ${tag}`,
     tags: [tag],
     parameters: [correlationIdHeader],
-    requestBody: { required: true, content: { 'application/json': { schema: deleteManyBodySchema } } },
+    requestBody: {
+      required: true,
+      content: { 'application/json': { schema: deleteManyBodySchema } }
+    },
     responses: {
       '200': {
         description: 'OK',
@@ -267,7 +278,9 @@ export function addQueryPath(ctx: ResourceSpecCtx): void {
     responses: {
       '200': {
         description: 'OK',
-        content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } } }
+        content: {
+          'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}List` } }
+        }
       },
       '400': badRequestError,
       '501': notImplementedError,
@@ -312,7 +325,9 @@ export function addUpdateOnePath(ctx: ResourceSpecCtx): void {
     parameters: [idParam, correlationIdHeader],
     requestBody: {
       required: true,
-      content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Update` } } }
+      content: {
+        'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Update` } }
+      }
     },
     responses: {
       '200': {
@@ -349,7 +364,9 @@ export function addUpsertOnePath(ctx: ResourceSpecCtx): void {
     parameters: [idParam, correlationIdHeader],
     requestBody: {
       required: true,
-      content: { 'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Create` } } }
+      content: {
+        'application/json': { schema: { $ref: `#/components/schemas/${schemaBase}Create` } }
+      }
     },
     responses: {
       '200': {
@@ -374,7 +391,11 @@ export function addDeleteOnePath(ctx: ResourceSpecCtx): void {
   const { spec, schemaBase, tag, itemPath, envelope, idParam } = ctx
   spec.paths[itemPath] ??= {}
   const deleteOneResponse: JsonSchema = withEnvelope(
-    { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean', example: true } } },
+    {
+      type: 'object',
+      required: ['deleted'],
+      properties: { deleted: { type: 'boolean', example: true } }
+    },
     envelope
   )
   spec.paths[itemPath]!.delete = {

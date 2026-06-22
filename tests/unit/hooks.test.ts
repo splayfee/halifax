@@ -120,6 +120,11 @@ function makeResource(
   return {
     routePrefix: 'rows',
     fields: [{ name: 'id', writable: false }, { name: 'name' }, { name: 'secret' }],
+    permissions: {
+      allowUpdateMany: true,
+      allowDeleteMany: true,
+      allowUpsertOne: true
+    },
     repository: makeRepo(repoOverrides),
     hooks
   }

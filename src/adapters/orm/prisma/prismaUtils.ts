@@ -29,9 +29,7 @@ export function isIdentityInsertError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
   const cause = (error as Record<string, unknown>).cause
   return (
-    typeof cause === 'object' &&
-    cause !== null &&
-    (cause as Record<string, unknown>).code === 544
+    typeof cause === 'object' && cause !== null && (cause as Record<string, unknown>).code === 544
   )
 }
 

@@ -14,6 +14,11 @@ function makeResource(overrides: Partial<ResourceDefinition> = {}): ResourceDefi
       { name: 'id', writable: false },
       { name: 'title', writable: true }
     ],
+    permissions: {
+      allowUpdateMany: true,
+      allowDeleteMany: true,
+      allowUpsertOne: true
+    },
     repository: {
       fields: [],
       async getOne() {

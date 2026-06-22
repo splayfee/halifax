@@ -42,10 +42,13 @@ const DRIZZLE_COMPARISONS: ComparisonStrategyTable<SQL | undefined, AnyColumn> =
   [SqlComparison.GreaterThanOrEqual]: (col, { v1 }) => gte(col, v1 as QueryScalar),
   [SqlComparison.LessThan]: (col, { v1 }) => lt(col, v1 as QueryScalar),
   [SqlComparison.LessThanOrEqual]: (col, { v1 }) => lte(col, v1 as QueryScalar),
-  [SqlComparison.In]: (col, { v1 }) => inArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[]),
-  [SqlComparison.NotIn]: (col, { v1 }) => notInArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[]),
+  [SqlComparison.In]: (col, { v1 }) =>
+    inArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[]),
+  [SqlComparison.NotIn]: (col, { v1 }) =>
+    notInArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[]),
   [SqlComparison.Between]: (col, { v1, v2 }) => between(col, v1 as QueryScalar, v2 as QueryScalar),
-  [SqlComparison.NotBetween]: (col, { v1, v2 }) => notBetween(col, v1 as QueryScalar, v2 as QueryScalar),
+  [SqlComparison.NotBetween]: (col, { v1, v2 }) =>
+    notBetween(col, v1 as QueryScalar, v2 as QueryScalar),
   [SqlComparison.IsNull]: (col) => isNull(col),
   [SqlComparison.IsNotNull]: (col) => isNotNull(col),
   [SqlComparison.Contains]: (col, { v1 }) => like(col, `%${escapeLike(String(v1 ?? ''))}%`),

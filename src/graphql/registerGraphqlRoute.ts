@@ -83,7 +83,9 @@ export function registerGraphqlRoute(
 
       const validationErrors = validate(schema, document)
       if (validationErrors.length) {
-        await res.status(400).json({ errors: validationErrors.map((e) => ({ message: e.message })) })
+        await res
+          .status(400)
+          .json({ errors: validationErrors.map((e) => ({ message: e.message })) })
         return
       }
 

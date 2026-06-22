@@ -36,6 +36,23 @@ All publicly exported TypeScript type aliases, enums, and constants. Interfaces 
 | ------------- | ---------------- | ------------------------------------- | ----------------------------------------------------------------------- |
 | `QueryScalar` | `@edium/halifax` | `string \| number \| boolean \| null` | Scalar value accepted by filter comparison operators in `IQueryFilter`. |
 
+### Validation (see [README_VALIDATION.md](./README_VALIDATION.md))
+
+| Type                  | Import path      | Definition                                                                | Description                                                 |
+| --------------------- | ---------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `ValidationResult<T>` | `@edium/halifax` | `{ success: true; value: T } \| { success: false; errors: FieldError[] }` | Outcome of `ISchemaValidator.validate`.                     |
+| `FieldError`          | `@edium/halifax` | `{ path: string; message: string }`                                       | A single validation failure (dotted `path`, `''` = root).   |
+| `JsonSchema`          | `@edium/halifax` | `Record<string, unknown>`                                                 | Opaque JSON Schema object merged into the OpenAPI document. |
+
+### Stored procedures (see [README_EXECUTE.md](./README_EXECUTE.md))
+
+| Type               | Import path      | Definition                                                                     | Description                                         |
+| ------------------ | ---------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `ExecuteScalar`    | `@edium/halifax` | `string \| number \| boolean`                                                  | A JSON-safe stored-procedure argument scalar.       |
+| `ExecuteValue`     | `@edium/halifax` | `ExecuteScalar \| ExecuteScalar[]`                                             | A single argument value (scalar or array).          |
+| `ExecuteParams`    | `@edium/halifax` | `Record<string, ExecuteValue>`                                                 | Named arguments in a stored-procedure request body. |
+| `ExecuteParamType` | `@edium/halifax` | `'string' \| 'number' \| 'boolean' \| 'string[]' \| 'number[]' \| 'boolean[]'` | Declared JSON type of a parameter.                  |
+
 ### HTTP adapter type aliases
 
 These are aliased to `CrudApiOptions` — documented in [README_INTERFACES.md](./README_INTERFACES.md).

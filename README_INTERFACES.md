@@ -27,8 +27,8 @@ Full definition of a Halifax resource. Pass an array of these to `createExpressC
 | `maxFilterDepth`      | `number`                                | no       | Maximum nesting depth for `where` clause children. Defaults to 4.                                                                                                                                                                          |
 | `cache`               | `ResourceCacheConfig \| false`          | no       | Per-resource cache TTL. `false` disables caching even when an API-wide default is set.                                                                                                                                                     |
 | `envelope`            | `string \| null`                        | no       | Wraps every success response body under this key (e.g. `'data'`). Overrides the API-wide `envelope` option.                                                                                                                                |
-| `graphql`             | `boolean`                               | no       | When `false`, excludes this resource from the auto-generated GraphQL schema while keeping it on REST. Defaults to `true` when GraphQL is enabled.                                                                                           |
-| `bypassTenantRoles`   | `string[]`                              | no       | Roles or permission slugs whose holders bypass tenant scoping for read operations on this resource. Overrides `TenantOptions.bypassRoles`. Set to `[]` to prevent bypass on this resource even when a global list is configured.            |
+| `graphql`             | `boolean`                               | no       | When `false`, excludes this resource from the auto-generated GraphQL schema while keeping it on REST. Defaults to `true` when GraphQL is enabled.                                                                                          |
+| `bypassTenantRoles`   | `string[]`                              | no       | Roles or permission slugs whose holders bypass tenant scoping for read operations on this resource. Overrides `TenantOptions.bypassRoles`. Set to `[]` to prevent bypass on this resource even when a global list is configured.           |
 
 ---
 
@@ -69,7 +69,7 @@ Declares a relation that callers may eager-load via `?include=`.
 
 Import: `@edium/halifax`
 
-Per-action toggles controlling which CRUD endpoints are registered for a resource. All actions default to `true`. List only the actions to disable.
+Per-action toggles controlling which CRUD endpoints are registered for a resource. All actions default to `true` **except the bulk writes `allowUpdateMany` and `allowDeleteMany`, which default to `false`** (3.0.0, secure-by-default). List the single-record actions you want to disable, and set a bulk flag to `true` to opt into it.
 
 | Property                        | Default | Route affected          |
 | ------------------------------- | ------- | ----------------------- |
@@ -158,12 +158,12 @@ Import: `@edium/halifax`
 
 Contract for pluggable authentication and authorization strategies. Implement this to create a custom strategy.
 
-| Member          | Signature                                                   | Required | Description                                                                                                                                    |
-| --------------- | ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `authenticate`    | `(req: HttpRequest) => AuthContext \| Promise<AuthContext>`      | yes      | Authenticate the request. Throw `AuthenticationError` (→ 401) or `AuthorizationError` (→ 403) on failure.                                      |
-| `authorize`       | `(params: AuthorizeParams) => boolean \| Promise<boolean>`       | no       | Gate each **auto-CRUD** action against the auth context. When absent, Halifax checks `requiredPermissions` against `auth.roles`/`auth.permissions` directly. |
+| Member            | Signature                                                        | Required | Description                                                                                                                                                                             |
+| ----------------- | ---------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authenticate`    | `(req: HttpRequest) => AuthContext \| Promise<AuthContext>`      | yes      | Authenticate the request. Throw `AuthenticationError` (→ 401) or `AuthorizationError` (→ 403) on failure.                                                                               |
+| `authorize`       | `(params: AuthorizeParams) => boolean \| Promise<boolean>`       | no       | Gate each **auto-CRUD** action against the auth context. When absent, Halifax checks `requiredPermissions` against `auth.roles`/`auth.permissions` directly.                            |
 | `authorizeCustom` | `(params: CustomAuthorizeParams) => boolean \| Promise<boolean>` | no       | Gate each **custom endpoint** against the auth context. When absent, Halifax uses the flat OR-match of the endpoint's `roles`. Lets a strategy apply a role hierarchy to custom routes. |
-| `openApiScheme`   | `() => SecurityScheme \| undefined`                              | no       | Return the security scheme to document in the OpenAPI spec (wires up the Swagger UI "Authorize" button).                                       |
+| `openApiScheme`   | `() => SecurityScheme \| undefined`                              | no       | Return the security scheme to document in the OpenAPI spec (wires up the Swagger UI "Authorize" button).                                                                                |
 
 ---
 
@@ -205,13 +205,13 @@ Import: `@edium/halifax`
 
 Passed to `AuthStrategy.authorizeCustom` for every custom endpoint (the custom-endpoint counterpart of `AuthorizeParams`). A custom endpoint has no CRUD action or resource, so authorization is keyed on the route.
 
-| Property              | Type                                              | Description                                                              |
-| --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------ |
-| `auth`                | `AuthContext`                                     | The resolved authentication context.                                     |
-| `method`              | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` | The HTTP verb of the custom endpoint.                                    |
-| `path`                | `string`                                          | The endpoint's route path (e.g. `'/orders/:id/fulfill'`).               |
-| `requiredPermissions` | `string[]`                                        | The roles/permissions declared on the endpoint (its `roles` argument).   |
-| `req`                 | `HttpRequest`                                     | The incoming HTTP request.                                               |
+| Property              | Type                                              | Description                                                            |
+| --------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
+| `auth`                | `AuthContext`                                     | The resolved authentication context.                                   |
+| `method`              | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` | The HTTP verb of the custom endpoint.                                  |
+| `path`                | `string`                                          | The endpoint's route path (e.g. `'/orders/:id/fulfill'`).              |
+| `requiredPermissions` | `string[]`                                        | The roles/permissions declared on the endpoint (its `roles` argument). |
+| `req`                 | `HttpRequest`                                     | The incoming HTTP request.                                             |
 
 ---
 
@@ -221,15 +221,15 @@ Import: `@edium/halifax`
 
 The options-bag argument to `HalifaxApi.addCustomEndpoint(method, path, options, handler)`. Every field is optional; defaults reproduce the positional `roles`-array call.
 
-| Property               | Type                                                                  | Default                  | Description                                                                                          |
-| ---------------------- | --------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `roles`                | `string[] \| null`                                                    | `[]`                     | Roles/permissions (OR logic). `[]` → any authenticated caller; `null` → **public** (auth skipped).   |
-| `auth`                 | `boolean`                                                             | `true`                   | `false` makes the endpoint public (same as `roles: null`).                                           |
-| `authorize`            | `(ctx: { auth: AuthContext; req: HttpRequest }) => boolean \| Promise<boolean>` | —              | One-off authorization predicate. When set, the **sole** gate (overrides `roles` + `authorizeCustom`).|
-| `useStrategyAuthorize` | `boolean`                                                             | `true`                   | Route role-gating through `AuthStrategy.authorizeCustom` when available. `false` forces the flat match.|
-| `consumes`             | `string[]`                                                            | `['application/json']`   | Accepted request `Content-Type`s (e.g. `['multipart/form-data']`).                                   |
-| `produces`             | `string[]`                                                            | `['application/json']`   | Response types negotiated against `Accept` (e.g. `['application/pdf']`).                              |
-| `openapi`              | `CustomEndpointOpenApi`                                               | —                        | OpenAPI 3.1 metadata merged into the live spec.                                                      |
+| Property               | Type                                                                            | Default                | Description                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `roles`                | `string[] \| null`                                                              | `[]`                   | Roles/permissions (OR logic). `[]` → any authenticated caller; `null` → **public** (auth skipped).      |
+| `auth`                 | `boolean`                                                                       | `true`                 | `false` makes the endpoint public (same as `roles: null`).                                              |
+| `authorize`            | `(ctx: { auth: AuthContext; req: HttpRequest }) => boolean \| Promise<boolean>` | —                      | One-off authorization predicate. When set, the **sole** gate (overrides `roles` + `authorizeCustom`).   |
+| `useStrategyAuthorize` | `boolean`                                                                       | `true`                 | Route role-gating through `AuthStrategy.authorizeCustom` when available. `false` forces the flat match. |
+| `consumes`             | `string[]`                                                                      | `['application/json']` | Accepted request `Content-Type`s (e.g. `['multipart/form-data']`).                                      |
+| `produces`             | `string[]`                                                                      | `['application/json']` | Response types negotiated against `Accept` (e.g. `['application/pdf']`).                                |
+| `openapi`              | `CustomEndpointOpenApi`                                                         | —                      | OpenAPI 3.1 metadata merged into the live spec.                                                         |
 
 ---
 
@@ -267,11 +267,11 @@ Import: `@edium/halifax`
 
 Configures multi-tenant isolation API-wide. Set on `CrudApiOptions.tenant`.
 
-| Property    | Type                                                         | Default      | Description                                                                                                                                                         |
-| ----------- | ------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resolveId`   | `(ctx: TenantResolveContext) => unknown \| Promise<unknown>` | required     | Resolves the tenant key from the auth context and request. Must come from the token/session — never from client input. Return `null`/`undefined` when none applies. |
-| `field`       | `string`                                                     | `'tenantId'` | Default column name for auto-detection: resources with a field of this name are automatically scoped on it.                                                         |
-| `strict`      | `boolean`                                                    | `true`       | When `true`, a tenant-scoped resource whose `resolveId` returns no value rejects with 403 rather than serving unscoped.                                             |
+| Property      | Type                                                         | Default      | Description                                                                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resolveId`   | `(ctx: TenantResolveContext) => unknown \| Promise<unknown>` | required     | Resolves the tenant key from the auth context and request. Must come from the token/session — never from client input. Return `null`/`undefined` when none applies.                                                                      |
+| `field`       | `string`                                                     | `'tenantId'` | Default column name for auto-detection: resources with a field of this name are automatically scoped on it.                                                                                                                              |
+| `strict`      | `boolean`                                                    | `true`       | When `true`, a tenant-scoped resource whose `resolveId` returns no value rejects with 403 rather than serving unscoped.                                                                                                                  |
 | `bypassRoles` | `string[]`                                                   | —            | Roles or permission slugs (matched against `auth.roles` OR `auth.permissions`) whose holders receive unscoped reads across all tenants. Writes are never bypassed. Per-resource `ResourceDefinition.bypassTenantRoles` takes precedence. |
 
 ---
@@ -430,12 +430,12 @@ Import: `@edium/halifax`
 
 Contract for pluggable cache backends. Implement this to use Redis, Memcached, or any other store.
 
-| Method      | Signature                                             | Description                                                                                                          |
-| ----------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `get`       | `(key: string) => Promise<unknown> \| unknown`        | Read a cached value. Returns `undefined` when absent or expired.                                                     |
-| `set`       | `(key, value, ttlSeconds?) => Promise<void> \| void`  | Write a value. `ttlSeconds` `0` or omitted means no expiry.                                                          |
-| `delete`    | `(key: string) => Promise<void> \| void`              | Delete a cached value.                                                                                               |
-| `increment` | `(key: string) => Promise<number> \| number` *(opt.)* | Atomically increment an integer key and return the new value. Implement this for safe concurrent version bumps (e.g. Redis `INCR`). When omitted, Halifax falls back to a non-atomic `get`+`set`. |
+| Method      | Signature                                             | Description                                                                                                                                                                                       |
+| ----------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get`       | `(key: string) => Promise<unknown> \| unknown`        | Read a cached value. Returns `undefined` when absent or expired.                                                                                                                                  |
+| `set`       | `(key, value, ttlSeconds?) => Promise<void> \| void`  | Write a value. `ttlSeconds` `0` or omitted means no expiry.                                                                                                                                       |
+| `delete`    | `(key: string) => Promise<void> \| void`              | Delete a cached value.                                                                                                                                                                            |
+| `increment` | `(key: string) => Promise<number> \| number` _(opt.)_ | Atomically increment an integer key and return the new value. Implement this for safe concurrent version bumps (e.g. Redis `INCR`). When omitted, Halifax falls back to a non-atomic `get`+`set`. |
 
 ---
 
@@ -460,12 +460,12 @@ Import: `@edium/halifax`
 
 Minimal structural type for a Redis client. `RedisCacheStore` uses this interface so no specific Redis package is a hard dependency. `redis` v4's `get`, `set`, and `del` satisfy it directly.
 
-| Method | Signature                                          | Description                                                                         |
-| ------ | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `get`  | `(key: string) => Promise<string \| null>`         | Read a key.                                                                         |
-| `set`  | `(key, value, options?) => Promise<unknown>`       | Write a key. `options.EX` sets TTL in seconds.                                      |
-| `del`  | `(key: string) => Promise<unknown>`                | Delete a key.                                                                       |
-| `incr` | `(key: string) => Promise<number>` *(optional)*    | Atomically increment a key. Used by `RedisCacheStore.increment` for version bumps when the client exposes this method. |
+| Method | Signature                                       | Description                                                                                                            |
+| ------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `get`  | `(key: string) => Promise<string \| null>`      | Read a key.                                                                                                            |
+| `set`  | `(key, value, options?) => Promise<unknown>`    | Write a key. `options.EX` sets TTL in seconds.                                                                         |
+| `del`  | `(key: string) => Promise<unknown>`             | Delete a key.                                                                                                          |
+| `incr` | `(key: string) => Promise<number>` _(optional)_ | Atomically increment a key. Used by `RedisCacheStore.increment` for version bumps when the client exposes this method. |
 
 ---
 
@@ -627,3 +627,92 @@ A single sort clause in an `orderBy` array.
 | -------- | ---------- | --------------------------------- |
 | `field`  | `string`   | Column to sort on.                |
 | `order`  | `SqlOrder` | Sort direction (`ASC` or `DESC`). |
+
+---
+
+## Validation (`@edium/halifax`, contract in `@edium/halifax-types`)
+
+See [README_VALIDATION.md](./README_VALIDATION.md) for usage.
+
+### `ISchemaValidator<T>`
+
+Import: `@edium/halifax` (or `@edium/halifax-types`)
+
+Validator-agnostic schema adapter wrapping a Yup/Zod/Joi/Valibot (or any) schema. Drives both request validation and OpenAPI generation.
+
+| Member          | Type                                                                     | Description                                                      |
+| --------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `validate`      | `(data: unknown) => ValidationResult<T> \| Promise<ValidationResult<T>>` | Validate (and coerce) input; never throws for ordinary failures. |
+| `toJsonSchema?` | `() => JsonSchema \| undefined`                                          | Best-effort JSON Schema for OpenAPI; optional.                   |
+
+### `CustomEndpointSchemas`
+
+Import: `@edium/halifax`
+
+The `validate` option on a custom endpoint. Each part is an `ISchemaValidator` applied to that request part (validated + coerced before the handler; `422` with `details.fieldErrors` on failure).
+
+| Property  | Type               | Description                     |
+| --------- | ------------------ | ------------------------------- |
+| `body?`   | `ISchemaValidator` | Validates/coerces `req.body`.   |
+| `query?`  | `ISchemaValidator` | Validates/coerces `req.query`.  |
+| `params?` | `ISchemaValidator` | Validates/coerces `req.params`. |
+
+---
+
+## Stored-procedure endpoints (`@edium/halifax`)
+
+See [README_EXECUTE.md](./README_EXECUTE.md) for usage.
+
+### `SqlExecutor`
+
+Import: `@edium/halifax`
+
+Backs stored-procedure endpoints. Implemented by `PrismaSqlExecutor` / `DrizzleSqlExecutor`.
+
+| Member | Type                                                           | Description                                                                                      |
+| ------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `call` | `(name: string, params: ExecuteValue[]) => Promise<unknown[]>` | Call a routine by name with positional, parameter-bound args; returns its rows (empty for void). |
+
+### `ExecuteProcedure`
+
+Import: `@edium/halifax`
+
+One registered stored procedure — becomes its own `POST` route.
+
+| Property                    | Type               | Description                                                                                                |
+| --------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `name`                      | `string`           | **Required.** Database routine name used in the SQL call.                                                  |
+| `params?`                   | `IExecuteParam[]`  | Ordered parameter declarations (order = positional binding).                                               |
+| `roles?`                    | `string[] \| null` | Authorization for this procedure (`[]` = any authed; `null` = public). Defaults to `ExecuteOptions.roles`. |
+| `path?`                     | `string`           | Route override: leading `/` = full path, else a segment under `basePath`. Defaults to kebab-cased `name`.  |
+| `summary?` / `description?` | `string`           | OpenAPI metadata.                                                                                          |
+
+### `IExecuteParam`
+
+Import: `@edium/halifax` (or `@edium/halifax-types`)
+
+| Property       | Type               | Description                                                              |
+| -------------- | ------------------ | ------------------------------------------------------------------------ |
+| `name`         | `string`           | Parameter name (request-body key + OpenAPI property).                    |
+| `type?`        | `ExecuteParamType` | `'string'`/`'number'`/`'boolean'` (+ `[]` variants). Default `'string'`. |
+| `required?`    | `boolean`          | Default `true`.                                                          |
+| `description?` | `string`           | OpenAPI description.                                                     |
+
+### `ExecuteOptions`
+
+Import: `@edium/halifax`
+
+The `execute` option on `CrudApiOptions`.
+
+| Property     | Type                 | Description                             |
+| ------------ | -------------------- | --------------------------------------- |
+| `executor`   | `SqlExecutor`        | The executor that runs routines.        |
+| `procedures` | `ExecuteProcedure[]` | Registered procedures — one route each. |
+| `basePath?`  | `string`             | Route prefix. Default `'/execute'`.     |
+| `roles?`     | `string[] \| null`   | Default authorization for every route.  |
+
+### `PrismaRawClient` / `PrismaSqlExecutorOptions` / `DrizzleDb` / `DrizzleSqlExecutorOptions`
+
+Import: `@edium/halifax` (Prisma) · `@edium/halifax/drizzle` (Drizzle)
+
+Constructor inputs for the executors. `PrismaRawClient` is the `$queryRawUnsafe`/`$executeRawUnsafe` slice of a Prisma client; `DrizzleDb` is the `execute(sql)` slice of a Drizzle db. `PrismaSqlExecutorOptions` accepts `{ dialect?: 'postgres' | 'mysql' | 'mssql' }` (auto-detected from the active provider); `DrizzleSqlExecutorOptions` accepts `{ dialect?: DrizzleSqlDialect }` = `'postgres' | 'mysql'` (Drizzle has no SQL Server driver; defaults to `postgres`).

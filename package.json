@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax",
-  "version": "2.7.0",
+  "version": "3.0.0",
   "description": "Auto-generate type-safe REST CRUD APIs from your data models. Adapter-driven: Express/Fastify/HyperExpress, Prisma (PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, SQLite), JWT/API-key auth, multi-tenancy, a dynamic query builder, and pluggable Redis caching.",
   "author": "David LaTour <david@edium.com>",
   "homepage": "https://github.com/splayfee/halifax#readme",
@@ -46,25 +46,32 @@
       "import": "./dist/adapters/orm/drizzle/index.js",
       "default": "./dist/adapters/orm/drizzle/index.js"
     },
+    "./yup": {
+      "types": "./dist/validators/yup.d.ts",
+      "import": "./dist/validators/yup.js",
+      "default": "./dist/validators/yup.js"
+    },
+    "./zod": {
+      "types": "./dist/validators/zod.d.ts",
+      "import": "./dist/validators/zod.js",
+      "default": "./dist/validators/zod.js"
+    },
+    "./joi": {
+      "types": "./dist/validators/joi.d.ts",
+      "import": "./dist/validators/joi.js",
+      "default": "./dist/validators/joi.js"
+    },
+    "./valibot": {
+      "types": "./dist/validators/valibot.d.ts",
+      "import": "./dist/validators/valibot.js",
+      "default": "./dist/validators/valibot.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "CHANGELOG.md",
-    "README.md",
-    "README_AUTH.md",
-    "README_AUTOCRUD.md",
-    "README_CACHE.md",
-    "README_HTTP_ADAPTERS.md",
-    "README_GRAPHQL.md",
-    "README_MULTITENANCY.md",
-    "README_QUERYBUILDER.md",
-    "README_REPO_ADAPTERS.md",
-    "README_HOOKS.md",
-    "README_OPENAPI.md",
-    "README_TYPES.md",
-    "README_INTERFACES.md",
-    "README_CLASSES.md",
+    "README*.md",
     "LICENSE"
   ],
   "publishConfig": {
@@ -97,7 +104,11 @@
     "fastify": ">=4.0.0",
     "hyper-express": ">=6.0.0",
     "ultimate-express": ">=2.0.0",
-    "graphql": ">=16.0.0"
+    "graphql": ">=16.0.0",
+    "joi": ">=17",
+    "valibot": ">=1",
+    "yup": ">=1",
+    "zod": ">=3.23"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
@@ -119,6 +130,18 @@
       "optional": true
     },
     "graphql": {
+      "optional": true
+    },
+    "joi": {
+      "optional": true
+    },
+    "valibot": {
+      "optional": true
+    },
+    "yup": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },
@@ -144,6 +167,7 @@
     "fastify": "^5.8.5",
     "globals": "^17.6.0",
     "hyper-express": "^6.17.3",
+    "joi": "^18.2.3",
     "pg": "^8.21.0",
     "prettier": "^3.8.4",
     "prisma": "^7.8.0",
@@ -155,7 +179,10 @@
     "typescript-eslint": "^8.61.0",
     "ultimate-express": "^2.1.1",
     "graphql": "^17.0.0",
-    "vitest": "^4.1.8"
+    "valibot": "^1.4.1",
+    "vitest": "^4.1.8",
+    "yup": "^1.7.1",
+    "zod": "^4.4.3"
   },
   "keywords": [
     "api",

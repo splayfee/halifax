@@ -78,7 +78,14 @@ export function prepareResource(
       )
   }
 
-  const resolveRepo = buildResolveRepo(resource, repository, tenantField, options, cacheStore, bustHeader)
+  const resolveRepo = buildResolveRepo(
+    resource,
+    repository,
+    tenantField,
+    options,
+    cacheStore,
+    bustHeader
+  )
   // Cast to the widest usable type once so every handler can call hooks without generics.
   const hooks = resource.hooks as
     | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>

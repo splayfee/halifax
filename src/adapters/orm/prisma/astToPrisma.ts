@@ -45,7 +45,9 @@ const PRISMA_COMPARISONS: ComparisonStrategyTable<PrismaWhere, string> = {
   [SqlComparison.In]: (field, { v1 }) => ({ [field]: { in: Array.isArray(v1) ? v1 : [v1] } }),
   [SqlComparison.NotIn]: (field, { v1 }) => ({ [field]: { notIn: Array.isArray(v1) ? v1 : [v1] } }),
   [SqlComparison.Between]: (field, { v1, v2 }) => ({ [field]: { gte: v1, lte: v2 } }),
-  [SqlComparison.NotBetween]: (field, { v1, v2 }) => ({ OR: [{ [field]: { lt: v1 } }, { [field]: { gt: v2 } }] }),
+  [SqlComparison.NotBetween]: (field, { v1, v2 }) => ({
+    OR: [{ [field]: { lt: v1 } }, { [field]: { gt: v2 } }]
+  }),
   [SqlComparison.IsNull]: (field) => ({ [field]: null }),
   [SqlComparison.IsNotNull]: (field) => ({ [field]: { not: null } }),
   [SqlComparison.Contains]: (field, { v1 }) => ({ [field]: { contains: String(v1 ?? '') } }),

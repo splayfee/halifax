@@ -65,6 +65,11 @@ function createApp(
       { name: 'id', filterable: true },
       { name: 'name', filterable: true, writable: true }
     ],
+    permissions: {
+      allowUpdateMany: true,
+      allowDeleteMany: true,
+      allowUpsertOne: true
+    },
     repository: makeWidgetRepo(),
     ...resourceOverrides
   }

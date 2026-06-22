@@ -23,11 +23,21 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🔷 **GraphQL endpoint** — opt-in GraphQL API auto-generated from the same resource definitions as REST. Every query, mutation, filter, sort, and field-level permission works identically. Includes a GraphiQL IDE, per-resource opt-out, and full tenant bypass support. See [README_GRAPHQL.md](./README_GRAPHQL.md).
 - 🪝 **Lifecycle hooks** — inject custom logic before or after any CRUD operation per resource (`beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, …). Stamp audit fields, emit events, enforce ownership, or transform results without writing a custom repository. See [README_HOOKS.md](./README_HOOKS.md).
 - 🛠️ **Custom endpoints with full Halifax context** — `registerCrudApi()` returns a `HalifaxApi` singleton. Call `api.addCustomEndpoint(method, path, roles, handler, openapi?)` to register any route — aggregates (`GROUP BY` / `HAVING`), complex joins, business actions, external-service calls — while inheriting auth, role enforcement, error serialization, content negotiation, and live OpenAPI documentation automatically. Make a route **public** (skip auth) for health checks/login/webhooks, accept **file uploads** or stream **binary responses** with per-endpoint `consumes`/`produces`, apply a **role hierarchy** via `authorizeCustom`, or gate one route with an inline `authorize` predicate. Or disable all auto-CRUD on a resource and roll every route yourself. See [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md).
+- ✅ **Validator-agnostic request validation** — attach a schema to any custom endpoint via `validate: { body, query, params }` and Halifax validates + coerces the request (422 with `details.fieldErrors` on failure) **and auto-generates the OpenAPI request schema** from it. Bring your own validator: official adapters for **Yup, Zod, Joi, and Valibot** ship as opt-in subpaths (`@edium/halifax/{yup,zod,joi,valibot}`), and **all four emit JSON Schema out of the box**, so the schemas you already have document themselves with zero rewrites. See [README_VALIDATION.md](./README_VALIDATION.md).
+- 🗄️ **Stored-procedure endpoints** — register a database routine and Halifax exposes it as its own auto-documented `POST /execute/<name>` route (kebab-cased, overridable), with typed/named parameters, per-procedure role gating, and OpenAPI generated from the parameter declarations. Off by default; works for routines that return rows **or** void on PostgreSQL, MySQL/MariaDB, and SQL Server. See [README_EXECUTE.md](./README_EXECUTE.md).
+- 🔒 **Secure-by-default permissions** — single-record CRUD, the query-builder, and single-row upsert are enabled by default; the bulk whole-collection writes (`updateMany`, `deleteMany`) are **off** unless a resource explicitly opts in, so one bad filter can't mutate or wipe a table.
 - 📦 **Companion browser client** — [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is a typed, zero-dependency client with a fluent query builder and built-in TanStack Query helpers (queries + mutation auto-invalidation). Bring your own HTTP library (fetch, axios, ky, ofetch, superagent).
 - 🧪 **Type-safe & battle-tested** — strict TypeScript, ESM, ships full `.d.ts`; hundreds of unit tests plus the full integration suite run against six real databases + Redis in CI.
 
 > [!NOTE]
-> **New in 2.7 — Custom Endpoints, fully unblocked:** custom endpoints can now host *any* route an
+> **New in 3.0 (breaking):** validator-agnostic **request validation** with auto-generated OpenAPI
+> (Yup/Zod/Joi/Valibot adapters — see [README_VALIDATION.md](./README_VALIDATION.md)); **stored-procedure
+> endpoints** via `execute` (see [README_EXECUTE.md](./README_EXECUTE.md)); and **secure-by-default
+> permissions** — the bulk writes `allowUpdateMany`/`allowDeleteMany` now default to `false` and must
+> be opted in per resource. See the [CHANGELOG](./CHANGELOG.md) for the full 3.0.0 entry and migration
+> notes.
+>
+> **New in 2.7 — Custom Endpoints, fully unblocked:** custom endpoints can host _any_ route an
 > app needs. Make one **public** (skip auth) with `roles: null`/`{ auth: false }`; accept **file
 > uploads** or stream **binary responses** with per-endpoint `consumes`/`produces`; apply a **role
 > hierarchy** by implementing `AuthStrategy.authorizeCustom`; gate a single route with an inline
@@ -49,7 +59,7 @@ The package is split into small, replaceable layers — nothing is imported into
 | Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`; role or permission slug                     |
 | Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)                                                  |
 | API docs       | OpenAPI 3.1 spec + Swagger UI (optional, zero overhead when disabled)                                                |
-| GraphQL        | Auto-generated schema from resource definitions; opt-in; GraphiQL IDE; requires `graphql` ≥ 16 peer dep             |
+| GraphQL        | Auto-generated schema from resource definitions; opt-in; GraphiQL IDE; requires `graphql` ≥ 16 peer dep              |
 
 Every HTTP adapter is interchangeable and behaves identically — same routes, status codes,
 error-body shape, and content negotiation — so you can switch frameworks without touching
@@ -174,23 +184,25 @@ app.listen(3000)
 
 ## Documentation
 
-| Guide                                                                                               | Contents                                                                                                 |
-| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [README_CLIENT.md](./README_CLIENT.md)                                                              | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples        |
-| [README_AUTOCRUD.md](./README_AUTOCRUD.md)                                                          | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
-| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)                                                | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, capabilities, custom repositories             |
-| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md)                                                | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |
-| [README_AUTH.md](./README_AUTH.md)                                                                  | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, per-field `readRoles`/`writeRoles` |
-| [README_MULTITENANCY.md](./README_MULTITENANCY.md)                                                  | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour            |
-| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)                                                  | Query-builder payload, comparisons, nested filters, portable execution                                   |
-| [README_CACHE.md](./README_CACHE.md)                                                                | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                          |
-| [README_HOOKS.md](./README_HOOKS.md)                                                                | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook    |
-| [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md)                                          | Custom endpoints: `HalifaxApi`, `addCustomEndpoint`, aggregate queries, business actions, disabling CRUD |
-| [README_GRAPHQL.md](./README_GRAPHQL.md)                                                            | GraphQL endpoint: opt-in setup, auto-generated schema, GraphiQL IDE, auth, tenant bypass for admins      |
-| [README_OPENAPI.md](./README_OPENAPI.md)                                                            | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use          |
-| [README_TYPES.md](./README_TYPES.md)                                                                | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants             |
-| [README_INTERFACES.md](./README_INTERFACES.md)                                                      | All exported interfaces — resource, auth, HTTP, repository, cache, Prisma, Drizzle, query AST            |
-| [README_CLASSES.md](./README_CLASSES.md)                                                            | All exported classes — auth strategies, HTTP adapters, ORM adapters, cache stores, error types           |
+| Guide                                                      | Contents                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [README_CLIENT.md](./README_CLIENT.md)                     | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples        |
+| [README_AUTOCRUD.md](./README_AUTOCRUD.md)                 | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
+| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)       | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, capabilities, custom repositories             |
+| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md)       | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |
+| [README_AUTH.md](./README_AUTH.md)                         | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, per-field `readRoles`/`writeRoles` |
+| [README_MULTITENANCY.md](./README_MULTITENANCY.md)         | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour            |
+| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)         | Query-builder payload, comparisons, nested filters, portable execution                                   |
+| [README_CACHE.md](./README_CACHE.md)                       | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                          |
+| [README_HOOKS.md](./README_HOOKS.md)                       | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook    |
+| [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md) | Custom endpoints: `HalifaxApi`, `addCustomEndpoint`, aggregate queries, business actions, disabling CRUD |
+| [README_VALIDATION.md](./README_VALIDATION.md)             | Validator-agnostic request validation: `ISchemaValidator`, Yup/Zod/Joi/Valibot adapters, auto-OpenAPI    |
+| [README_EXECUTE.md](./README_EXECUTE.md)                   | Stored-procedure endpoints: `execute`, per-SP routes, typed named params, `PrismaSqlExecutor`/`Drizzle`  |
+| [README_GRAPHQL.md](./README_GRAPHQL.md)                   | GraphQL endpoint: opt-in setup, auto-generated schema, GraphiQL IDE, auth, tenant bypass for admins      |
+| [README_OPENAPI.md](./README_OPENAPI.md)                   | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use          |
+| [README_TYPES.md](./README_TYPES.md)                       | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants             |
+| [README_INTERFACES.md](./README_INTERFACES.md)             | All exported interfaces — resource, auth, HTTP, repository, cache, Prisma, Drizzle, query AST            |
+| [README_CLASSES.md](./README_CLASSES.md)                   | All exported classes — auth strategies, HTTP adapters, ORM adapters, cache stores, error types           |
 
 ## Examples
 

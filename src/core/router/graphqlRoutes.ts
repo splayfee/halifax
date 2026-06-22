@@ -9,7 +9,9 @@ import type { TrackingHttpServer } from './trackingHttpServer.js'
 /** Per-resource context shared between REST registration and the GraphQL schema builder. */
 export interface GqlCtx {
   resource: ResourceDefinition
-  hooks: CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>> | undefined
+  hooks:
+    | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
+    | undefined
   resolveRepo: ResolveRepo
 }
 

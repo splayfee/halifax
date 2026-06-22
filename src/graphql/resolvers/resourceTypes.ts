@@ -87,8 +87,14 @@ export function buildResourceTypes(
     name: `${typeName}ListResult`,
     description: `Paginated list of ${typeName} records.`,
     fields: {
-      count: { type: new GraphQLNonNull(GraphQLInt), description: 'Total matching records (before pagination).' },
-      results: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(OutputType))), description: 'Records for the current page.' }
+      count: {
+        type: new GraphQLNonNull(GraphQLInt),
+        description: 'Total matching records (before pagination).'
+      },
+      results: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(OutputType))),
+        description: 'Records for the current page.'
+      }
     }
   }) as GraphQLObjectType
 
@@ -127,15 +133,24 @@ export function buildResourceTypes(
   const UpdateManyResultType = new GraphQLObjectType({
     name: `${typeName}UpdateManyResult`,
     fields: {
-      updated: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))), description: 'IDs of updated records.' },
-      results: { type: new GraphQLList(OutputType), description: 'Updated records (when the repository supports returning them).' }
+      updated: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))),
+        description: 'IDs of updated records.'
+      },
+      results: {
+        type: new GraphQLList(OutputType),
+        description: 'Updated records (when the repository supports returning them).'
+      }
     }
   }) as GraphQLObjectType
 
   const DeleteManyResultType = new GraphQLObjectType({
     name: `${typeName}DeleteManyResult`,
     fields: {
-      deleted: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))), description: 'IDs of deleted records.' }
+      deleted: {
+        type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))),
+        description: 'IDs of deleted records.'
+      }
     }
   }) as GraphQLObjectType
 

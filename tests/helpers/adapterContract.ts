@@ -93,6 +93,11 @@ export function contractResources(): ResourceDefinition[] {
         { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
         { name: 'role', filterable: false, sortable: false, selectable: false, writable: false }
       ],
+      permissions: {
+        allowUpdateMany: true,
+        allowDeleteMany: true,
+        allowUpsertOne: true
+      },
       repository: makeUserRepo([
         { id: 1, email: 'one@example.com', role: 'user' },
         { id: 2, email: 'two@example.com', role: 'user' }

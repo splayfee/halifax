@@ -1,3 +1,5 @@
 export type { PrismaDelegate, PrismaAdapterOptions, CreatePrismaResourcesOptions } from './types.js'
 export { PrismaAdapter } from './PrismaAdapter.js'
 export { createPrismaResources } from './createPrismaResources.js'
+export { PrismaSqlExecutor } from './PrismaSqlExecutor.js'
+export type { PrismaRawClient, PrismaSqlExecutorOptions } from './PrismaSqlExecutor.js'

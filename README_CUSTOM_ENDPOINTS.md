@@ -33,18 +33,16 @@ app.use(express.json())
 
 // Use registerCrudApi (not createExpressCrudRouter) to get the HalifaxApi instance back.
 const router = Router()
-const api = registerCrudApi(
-  new ExpressHttpServer(router),
-  [ordersResource],
-  { authStrategy: new ApiKeyAuthStrategy(process.env.API_KEY!) }
-)
+const api = registerCrudApi(new ExpressHttpServer(router), [ordersResource], {
+  authStrategy: new ApiKeyAuthStrategy(process.env.API_KEY!)
+})
 app.use('/api', router)
 
 // Register a custom endpoint anywhere — at startup, or lazily in another module.
 api.addCustomEndpoint(
   'POST',
   '/orders/:id/fulfill',
-  ['fulfillment'],                    // caller must have the 'fulfillment' role/permission
+  ['fulfillment'], // caller must have the 'fulfillment' role/permission
   async (req, res, ctx) => {
     const order = await fulfillOrder(req.params['id']!, ctx.auth.userId)
     if (!order) throw new NotFoundError('Order not found.')
@@ -105,13 +103,13 @@ api.addCustomEndpoint(method, path, options, handler)
 
 ### Positional form — `api.addCustomEndpoint(method, path, roles, handler, openapi?)`
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `method` | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` | HTTP verb |
-| `path` | `string` | Route path, e.g. `'/reports/summary'` or `'/orders/:id/invoice'`. Path params are available via `req.params`. |
-| `roles` | `string[] \| null` | Required roles or permission slugs. **OR logic** — any single match in `auth.roles` or `auth.permissions` grants access. Pass `[]` to allow any authenticated caller, or **`null` to make the endpoint public** (authentication is skipped — see [Public endpoints](#public-unauthenticated-endpoints)). |
-| `handler` | `CustomEndpointHandler` | Your business logic (see below). |
-| `openapi` | `CustomEndpointOpenApi \| undefined` | Optional OpenAPI 3.1 metadata merged into the live spec. |
+| Parameter | Type                                              | Description                                                                                                                                                                                                                                                                                              |
+| --------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `method`  | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` | HTTP verb                                                                                                                                                                                                                                                                                                |
+| `path`    | `string`                                          | Route path, e.g. `'/reports/summary'` or `'/orders/:id/invoice'`. Path params are available via `req.params`.                                                                                                                                                                                            |
+| `roles`   | `string[] \| null`                                | Required roles or permission slugs. **OR logic** — any single match in `auth.roles` or `auth.permissions` grants access. Pass `[]` to allow any authenticated caller, or **`null` to make the endpoint public** (authentication is skipped — see [Public endpoints](#public-unauthenticated-endpoints)). |
+| `handler` | `CustomEndpointHandler`                           | Your business logic (see below).                                                                                                                                                                                                                                                                         |
+| `openapi` | `CustomEndpointOpenApi \| undefined`              | Optional OpenAPI 3.1 metadata merged into the live spec.                                                                                                                                                                                                                                                 |
 
 Returns `this` for chaining.
 
@@ -133,7 +131,13 @@ interface CustomEndpointOptions {
   consumes?: string[]
   /** Produced response types negotiated against Accept (e.g. ['application/pdf']). Default ['application/json']. */
   produces?: string[]
-  /** OpenAPI 3.1 metadata merged into the live spec. */
+  /**
+   * Validator-agnostic schemas for `body`/`query`/`params` (Yup/Zod/Joi/Valibot). Each is validated
+   * and coerced before the handler (422 with `details.fieldErrors` on failure); a schema that can emit
+   * JSON Schema also auto-populates this endpoint's OpenAPI. See [README_VALIDATION.md](./README_VALIDATION.md).
+   */
+  validate?: { body?: ISchemaValidator; query?: ISchemaValidator; params?: ISchemaValidator }
+  /** OpenAPI 3.1 metadata merged into the live spec. Explicit metadata wins over schema-derived docs. */
   openapi?: CustomEndpointOpenApi
 }
 ```
@@ -170,7 +174,10 @@ interface CustomEndpointOpenApi {
   tags?: string[]
   parameters?: OpenApiParameter[]
   requestBody?: { required: boolean; content: { 'application/json': { schema: JsonSchema } } }
-  responses?: Record<string, { description: string; content?: { 'application/json': { schema: JsonSchema } } }>
+  responses?: Record<
+    string,
+    { description: string; content?: { 'application/json': { schema: JsonSchema } } }
+  >
   // responses defaults to { '200': { description: 'OK' } } when omitted
 }
 ```
@@ -181,13 +188,13 @@ interface CustomEndpointOpenApi {
 
 Every custom endpoint automatically receives the same middleware stack Halifax applies to its generated CRUD routes:
 
-| Feature | Behaviour |
-|---------|-----------|
-| **Authentication** | `authStrategy.authenticate(req)` runs before your handler. Unauthenticated requests are rejected with the strategy's error (typically 401). Skipped entirely for [public endpoints](#public-unauthenticated-endpoints) (`roles: null` / `auth: false`). |
-| **Authorization** | When `roles` is non-empty, the caller must hold at least one (OR logic). A strategy that implements [`authorizeCustom`](#hierarchical-authorization-with-authorizecustom) gets to apply its own model (e.g. a role hierarchy) instead of the flat match; a per-endpoint [`authorize` predicate](#per-endpoint-authorize-predicate) overrides both. Denied callers receive 403. |
-| **Error serialization** | Throw any Halifax error class (`NotFoundError`, `BadRequestError`, `AuthorizationError`, `UnprocessableEntityError`, …) and Halifax serializes it as `{ errors: [{ code, message }] }` with the correct status code. Unhandled exceptions become 500. |
-| **Content-Type negotiation** | By default `POST`/`PUT`/`PATCH`/`DELETE` requests with a non-JSON body receive 415, and a request whose `Accept` excludes `application/json` receives 406. Override per endpoint with [`consumes` / `produces`](#content-negotiation-uploads--binary-responses). |
-| **`X-Correlation-ID` echo** | When the request carries an `X-Correlation-ID` header, the same value is echoed back on the response. |
+| Feature                      | Behaviour                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Authentication**           | `authStrategy.authenticate(req)` runs before your handler. Unauthenticated requests are rejected with the strategy's error (typically 401). Skipped entirely for [public endpoints](#public-unauthenticated-endpoints) (`roles: null` / `auth: false`).                                                                                                                        |
+| **Authorization**            | When `roles` is non-empty, the caller must hold at least one (OR logic). A strategy that implements [`authorizeCustom`](#hierarchical-authorization-with-authorizecustom) gets to apply its own model (e.g. a role hierarchy) instead of the flat match; a per-endpoint [`authorize` predicate](#per-endpoint-authorize-predicate) overrides both. Denied callers receive 403. |
+| **Error serialization**      | Throw any Halifax error class (`NotFoundError`, `BadRequestError`, `AuthorizationError`, `UnprocessableEntityError`, …) and Halifax serializes it as `{ errors: [{ code, message }] }` with the correct status code. Unhandled exceptions become 500.                                                                                                                          |
+| **Content-Type negotiation** | By default `POST`/`PUT`/`PATCH`/`DELETE` requests with a non-JSON body receive 415, and a request whose `Accept` excludes `application/json` receives 406. Override per endpoint with [`consumes` / `produces`](#content-negotiation-uploads--binary-responses).                                                                                                               |
+| **`X-Correlation-ID` echo**  | When the request carries an `X-Correlation-ID` header, the same value is echoed back on the response.                                                                                                                                                                                                                                                                          |
 
 ---
 
@@ -205,7 +212,7 @@ api.addCustomEndpoint('GET', '/health', null, async (_req, res) => {
 
 // Options bag — auth: false is equivalent
 api.addCustomEndpoint('POST', '/login', { auth: false }, async (req, res) => {
-  const session = await authenticateUser(req.body)          // your own login logic
+  const session = await authenticateUser(req.body) // your own login logic
   if (!session) throw new BadRequestError('Invalid credentials.')
   await res.status(200).json({ ok: true })
 })
@@ -235,7 +242,9 @@ exact authorization model you already apply to auto-CRUD via `requiredPermission
 
 ```ts
 class SessionAuthStrategy implements AuthStrategy {
-  authenticate(req) { /* … resolve { roles, permissions, claims: { roleValue } } … */ }
+  authenticate(req) {
+    /* … resolve { roles, permissions, claims: { roleValue } } … */
+  }
 
   // CRUD routes — value-threshold check (lower value = more privileged)
   authorize({ auth, requiredPermissions }) {
@@ -251,7 +260,7 @@ class SessionAuthStrategy implements AuthStrategy {
 
 ```ts
 // Now a Manager-gated custom endpoint is satisfied by Manager AND any higher role:
-api.addCustomEndpoint('POST', '/invite', ['role:3'], inviteHandler)   // role:3 = Manager threshold
+api.addCustomEndpoint('POST', '/invite', ['role:3'], inviteHandler) // role:3 = Manager threshold
 ```
 
 `authorizeCustom` receives `{ auth, method, path, requiredPermissions, req }` (the `roles` array you
@@ -274,7 +283,7 @@ api.addCustomEndpoint(
   {
     authorize: async ({ auth, req }) => {
       const order = await db.order.findUnique({ where: { id: Number(req.params.id) } })
-      return order?.ownerId === auth.userId      // false → 403
+      return order?.ownerId === auth.userId // false → 403
     }
   },
   async (req, res) => {
@@ -306,7 +315,7 @@ api.addCustomEndpoint(
   '/companies/:id/logo',
   { roles: ['admin'], consumes: ['multipart/form-data'] },
   async (req, res) => {
-    const url = await uploadLogoFromRequest(req.raw)        // your multipart handling
+    const url = await uploadLogoFromRequest(req.raw) // your multipart handling
     await res.status(200).json({ logoUrl: url })
   }
 )
@@ -317,9 +326,9 @@ api.addCustomEndpoint(
   '/reports/scans/:id',
   { roles: ['viewer', 'admin'], produces: ['application/pdf'] },
   async (req, res) => {
-    const pdf = await renderScanReport(req.params.id)       // a Buffer
+    const pdf = await renderScanReport(req.params.id) // a Buffer
     res.setHeader?.('Content-Type', 'application/pdf')
-    res.raw.end(pdf)                                        // stream via the raw framework response
+    res.raw.end(pdf) // stream via the raw framework response
   }
 )
 ```
@@ -338,7 +347,7 @@ Notes:
 ## Multiple credentials with `CompositeAuthStrategy`
 
 When a single route must be reachable by **more than one** kind of credential — e.g. an interactive
-**session** *or* a programmatic **API key** — combine strategies with `CompositeAuthStrategy`. It
+**session** _or_ a programmatic **API key** — combine strategies with `CompositeAuthStrategy`. It
 tries each in order and adopts the first that authenticates the request:
 
 ```ts
@@ -366,37 +375,31 @@ strategy actually authenticated the request, so each credential keeps its own au
 When the API was configured with `openapi: { enabled: true }`, the live spec is a mutable object serialized on each request to `/openapi.json`. Custom endpoints appear in the spec and Swagger UI the moment they are registered — there is no restart required.
 
 ```ts
-api.addCustomEndpoint(
-  'GET',
-  '/reports/sales-summary',
-  ['analyst'],
-  handler,
-  {
-    summary: 'Sales summary by category',
-    description: 'Aggregates revenue and count per product category. Use ?minTotal to filter.',
-    tags: ['Reports'],
-    parameters: [
-      {
-        name: 'minTotal',
-        in: 'query',
-        description: 'Minimum total revenue threshold (HAVING clause).',
-        schema: { type: 'number' }
-      }
-    ],
-    responses: {
-      '200': {
-        description: 'Array of category summaries',
-        content: {
-          'application/json': {
-            schema: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  category: { type: 'string' },
-                  count:    { type: 'integer' },
-                  total:    { type: 'number' }
-                }
+api.addCustomEndpoint('GET', '/reports/sales-summary', ['analyst'], handler, {
+  summary: 'Sales summary by category',
+  description: 'Aggregates revenue and count per product category. Use ?minTotal to filter.',
+  tags: ['Reports'],
+  parameters: [
+    {
+      name: 'minTotal',
+      in: 'query',
+      description: 'Minimum total revenue threshold (HAVING clause).',
+      schema: { type: 'number' }
+    }
+  ],
+  responses: {
+    '200': {
+      description: 'Array of category summaries',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                category: { type: 'string' },
+                count: { type: 'integer' },
+                total: { type: 'number' }
               }
             }
           }
@@ -404,7 +407,7 @@ api.addCustomEndpoint(
       }
     }
   }
-)
+})
 ```
 
 If you omit the `openapi` argument entirely, the endpoint is registered and works normally — it just won't appear in the spec.
@@ -451,7 +454,7 @@ api.addCustomEndpoint(
 api.addCustomEndpoint(
   'POST',
   '/orders/:id/approve',
-  ['finance', 'admin'],             // finance OR admin can approve
+  ['finance', 'admin'], // finance OR admin can approve
   async (req, res, ctx) => {
     const orderId = req.params['id']!
     const order = await orderService.approve(orderId, { approvedBy: ctx.auth.userId })
@@ -482,16 +485,16 @@ api.addCustomEndpoint(
     const rows = await prisma.saleRecord.groupBy({
       by: ['category'],
       _count: { id: true },
-      _sum:   { amount: true },
+      _sum: { amount: true },
       having: { amount: { _sum: { gte: minTotal } } },
       orderBy: { _sum: { amount: 'desc' } }
     })
 
     await res.status(200).json(
-      rows.map(r => ({
+      rows.map((r) => ({
         category: r.category,
-        count:    r._count.id,
-        total:    r._sum.amount
+        count: r._count.id,
+        total: r._sum.amount
       }))
     )
   },
@@ -531,13 +534,13 @@ api.addCustomEndpoint(
     if (!invoice) throw new NotFoundError(`Order ${orderId} not found.`)
 
     await res.status(200).json({
-      orderId:    invoice.id,
-      issuedAt:   new Date().toISOString(),
-      customer:   invoice.customer,
-      lineItems:  invoice.lines.map(l => ({
-        sku:      l.product.sku,
-        name:     l.product.name,
-        qty:      l.quantity,
+      orderId: invoice.id,
+      issuedAt: new Date().toISOString(),
+      customer: invoice.customer,
+      lineItems: invoice.lines.map((l) => ({
+        sku: l.product.sku,
+        name: l.product.name,
+        qty: l.quantity,
         subtotal: l.quantity * l.unitPrice
       })),
       total: invoice.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)
@@ -571,7 +574,7 @@ api.addCustomEndpoint(
 
     await notificationService.send({
       recipientId: String(body['recipientId']),
-      message:     body['message']
+      message: body['message']
     })
 
     await res.status(202).json({ queued: true })
@@ -588,7 +591,7 @@ api.addCustomEndpoint(
             required: ['recipientId', 'message'],
             properties: {
               recipientId: { type: 'string' },
-              message:     { type: 'string', description: 'Max 500 characters.' }
+              message: { type: 'string', description: 'Max 500 characters.' }
             }
           }
         }
@@ -611,10 +614,18 @@ api.addCustomEndpoint(
 const api = registerCrudApi(server, resources, options)
 
 api
-  .addCustomEndpoint('GET',  '/reports/revenue',    ['analyst'], revenueHandler,   { summary: 'Revenue report'   })
-  .addCustomEndpoint('GET',  '/reports/churn',      ['analyst'], churnHandler,     { summary: 'Churn report'     })
-  .addCustomEndpoint('POST', '/admin/reindex',      ['admin'],   reindexHandler,   { summary: 'Trigger reindex'  })
-  .addCustomEndpoint('POST', '/admin/clear-cache',  ['admin'],   clearCacheHandler, { summary: 'Flush all caches' })
+  .addCustomEndpoint('GET', '/reports/revenue', ['analyst'], revenueHandler, {
+    summary: 'Revenue report'
+  })
+  .addCustomEndpoint('GET', '/reports/churn', ['analyst'], churnHandler, {
+    summary: 'Churn report'
+  })
+  .addCustomEndpoint('POST', '/admin/reindex', ['admin'], reindexHandler, {
+    summary: 'Trigger reindex'
+  })
+  .addCustomEndpoint('POST', '/admin/clear-cache', ['admin'], clearCacheHandler, {
+    summary: 'Flush all caches'
+  })
 ```
 
 ---
@@ -639,15 +650,15 @@ const ordersResource: ResourceDefinition = {
     { name: 'createdAt' }
   ],
   permissions: {
-    allowCreate:                    false,
-    allowReadMany:                  false,
-    allowReadOne:                   false,
-    allowUpdateOne:                 false,
-    allowUpdateMany:                false,
-    allowUpsertOne:                 false,
-    allowDeleteOne:                 false,
-    allowDeleteMany:                false,
-    allowReadManyWithQueryBuilder:  false
+    allowCreate: false,
+    allowReadMany: false,
+    allowReadOne: false,
+    allowUpdateOne: false,
+    allowUpdateMany: false,
+    allowUpsertOne: false,
+    allowDeleteOne: false,
+    allowDeleteMany: false,
+    allowReadManyWithQueryBuilder: false
   }
 }
 
@@ -713,10 +724,18 @@ const api = registerCrudApi(server, [], {
 })
 
 api
-  .addCustomEndpoint('GET',    '/v1/profile',         [], profileHandler,    { summary: 'Get current user profile' })
-  .addCustomEndpoint('PATCH',  '/v1/profile',         [], updateProfileHandler, { summary: 'Update profile' })
-  .addCustomEndpoint('GET',    '/v1/dashboard',       [], dashboardHandler,  { summary: 'Dashboard summary data' })
-  .addCustomEndpoint('POST',   '/v1/password/reset',  [], resetPwdHandler,   { summary: 'Request a password reset' })
+  .addCustomEndpoint('GET', '/v1/profile', [], profileHandler, {
+    summary: 'Get current user profile'
+  })
+  .addCustomEndpoint('PATCH', '/v1/profile', [], updateProfileHandler, {
+    summary: 'Update profile'
+  })
+  .addCustomEndpoint('GET', '/v1/dashboard', [], dashboardHandler, {
+    summary: 'Dashboard summary data'
+  })
+  .addCustomEndpoint('POST', '/v1/password/reset', [], resetPwdHandler, {
+    summary: 'Request a password reset'
+  })
 ```
 
 This is the "full escape hatch" — Halifax acts purely as an auth + error-handling + OpenAPI scaffolding layer, and you own 100% of the route logic.
@@ -726,16 +745,22 @@ This is the "full escape hatch" — Halifax acts purely as an auth + error-handl
 The most common pattern is to use auto-CRUD for the 70% of resources that are pure CRUD, and `addCustomEndpoint` for the 30% that need business logic. No special configuration is needed — just register your custom endpoints after `registerCrudApi` returns:
 
 ```ts
-const api = registerCrudApi(server, [
-  postsResource,    // pure CRUD — Halifax handles everything
-  usersResource,    // pure CRUD
-  tagsResource      // pure CRUD
-], options)
+const api = registerCrudApi(
+  server,
+  [
+    postsResource, // pure CRUD — Halifax handles everything
+    usersResource, // pure CRUD
+    tagsResource // pure CRUD
+  ],
+  options
+)
 
 // Only the business-logic endpoints need addCustomEndpoint
 api
-  .addCustomEndpoint('POST', '/posts/:id/publish',  ['editor'], publishHandler,  { tags: ['Posts']  })
-  .addCustomEndpoint('GET',  '/reports/engagement', ['analyst'], engagementHandler, { tags: ['Reports'] })
+  .addCustomEndpoint('POST', '/posts/:id/publish', ['editor'], publishHandler, { tags: ['Posts'] })
+  .addCustomEndpoint('GET', '/reports/engagement', ['analyst'], engagementHandler, {
+    tags: ['Reports']
+  })
 ```
 
 ---
@@ -744,15 +769,15 @@ api
 
 Throw any Halifax error class inside a handler to get a structured JSON response with the right HTTP status code. The response shape is always `{ errors: [{ code, message }] }`.
 
-| Class | Status | `code` |
-|-------|--------|--------|
-| `BadRequestError` | 400 | `BAD_REQUEST` |
-| `AuthenticationError` | 401 | `UNAUTHORIZED` |
-| `AuthorizationError` | 403 | `FORBIDDEN` |
-| `NotFoundError` | 404 | `NOT_FOUND` |
-| `ConflictError` | 409 | `CONFLICT` |
-| `UnprocessableEntityError` | 422 | `UNPROCESSABLE_ENTITY` |
-| `ServerError` | 500 | `INTERNAL_ERROR` |
+| Class                      | Status | `code`                 |
+| -------------------------- | ------ | ---------------------- |
+| `BadRequestError`          | 400    | `BAD_REQUEST`          |
+| `AuthenticationError`      | 401    | `UNAUTHORIZED`         |
+| `AuthorizationError`       | 403    | `FORBIDDEN`            |
+| `NotFoundError`            | 404    | `NOT_FOUND`            |
+| `ConflictError`            | 409    | `CONFLICT`             |
+| `UnprocessableEntityError` | 422    | `UNPROCESSABLE_ENTITY` |
+| `ServerError`              | 500    | `INTERNAL_ERROR`       |
 
 ```ts
 import { NotFoundError, BadRequestError } from '@edium/halifax'

@@ -164,15 +164,28 @@ export const DEFAULT_PAGE_LIMIT = 5000
  */
 export const MAX_PAGE_LIMIT = 5000
 
-/** Default permissions applied to every resource — all CRUD operations enabled. */
+/**
+ * Default permissions applied to every resource.
+ *
+ * **Secure-by-default (changed in 3.0.0):** every single-record verb, the query-builder, and the
+ * single-record upsert are enabled. Only the **bulk / whole-collection writes** are **off** and must
+ * be opted into per resource:
+ * - `allowUpdateMany` — `PATCH /{resource}` (mass update)
+ * - `allowDeleteMany` — `DELETE /{resource}` (mass delete)
+ *
+ * A single bad filter on a mass write can mutate or destroy an entire (tenant's) table in one call,
+ * so these two are not exposed unless a resource explicitly sets the flag to `true`. Single-record
+ * verbs — including `allowUpsertOne` (`PUT /{resource}/:id`), which only ever touches one row — stay
+ * on by default.
+ */
 export const defaultCrudPermissions: Required<CrudPermissions> = {
   allowCreate: true,
   allowReadOne: true,
   allowReadMany: true,
   allowReadManyWithQueryBuilder: true,
   allowUpdateOne: true,
-  allowUpdateMany: true,
+  allowUpdateMany: false,
   allowUpsertOne: true,
   allowDeleteOne: true,
-  allowDeleteMany: true
+  allowDeleteMany: false
 }

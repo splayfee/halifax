@@ -3,6 +3,56 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0]
+
+`@edium/halifax`, `@edium/halifax-types`, and `@edium/halifax-client` are all released together at
+`3.0.0`.
+
+### Changed — BREAKING
+
+- **Secure-by-default permissions.** `defaultCrudPermissions` now disables the **bulk / whole-collection
+  writes** that a single bad filter could use to mutate or destroy an entire (tenant's) table:
+  `allowUpdateMany` (`PATCH /{resource}`) and `allowDeleteMany` (`DELETE /{resource}`) now default to
+  **`false`**. Every single-record verb remains on by default — `create`, `readOne`, `readMany`, the
+  query-builder `POST /{resource}/query`, `updateOne`, `deleteOne`, and `upsertOne`
+  (`PUT /{resource}/:id`, which only ever touches one row).
+
+  **Migration:** any resource that needs a bulk verb must opt in explicitly:
+
+  ```ts
+  { routePrefix: 'widgets', repository, fields,
+    permissions: { allowUpdateMany: true, allowDeleteMany: true } }
+  ```
+
+### Added
+
+- **Validator-agnostic request validation for custom endpoints.** `addCustomEndpoint`'s options bag
+  accepts `validate: { body?, query?, params? }`, each an `ISchemaValidator`. The request part is
+  validated and coerced before the handler runs; a failure short-circuits with `422` and a
+  `details.fieldErrors` list. When a schema can emit a JSON Schema, the endpoint's OpenAPI
+  `requestBody`/`parameters` are **auto-generated** from it (explicit `openapi` metadata still wins).
+  See [README_VALIDATION.md](./README_VALIDATION.md).
+
+- **`ISchemaValidator` interface + official adapters.** The validator-agnostic contract
+  (`ISchemaValidator`, `ValidationResult`, `FieldError`, `JsonSchema`) lives in `@edium/halifax-types`
+  and is shared by the server and `@edium/halifax-client`. Adapters ship as opt-in subpaths for
+  **Yup, Zod, Joi, and Valibot** — `@edium/halifax-types/{yup,zod,joi,valibot}` (re-exported for
+  convenience as `@edium/halifax/{yup,zod,joi,valibot}`). Each validator is an optional peer
+  dependency, so importing one never pulls in the others. **All four adapters emit a JSON Schema for
+  auto-OpenAPI** out of the box — Zod via native `z.toJSONSchema`, Yup and Joi via `schema.describe()`,
+  Valibot via schema-structure traversal — so existing schemas document themselves with zero rewrites.
+
+- **Stored-procedure endpoints (`execute`, off by default).** Like GraphQL, configured via
+  `execute: { executor, procedures }`. **Each registered procedure becomes its own auto-documented
+  `POST` route** — at `${basePath}/<kebab-name>` by default (e.g. `get_report` → `/execute/get-report`),
+  or a `path` you supply. Parameters are declared (`{ name, type, required }`), the JSON request body
+  is keyed by those names, validated (`422` on missing/unknown/wrong-typed), then bound positionally.
+  Each procedure takes its own `roles`; an unregistered name simply has no route (clean `404`). Ships
+  `PrismaSqlExecutor` (PostgreSQL, MySQL/MariaDB, SQL Server) and `DrizzleSqlExecutor` (PostgreSQL,
+  MySQL), which "just work" for routines that return rows **or** void — Postgres falls back from
+  `SELECT * FROM fn(…)` to `CALL proc(…)` automatically, MySQL uses `CALL`, and SQL Server uses `EXEC`.
+  SQLite has no stored routines (the executor throws). See [README_EXECUTE.md](./README_EXECUTE.md).
+
 ## [2.7.0]
 
 ### Added
@@ -35,7 +85,7 @@ All notable changes to this project are documented here. This project adheres to
 
 - **`CompositeAuthStrategy`** — a new strategy that combines several strategies and adopts the first
   one that authenticates a request, so a single route can be reached by more than one credential
-  (e.g. an interactive **session** *or* a programmatic **API key** whose scopes map to
+  (e.g. an interactive **session** _or_ a programmatic **API key** whose scopes map to
   `auth.permissions`). Authorization (`authorize` / `authorizeCustom`) and the OpenAPI security
   scheme are delegated to whichever member strategy actually authenticated the request.
 
@@ -272,7 +322,7 @@ All notable changes to this project are documented here. This project adheres to
   `.every()` (ALL permissions required), while the fallback path in `handlerUtils.ts` correctly
   used `.some()` (ANY single permission grants access). The strategies were wrong. All four paths
   now delegate to a shared `checkRequiredPermissions()` utility that applies `.some()` semantics:
-  a caller who holds *any one* of the listed permissions is authorized. This matches the documented
+  a caller who holds _any one_ of the listed permissions is authorized. This matches the documented
   behavior of `readRoles`/`writeRoles` at the field level and is a consistent read of "required
   permissions" as an OR list. **If you relied on the undocumented ALL-must-match behavior,
   tighten your permission model accordingly.**
@@ -325,7 +375,7 @@ All notable changes to this project are documented here. This project adheres to
 - **`DrizzleAdapter` reports `supportsIncludes: false`** — the adapter has always silently ignored
   `?include=` requests because Drizzle has no built-in relation eager-loading surface compatible
   with Halifax's interface. The `capabilities` property now explicitly sets `supportsIncludes:
-  false`, which causes the router to reject `?include=` with `422 Unprocessable Entity` instead
+false`, which causes the router to reject `?include=` with `422 Unprocessable Entity` instead
   of silently returning records with no related data.
 
 - **`InMemoryCacheStore` memory growth bounded** — the store previously only evicted expired
@@ -337,7 +387,7 @@ All notable changes to this project are documented here. This project adheres to
 - **`CacheStore.increment` — atomic cache version bumps** — `createCachingRepository` previously
   incremented the version key with a non-atomic `GET` + `SET`, creating a race window under
   concurrent writes on Redis. The `CacheStore` interface gains an optional `increment(key):
-  Promise<number> | number` method. `RedisCacheStore` implements it with Redis `INCR` (atomic
+Promise<number> | number` method. `RedisCacheStore` implements it with Redis `INCR` (atomic
   by design). `InMemoryCacheStore` implements it synchronously (race-free in Node.js's
   single-threaded event loop). `createCachingRepository` uses `store.increment` when available
   and falls back to the non-atomic path only for custom stores that do not implement it.
@@ -359,7 +409,7 @@ All notable changes to this project are documented here. This project adheres to
   `src/adapters/orm/prisma/astToPrisma.ts` now carries a JSDoc comment explaining that patterns
   with an interior wildcard (e.g. `'foo%bar'`) cannot be expressed via Prisma's string operators
   and fall through to an exact `equals` match, not a wildcard match. Use `CONTAINS`, `STARTS
-  WITH`, or `ENDS WITH` comparisons instead of `LIKE` when possible.
+WITH`, or `ENDS WITH` comparisons instead of `LIKE` when possible.
 
 ### Documentation
 

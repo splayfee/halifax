@@ -56,7 +56,9 @@ export function buildSchemaHelpers(gql: GqlModule): SchemaHelpers {
       case Kind.LIST:
         return ast.values.map(parseLiteralToValue)
       case Kind.OBJECT:
-        return Object.fromEntries(ast.fields.map((f) => [f.name.value, parseLiteralToValue(f.value)]))
+        return Object.fromEntries(
+          ast.fields.map((f) => [f.name.value, parseLiteralToValue(f.value)])
+        )
       default:
         return null
     }
@@ -75,24 +77,34 @@ export function buildSchemaHelpers(gql: GqlModule): SchemaHelpers {
   function fieldTypeToOutputGQL(type: FieldType | undefined, isId: boolean): GraphQLOutputType {
     if (isId) return GraphQLID
     switch (type) {
-      case 'integer': return GraphQLInt
-      case 'number': return GraphQLFloat
-      case 'boolean': return GraphQLBoolean
-      case 'object': return GraphQLJSON
+      case 'integer':
+        return GraphQLInt
+      case 'number':
+        return GraphQLFloat
+      case 'boolean':
+        return GraphQLBoolean
+      case 'object':
+        return GraphQLJSON
       case 'string':
-      default: return GraphQLString
+      default:
+        return GraphQLString
     }
   }
 
   function fieldTypeToInputGQL(type: FieldType | undefined, isId: boolean): GraphQLInputType {
     if (isId) return GraphQLID
     switch (type) {
-      case 'integer': return GraphQLInt
-      case 'number': return GraphQLFloat
-      case 'boolean': return GraphQLBoolean
-      case 'object': return GraphQLJSON
+      case 'integer':
+        return GraphQLInt
+      case 'number':
+        return GraphQLFloat
+      case 'boolean':
+        return GraphQLBoolean
+      case 'object':
+        return GraphQLJSON
       case 'string':
-      default: return GraphQLString
+      default:
+        return GraphQLString
     }
   }
 
@@ -148,11 +160,18 @@ export function buildSchemaHelpers(gql: GqlModule): SchemaHelpers {
           'Comparison operator: =, <>, <, >, <=, >=, IN, NOT IN, BETWEEN, NOT BETWEEN, ' +
           'LIKE, NOT LIKE, IS NULL, IS NOT NULL, CONTAINS, STARTS WITH, ENDS WITH.'
       },
-      value1: { type: GraphQLJSON, description: 'Primary filter value (scalar or array for IN/BETWEEN operators).' },
-      value2: { type: GraphQLJSON, description: 'Secondary value for BETWEEN / NOT BETWEEN operators.' },
+      value1: {
+        type: GraphQLJSON,
+        description: 'Primary filter value (scalar or array for IN/BETWEEN operators).'
+      },
+      value2: {
+        type: GraphQLJSON,
+        description: 'Secondary value for BETWEEN / NOT BETWEEN operators.'
+      },
       operator: {
         type: GraphQLString,
-        description: 'Logical combinator for the flat where array: AND or OR. Required on all but the last element.'
+        description:
+          'Logical combinator for the flat where array: AND or OR. Required on all but the last element.'
       },
       children: {
         type: new GraphQLList(QueryFilterInput),

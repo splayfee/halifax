@@ -11,7 +11,12 @@ import {
   normalizeEnvelope
 } from '@/core/fields.js'
 import { toPascalCase } from '@/core/stringUtils.js'
-import type { OpenApiOptions, OpenApiSpec, OpenApiSecuritySchemeObject, OpenApiParameter } from './types.js'
+import type {
+  OpenApiOptions,
+  OpenApiSpec,
+  OpenApiSecuritySchemeObject,
+  OpenApiParameter
+} from './types.js'
 import { sharedSchemas, correlationIdHeader } from './sharedSchemas.js'
 import {
   addReadManyPath,
@@ -40,7 +45,10 @@ const FIELD_TYPE_TO_JSON_SCHEMA: Record<FieldType, string> = {
   object: 'object'
 }
 
-function fieldToSchema(field: Pick<FieldDefinition, 'type' | 'format'>): { type: string; format?: string } {
+function fieldToSchema(field: Pick<FieldDefinition, 'type' | 'format'>): {
+  type: string
+  format?: string
+} {
   const type = field.type ? FIELD_TYPE_TO_JSON_SCHEMA[field.type] : 'string'
   return field.format ? { type, format: field.format } : { type }
 }
@@ -147,7 +155,9 @@ export function generateOpenApiSpec(
     spec.components.schemas[schemaBase] = { type: 'object', properties: readProperties }
 
     const writableFields = fields.filter((f) => f.name !== idField && f.writable !== false)
-    const writeProperties = Object.fromEntries(writableFields.map((f) => [f.name, fieldToSchema(f)]))
+    const writeProperties = Object.fromEntries(
+      writableFields.map((f) => [f.name, fieldToSchema(f)])
+    )
     spec.components.schemas[`${schemaBase}Create`] = { type: 'object', properties: writeProperties }
     spec.components.schemas[`${schemaBase}Update`] = { type: 'object', properties: writeProperties }
 
@@ -188,7 +198,10 @@ export function generateOpenApiSpec(
       name: 'order',
       in: 'query',
       description: `Sort expression. Format: \`field:asc\` or \`field:desc\`, comma-separated for multiple columns. Sortable fields: \`${sortableFieldNames.join('`, `')}\`.`,
-      schema: { type: 'string', example: sortableFieldNames[0] ? `${sortableFieldNames[0]}:desc` : 'id:desc' }
+      schema: {
+        type: 'string',
+        example: sortableFieldNames[0] ? `${sortableFieldNames[0]}:desc` : 'id:desc'
+      }
     }
     const filterParams: OpenApiParameter[] = filterableFields.map((f) => ({
       name: f.name,
@@ -204,8 +217,18 @@ export function generateOpenApiSpec(
       schema: { type: 'string' }
     }
     const listQueryParams: OpenApiParameter[] = [
-      { name: 'limit', in: 'query', description: 'Maximum records to return. Defaults to resource limit (up to 5000).', schema: { type: 'integer', minimum: 0 } },
-      { name: 'offset', in: 'query', description: 'Records to skip for pagination. Defaults to `0`.', schema: { type: 'integer', minimum: 0, default: 0 } },
+      {
+        name: 'limit',
+        in: 'query',
+        description: 'Maximum records to return. Defaults to resource limit (up to 5000).',
+        schema: { type: 'integer', minimum: 0 }
+      },
+      {
+        name: 'offset',
+        in: 'query',
+        description: 'Records to skip for pagination. Defaults to `0`.',
+        schema: { type: 'integer', minimum: 0, default: 0 }
+      },
       fieldsParam,
       orderParam,
       ...(includeParam ? [includeParam] : []),
@@ -222,8 +245,16 @@ export function generateOpenApiSpec(
     // ─── Path operations ─────────────────────────────────────────────────────
 
     const ctx: ResourceSpecCtx = {
-      spec, schemaBase, tag, basePath, itemPath, envelope,
-      writableFields, listQueryParams, singleQueryParams, idParam
+      spec,
+      schemaBase,
+      tag,
+      basePath,
+      itemPath,
+      envelope,
+      writableFields,
+      listQueryParams,
+      singleQueryParams,
+      idParam
     }
 
     if (permissions.allowReadMany) addReadManyPath(ctx)

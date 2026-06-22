@@ -3,7 +3,13 @@ import type { HttpServer } from '@/core/types.js'
 import { NotFoundError } from '@/errors/NotFoundError.js'
 import { authorizeRequest } from '@/core/authUtils.js'
 import { filterReadableFields, filterWritableFields } from '@/core/fieldUtils.js'
-import { applyHook, parseId, type RouteHandlerContext, wrap, writeSuccess } from '@/core/handlerUtils.js'
+import {
+  applyHook,
+  parseId,
+  type RouteHandlerContext,
+  wrap,
+  writeSuccess
+} from '@/core/handlerUtils.js'
 
 export function registerUpdateOne(
   server: HttpServer,

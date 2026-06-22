@@ -1,7 +1,7 @@
 {
   "name": "@edium/halifax-types",
-  "version": "2.3.0",
-  "description": "Shared TypeScript types and enums for @edium/halifax and @edium/halifax-client.",
+  "version": "3.0.0",
+  "description": "Shared TypeScript types, enums, and validator adapters for @edium/halifax and @edium/halifax-client.",
   "author": "David LaTour <david@edium.com>",
   "license": "MIT",
   "type": "module",
@@ -13,11 +13,31 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./yup": {
+      "types": "./dist/validators/yup.d.ts",
+      "import": "./dist/validators/yup.js",
+      "default": "./dist/validators/yup.js"
+    },
+    "./zod": {
+      "types": "./dist/validators/zod.d.ts",
+      "import": "./dist/validators/zod.js",
+      "default": "./dist/validators/zod.js"
+    },
+    "./joi": {
+      "types": "./dist/validators/joi.d.ts",
+      "import": "./dist/validators/joi.js",
+      "default": "./dist/validators/joi.js"
+    },
+    "./valibot": {
+      "types": "./dist/validators/valibot.d.ts",
+      "import": "./dist/validators/valibot.js",
+      "default": "./dist/validators/valibot.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "README.md",
+    "README*.md",
     "LICENSE"
   ],
   "publishConfig": {
@@ -27,10 +47,28 @@
   "scripts": {
     "prepublishOnly": "pnpm run build",
     "build": "rm -rf dist && tsc --build",
+    "test:unit": "vitest run tests/unit",
     "type-check": "tsc --noEmit"
   },
+  "peerDependencies": {
+    "joi": ">=17",
+    "valibot": ">=1",
+    "yup": ">=1",
+    "zod": ">=3.23"
+  },
+  "peerDependenciesMeta": {
+    "joi": { "optional": true },
+    "valibot": { "optional": true },
+    "yup": { "optional": true },
+    "zod": { "optional": true }
+  },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "joi": "^18.2.3",
+    "typescript": "^6.0.3",
+    "valibot": "^1.4.1",
+    "vitest": "^4.1.8",
+    "yup": "^1.7.1",
+    "zod": "^4.4.3"
   },
   "keywords": [
     "halifax",

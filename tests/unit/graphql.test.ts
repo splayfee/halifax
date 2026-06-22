@@ -70,6 +70,11 @@ function makeResource(overrides: Partial<ResourceDefinition> = {}): ResourceDefi
       { name: 'status', writable: true, type: 'string' },
       { name: 'active', writable: true, type: 'boolean' }
     ],
+    permissions: {
+      allowUpdateMany: true,
+      allowDeleteMany: true,
+      allowUpsertOne: true
+    },
     repository: makeRepo(),
     ...overrides
   }

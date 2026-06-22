@@ -403,6 +403,9 @@ function createUpsertSecuredApp() {
       { name: 'email', filterable: true, sortable: true, selectable: true, writable: true },
       { name: 'role', filterable: false, sortable: false, selectable: false, writable: false }
     ],
+    permissions: {
+      allowUpsertOne: true
+    },
     repository: repo
   }
 
@@ -717,6 +720,11 @@ function createFullApp() {
       { name: 'id', filterable: true, sortable: true },
       { name: 'email', filterable: true, writable: true }
     ],
+    permissions: {
+      allowUpdateMany: true,
+      allowDeleteMany: true,
+      allowUpsertOne: true
+    },
     repository: repo
   }
 
@@ -815,6 +823,9 @@ describe('createExpressCrudRouter — upsertOne', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
+      permissions: {
+        allowUpsertOne: true
+      },
       repository: repo
     }
     app.use(createExpressCrudRouter([resource]))
@@ -1171,6 +1182,10 @@ describe('createExpressCrudRouter — updateMany/deleteMany 501', () => {
       name: 'X',
       routePrefix: 'xs',
       fields: [{ name: 'id' }],
+      permissions: {
+        allowUpdateMany: true,
+        allowDeleteMany: true
+      },
       repository: repo
     }
 

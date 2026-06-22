@@ -3,13 +3,11 @@ import type { GraphQLResourceContext, GraphQLResolverContext } from './types.js'
 import { buildSchemaHelpers } from './schemaHelpers.js'
 import { addResourceFields } from './resourceResolvers.js'
 
-export async function buildGraphQLSchema(contexts: GraphQLResourceContext[]): Promise<GraphQLSchema> {
+export async function buildGraphQLSchema(
+  contexts: GraphQLResourceContext[]
+): Promise<GraphQLSchema> {
   const gql = await import('graphql')
-  const {
-    GraphQLSchema,
-    GraphQLObjectType,
-    GraphQLString
-  } = gql
+  const { GraphQLSchema, GraphQLObjectType, GraphQLString } = gql
 
   const helpers = buildSchemaHelpers(gql)
 

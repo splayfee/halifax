@@ -1,6 +1,9 @@
 import type { JsonSchema, OpenApiParameter, OpenApiOperation } from './types.js'
 
-type ErrorResponse = { description: string; content: { 'application/json': { schema: JsonSchema } } }
+type ErrorResponse = {
+  description: string
+  content: { 'application/json': { schema: JsonSchema } }
+}
 
 export const correlationIdHeader: OpenApiParameter = {
   name: 'X-Correlation-ID',
@@ -71,10 +74,23 @@ export const sharedSchemas: Record<string, JsonSchema> = {
         type: 'string',
         description: 'Comparison operator.',
         enum: [
-          '=', '<>', '<', '>', '<=', '>=',
-          'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN',
-          'LIKE', 'NOT LIKE', 'IS NULL', 'IS NOT NULL',
-          'CONTAINS', 'STARTS WITH', 'ENDS WITH'
+          '=',
+          '<>',
+          '<',
+          '>',
+          '<=',
+          '>=',
+          'IN',
+          'NOT IN',
+          'BETWEEN',
+          'NOT BETWEEN',
+          'LIKE',
+          'NOT LIKE',
+          'IS NULL',
+          'IS NOT NULL',
+          'CONTAINS',
+          'STARTS WITH',
+          'ENDS WITH'
         ]
       },
       value: {
@@ -155,7 +171,8 @@ export const sharedSchemas: Record<string, JsonSchema> = {
       distinct: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Field names to de-duplicate results on (maps to SQL DISTINCT ON these columns).'
+        description:
+          'Field names to de-duplicate results on (maps to SQL DISTINCT ON these columns).'
       }
     }
   }
