@@ -30,7 +30,13 @@ function makeRepo(overrides: Partial<Repository<Row>> = {}): Repository<Row> {
       return { id: Number(id), name: 'alice', status: 'active', active: true }
     },
     async getMany() {
-      return { count: 2, results: [{ id: 1, name: 'alice' }, { id: 2, name: 'bob' }] }
+      return {
+        count: 2,
+        results: [
+          { id: 1, name: 'alice' },
+          { id: 2, name: 'bob' }
+        ]
+      }
     },
     async createOne(d) {
       return { id: 99, ...(d as object) } as Row
@@ -173,17 +179,16 @@ describe('GraphQL introspection', () => {
 
   it('exposes get, list, and query operations for the resource', async () => {
     const result = await runGraphQL('{ __schema { queryType { fields { name } } } }')
-    const fields = (result.data as { __schema: { queryType: { fields: { name: string }[] } } })
-      .__schema.queryType.fields.map((f: { name: string }) => f.name)
+    const fields = (
+      result.data as { __schema: { queryType: { fields: { name: string }[] } } }
+    ).__schema.queryType.fields.map((f: { name: string }) => f.name)
     expect(fields).toContain('getUsers')
     expect(fields).toContain('listUsers')
     expect(fields).toContain('queryUsers')
   })
 
   it('exposes all mutation operations', async () => {
-    const result = await runGraphQL(
-      '{ __schema { mutationType { fields { name } } } }'
-    )
+    const result = await runGraphQL('{ __schema { mutationType { fields { name } } } }')
     const fields = (
       result.data as { __schema: { mutationType: { fields: { name: string }[] } } }
     ).__schema.mutationType.fields.map((f: { name: string }) => f.name)
@@ -198,18 +203,15 @@ describe('GraphQL introspection', () => {
 
   it('excludes resource from schema when graphql: false on resource', async () => {
     const { server, routes } = makeServer()
-    registerCrudApi(
-      server,
-      [{ ...makeResource(), graphql: false }],
-      { graphql: { enabled: true } }
-    )
+    registerCrudApi(server, [{ ...makeResource(), graphql: false }], { graphql: { enabled: true } })
     const handler = routes.get('POST:/graphql')!
     const req = makeReq({ query: '{ __schema { queryType { fields { name } } } }' })
     const { res, getBody } = makeRes()
     await handler(req, res)
     const result = getBody() as { data?: unknown }
-    const fields = (result.data as { __schema: { queryType: { fields: { name: string }[] } } })
-      .__schema.queryType.fields.map((f) => f.name)
+    const fields = (
+      result.data as { __schema: { queryType: { fields: { name: string }[] } } }
+    ).__schema.queryType.fields.map((f) => f.name)
     expect(fields).not.toContain('getUsers')
   })
 })
@@ -229,7 +231,15 @@ describe('getUsers query', () => {
     const { server, routes } = makeServer()
     registerCrudApi(
       server,
-      [makeResource({ repository: makeRepo({ async getOne() { return null } }) })],
+      [
+        makeResource({
+          repository: makeRepo({
+            async getOne() {
+              return null
+            }
+          })
+        })
+      ],
       { graphql: { enabled: true } }
     )
     const handler = routes.get('POST:/graphql')!
@@ -363,7 +373,15 @@ describe('updateUsers mutation', () => {
     const { server, routes } = makeServer()
     registerCrudApi(
       server,
-      [makeResource({ repository: makeRepo({ async updateOne() { return null } }) })],
+      [
+        makeResource({
+          repository: makeRepo({
+            async updateOne() {
+              return null
+            }
+          })
+        })
+      ],
       { graphql: { enabled: true } }
     )
     const handler = routes.get('POST:/graphql')!
@@ -413,11 +431,9 @@ describe('upsertUsers mutation', () => {
 
   it('errors when upsertOne not supported', async () => {
     const { server, routes } = makeServer()
-    registerCrudApi(
-      server,
-      [makeResource({ repository: makeRepo({ upsertOne: undefined }) })],
-      { graphql: { enabled: true } }
-    )
+    registerCrudApi(server, [makeResource({ repository: makeRepo({ upsertOne: undefined }) })], {
+      graphql: { enabled: true }
+    })
     const handler = routes.get('POST:/graphql')!
     const req = makeReq({ query: 'mutation { upsertUsers(id: "5", input: { name: "x" }) { id } }' })
     const { res, getBody } = makeRes()
@@ -441,7 +457,15 @@ describe('deleteUsers mutation', () => {
     const { server, routes } = makeServer()
     registerCrudApi(
       server,
-      [makeResource({ repository: makeRepo({ async deleteOne() { return false } }) })],
+      [
+        makeResource({
+          repository: makeRepo({
+            async deleteOne() {
+              return false
+            }
+          })
+        })
+      ],
       { graphql: { enabled: true } }
     )
     const handler = routes.get('POST:/graphql')!
@@ -502,7 +526,15 @@ describe('GraphQL error handling', () => {
     const { server, routes } = makeServer()
     registerCrudApi(
       server,
-      [makeResource({ repository: makeRepo({ async getOne() { return null } }) })],
+      [
+        makeResource({
+          repository: makeRepo({
+            async getOne() {
+              return null
+            }
+          })
+        })
+      ],
       { graphql: { enabled: true } }
     )
     const handler = routes.get('POST:/graphql')!
@@ -519,32 +551,32 @@ describe('GraphQL error handling', () => {
 describe('CrudPermissions respected in GraphQL', () => {
   it('omits getX when allowReadOne is false', async () => {
     const { server, routes } = makeServer()
-    registerCrudApi(
-      server,
-      [makeResource({ permissions: { allowReadOne: false } })],
-      { graphql: { enabled: true } }
-    )
+    registerCrudApi(server, [makeResource({ permissions: { allowReadOne: false } })], {
+      graphql: { enabled: true }
+    })
     const handler = routes.get('POST:/graphql')!
     const req = makeReq({ query: '{ __schema { queryType { fields { name } } } }' })
     const { res, getBody } = makeRes()
     await handler(req, res)
-    const result = getBody() as { data: { __schema: { queryType: { fields: { name: string }[] } } } }
+    const result = getBody() as {
+      data: { __schema: { queryType: { fields: { name: string }[] } } }
+    }
     const names = result.data.__schema.queryType.fields.map((f) => f.name)
     expect(names).not.toContain('getUsers')
   })
 
   it('omits createX when allowCreate is false', async () => {
     const { server, routes } = makeServer()
-    registerCrudApi(
-      server,
-      [makeResource({ permissions: { allowCreate: false } })],
-      { graphql: { enabled: true } }
-    )
+    registerCrudApi(server, [makeResource({ permissions: { allowCreate: false } })], {
+      graphql: { enabled: true }
+    })
     const handler = routes.get('POST:/graphql')!
     const req = makeReq({ query: '{ __schema { mutationType { fields { name } } } }' })
     const { res, getBody } = makeRes()
     await handler(req, res)
-    const result = getBody() as { data: { __schema: { mutationType: { fields: { name: string }[] } | null } } }
+    const result = getBody() as {
+      data: { __schema: { mutationType: { fields: { name: string }[] } | null } }
+    }
     const mutationType = result.data.__schema.mutationType
     if (mutationType) {
       const names = mutationType.fields.map((f) => f.name)
@@ -589,7 +621,10 @@ describe('Multiple resources', () => {
     const { server, routes } = makeServer()
     const posts: ResourceDefinition = {
       routePrefix: 'posts',
-      fields: [{ name: 'id', writable: false }, { name: 'title', writable: true }],
+      fields: [
+        { name: 'id', writable: false },
+        { name: 'title', writable: true }
+      ],
       repository: makeRepo()
     }
     registerCrudApi(server, [makeResource(), posts], { graphql: { enabled: true } })
@@ -597,7 +632,9 @@ describe('Multiple resources', () => {
     const req = makeReq({ query: '{ __schema { queryType { fields { name } } } }' })
     const { res, getBody } = makeRes()
     await handler(req, res)
-    const result = getBody() as { data: { __schema: { queryType: { fields: { name: string }[] } } } }
+    const result = getBody() as {
+      data: { __schema: { queryType: { fields: { name: string }[] } } }
+    }
     const names = result.data.__schema.queryType.fields.map((f) => f.name)
     expect(names).toContain('getUsers')
     expect(names).toContain('getPosts')
@@ -615,9 +652,13 @@ describe('GraphiQL GET endpoint', () => {
     const req = { method: 'GET', params: {}, query: {}, body: undefined, headers: {}, raw: {} }
     let sentBody = ''
     const res: HttpResponse = {
-      status() { return this },
+      status() {
+        return this
+      },
       json() {},
-      send(payload) { sentBody = String(payload) },
+      send(payload) {
+        sentBody = String(payload)
+      },
       setHeader() {},
       raw: {}
     }

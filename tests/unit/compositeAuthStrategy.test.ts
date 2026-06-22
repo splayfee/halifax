@@ -16,7 +16,9 @@ describe('CompositeAuthStrategy — construction', () => {
 
 describe('CompositeAuthStrategy — authenticate', () => {
   it('returns the context from the first strategy that authenticates', async () => {
-    const second = { authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: 'b' }) }
+    const second = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: 'b' })
+    }
     const first: AuthStrategy = {
       authenticate: vi.fn(() => {
         throw new AuthenticationError('no key')
@@ -31,8 +33,12 @@ describe('CompositeAuthStrategy — authenticate', () => {
   })
 
   it('short-circuits on the first success without trying later strategies', async () => {
-    const first = { authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: 'a' }) }
-    const second = { authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: 'b' }) }
+    const first = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: 'a' })
+    }
+    const second = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: 'b' })
+    }
     const composite = new CompositeAuthStrategy([first, second])
 
     const auth = await composite.authenticate(makeReq())

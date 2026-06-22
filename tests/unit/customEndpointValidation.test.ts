@@ -151,7 +151,10 @@ describe('custom endpoint — auto OpenAPI from schema', () => {
     api.addCustomEndpoint(
       'POST',
       '/orders',
-      { roles: [], validate: { body: zodValidator(z.object({ sku: z.string(), qty: z.number() })) } },
+      {
+        roles: [],
+        validate: { body: zodValidator(z.object({ sku: z.string(), qty: z.number() })) }
+      },
       async (_req, res) => {
         await res.status(201).json({ ok: true })
       }
@@ -161,7 +164,10 @@ describe('custom endpoint — auto OpenAPI from schema', () => {
     await invoke(routes, 'GET', '/openapi.json', makeReq('GET'), res)
     // The spec route sends a JSON string.
     const spec = JSON.parse(sent.body as string) as {
-      paths: Record<string, { post?: { requestBody?: { content: Record<string, { schema: { type?: string } }> } } }>
+      paths: Record<
+        string,
+        { post?: { requestBody?: { content: Record<string, { schema: { type?: string } }> } } }
+      >
     }
     const schema = spec.paths['/orders']?.post?.requestBody?.content['application/json']?.schema
     expect(schema?.type).toBe('object')
@@ -184,7 +190,16 @@ describe('custom endpoint — auto OpenAPI from schema', () => {
     const spec = JSON.parse(sent.body as string) as {
       paths: Record<
         string,
-        { post?: { requestBody?: { content: Record<string, { schema: { type?: string; properties?: Record<string, unknown> } }> } } }
+        {
+          post?: {
+            requestBody?: {
+              content: Record<
+                string,
+                { schema: { type?: string; properties?: Record<string, unknown> } }
+              >
+            }
+          }
+        }
       >
     }
     const schema = spec.paths['/y']?.post?.requestBody?.content['application/json']?.schema

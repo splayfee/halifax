@@ -54,9 +54,7 @@ describe('yupValidator', () => {
 
   it('uses the empty-string path for a root-level error', async () => {
     // A top-level mixed schema with a custom failing test yields an error with no `path`.
-    const rootSchema = yup
-      .mixed()
-      .test('always-fails', 'root rejected', () => false)
+    const rootSchema = yup.mixed().test('always-fails', 'root rejected', () => false)
     const validator = yupValidator(rootSchema)
 
     const result = await validator.validate('anything')

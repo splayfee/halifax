@@ -4,7 +4,10 @@ import { zodValidator } from '../../src/validators/zod.js'
 import type { ValidationResult } from '../../src/interfaces/ISchemaValidator.js'
 
 /** `validate` is synchronous for the Zod adapter; await to collapse the declared sync|async union. */
-async function run<T>(validator: { validate(d: unknown): ValidationResult<T> | Promise<ValidationResult<T>> }, data: unknown) {
+async function run<T>(
+  validator: { validate(d: unknown): ValidationResult<T> | Promise<ValidationResult<T>> },
+  data: unknown
+) {
   return await validator.validate(data)
 }
 
@@ -27,9 +30,7 @@ describe('zodValidator', () => {
   })
 
   it('joins nested object paths with dots', async () => {
-    const validator = zodValidator(
-      z.object({ address: z.object({ zip: z.string() }) })
-    )
+    const validator = zodValidator(z.object({ address: z.object({ zip: z.string() }) }))
     const result = await run(validator, { address: { zip: 90210 } })
     expect(result.success).toBe(false)
     if (result.success) throw new Error('expected failure')

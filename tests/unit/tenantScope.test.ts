@@ -499,9 +499,7 @@ describe('createExpressCrudRouter — admin bypass', () => {
     const res = await request(app).get('/api/v3/widgets')
 
     expect(res.status).toBe(200)
-    expect(delegate.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
-    )
+    expect(delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }))
   })
 
   it('returns unscoped list when caller permission matches bypassRoles (auth.permissions)', async () => {
@@ -514,9 +512,7 @@ describe('createExpressCrudRouter — admin bypass', () => {
     const res = await request(app).get('/api/v3/widgets')
 
     expect(res.status).toBe(200)
-    expect(delegate.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
-    )
+    expect(delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }))
   })
 
   it('still scopes list for callers without a bypass role', async () => {
@@ -636,9 +632,7 @@ describe('createExpressCrudRouter — admin bypass', () => {
     const res = await request(app).get('/api/v3/widgets')
 
     expect(res.status).toBe(200)
-    expect(delegate.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: {} })
-    )
+    expect(delegate.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }))
   })
 
   it('global bypassRoles does not grant bypass when role only matches a different resource override', async () => {
@@ -647,7 +641,7 @@ describe('createExpressCrudRouter — admin bypass', () => {
       roles: ['super_admin'],
       bypassRoles: ['super_admin'],
       company: { id: 7 },
-      resourceBypassRoles: ['support']  // resource override replaces, not extends
+      resourceBypassRoles: ['support'] // resource override replaces, not extends
     })
 
     const res = await request(app).get('/api/v3/widgets')

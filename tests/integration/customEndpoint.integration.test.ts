@@ -90,8 +90,8 @@ describe.skipIf(!hasDb)('addCustomEndpoint — GROUP BY + HAVING integration', (
 
         const result: SalesSummaryRow[] = rows.map((r) => ({
           category: r['category'] as string,
-          count: r['_count'] ? (r['_count'] as Record<string, number>)['id'] ?? 0 : 0,
-          total: r['_sum'] ? (r['_sum'] as Record<string, number>)['amount'] ?? 0 : 0
+          count: r['_count'] ? ((r['_count'] as Record<string, number>)['id'] ?? 0) : 0,
+          total: r['_sum'] ? ((r['_sum'] as Record<string, number>)['amount'] ?? 0) : 0
         }))
 
         await res.status(200).json(result)
@@ -237,9 +237,7 @@ describe.skipIf(!hasDb)('addCustomEndpoint — GROUP BY + HAVING integration', (
       data: [{ category: 'Solo', amount: 1 }]
     })
 
-    const res = await request(app)
-      .get('/reports/sales-summary')
-      .set('x-api-key', API_KEY)
+    const res = await request(app).get('/reports/sales-summary').set('x-api-key', API_KEY)
 
     expect(res.status).toBe(200)
     expect((res.body as SalesSummaryRow[]).length).toBe(1)
@@ -253,9 +251,7 @@ describe.skipIf(!hasDb)('addCustomEndpoint — GROUP BY + HAVING integration', (
   })
 
   it('returns 403 when the API key is wrong', async () => {
-    const res = await request(app)
-      .get('/reports/sales-summary')
-      .set('x-api-key', 'bad-key')
+    const res = await request(app).get('/reports/sales-summary').set('x-api-key', 'bad-key')
     expect(res.status).toBe(403)
   })
 

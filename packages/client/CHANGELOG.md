@@ -16,7 +16,7 @@ All notable changes to this project are documented here. This project adheres to
   `comparison`/`value1` parent condition because the Halifax query AST attaches grouped
   children to a parent filter node (not a standalone parenthesized group). The JSDoc now
   explains this constraint, clarifies what the resulting predicate looks like (`cond AND
-  (children)` for `andGroup`, `cond OR (children)` for `orGroup`), and includes a workaround
+(children)` for `andGroup`, `cond OR (children)` for `orGroup`), and includes a workaround
   for expressing a pure OR group with no meaningful parent condition.
 
 ## [2.2.4]

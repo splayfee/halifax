@@ -52,9 +52,7 @@ describe('valibotValidator', () => {
     expect(result.success).toBe(false)
     if (result.success) throw new Error('expected failure')
 
-    expect(result.errors).toEqual([
-      { path: 'address.zip', message: 'zip must be a string' }
-    ])
+    expect(result.errors).toEqual([{ path: 'address.zip', message: 'zip must be a string' }])
   })
 
   it('toJsonSchema() converts the schema structure (type, properties, required, pipe, enum)', () => {

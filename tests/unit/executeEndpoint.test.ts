@@ -63,7 +63,9 @@ function invoke(
   return Promise.resolve(handler(req, res))
 }
 
-function fakeExecutor(rows: unknown[] = []): SqlExecutor & { calls: Array<[string, ExecuteValue[]]> } {
+function fakeExecutor(
+  rows: unknown[] = []
+): SqlExecutor & { calls: Array<[string, ExecuteValue[]]> } {
   const calls: Array<[string, ExecuteValue[]]> = []
   return {
     calls,
@@ -86,7 +88,10 @@ describe('execute — per-procedure route registration', () => {
   it('registers one POST route per procedure at a kebab-cased path', () => {
     const { server, routes } = makeServer()
     registerCrudApi(server, [], {
-      execute: { executor: fakeExecutor(), procedures: [{ name: 'get_report' }, { name: 'recalcBalances' }] }
+      execute: {
+        executor: fakeExecutor(),
+        procedures: [{ name: 'get_report' }, { name: 'recalcBalances' }]
+      }
     })
     expect(routes.has('POST:/execute/get-report')).toBe(true)
     expect(routes.has('POST:/execute/recalc-balances')).toBe(true)
@@ -112,7 +117,9 @@ describe('execute — per-procedure route registration', () => {
 
   it('an unregistered procedure simply has no route (→ framework 404, never a 405)', () => {
     const { server, routes } = makeServer()
-    registerCrudApi(server, [], { execute: { executor: fakeExecutor(), procedures: [{ name: 'allowed' }] } })
+    registerCrudApi(server, [], {
+      execute: { executor: fakeExecutor(), procedures: [{ name: 'allowed' }] }
+    })
     expect(routes.has('POST:/execute/not-registered')).toBe(false)
   })
 })
@@ -165,7 +172,10 @@ describe('execute — invocation', () => {
     const executor = fakeExecutor()
     const { server, routes } = makeServer()
     registerCrudApi(server, [], {
-      execute: { executor, procedures: [{ name: 'get_report', params: [{ name: 'year', type: 'number' }] }] }
+      execute: {
+        executor,
+        procedures: [{ name: 'get_report', params: [{ name: 'year', type: 'number' }] }]
+      }
     })
 
     const { res, sent } = makeRes()
@@ -178,11 +188,20 @@ describe('execute — invocation', () => {
     const executor = fakeExecutor()
     const { server, routes } = makeServer()
     registerCrudApi(server, [], {
-      execute: { executor, procedures: [{ name: 'get_report', params: [{ name: 'year', type: 'number' }] }] }
+      execute: {
+        executor,
+        procedures: [{ name: 'get_report', params: [{ name: 'year', type: 'number' }] }]
+      }
     })
 
     const { res, sent } = makeRes()
-    await invoke(routes, 'POST', '/execute/get-report', makeReq('POST', { body: { year: 'nope' } }), res)
+    await invoke(
+      routes,
+      'POST',
+      '/execute/get-report',
+      makeReq('POST', { body: { year: 'nope' } }),
+      res
+    )
     expect(sent.status).toBe(422)
     expect(executor.calls).toEqual([])
   })
@@ -191,7 +210,10 @@ describe('execute — invocation', () => {
     const executor = fakeExecutor()
     const { server, routes } = makeServer()
     registerCrudApi(server, [], {
-      execute: { executor, procedures: [{ name: 'get_report', params: [{ name: 'year', type: 'number' }] }] }
+      execute: {
+        executor,
+        procedures: [{ name: 'get_report', params: [{ name: 'year', type: 'number' }] }]
+      }
     })
 
     const { res, sent } = makeRes()

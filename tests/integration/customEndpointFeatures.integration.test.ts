@@ -25,12 +25,19 @@ import { AuthenticationError } from '@/errors/AuthenticationError.js'
 const API_KEY = 'composite-key'
 
 /** Mounts a fresh Express app with JSON + text body parsing and a Halifax router. */
-function makeApp(authStrategy?: AuthStrategy): { app: ReturnType<typeof express>; api: ReturnType<typeof registerCrudApi> } {
+function makeApp(authStrategy?: AuthStrategy): {
+  app: ReturnType<typeof express>
+  api: ReturnType<typeof registerCrudApi>
+} {
   const app = express()
   app.use(express.json())
   app.use(express.text({ type: ['text/csv', 'text/plain'] }))
   const router = Router()
-  const api = registerCrudApi(new ExpressHttpServer(router), [], authStrategy ? { authStrategy } : {})
+  const api = registerCrudApi(
+    new ExpressHttpServer(router),
+    [],
+    authStrategy ? { authStrategy } : {}
+  )
   app.use(router)
   return { app, api }
 }
@@ -85,7 +92,9 @@ describe('custom endpoints — content negotiation', () => {
         '/imports/csv',
         { roles: [], consumes: ['text/csv'] },
         async (req, res) => {
-          const rows = String(req.body ?? '').trim().split('\n').length
+          const rows = String(req.body ?? '')
+            .trim()
+            .split('\n').length
           await res.status(200).json({ rows })
         }
       )
@@ -95,7 +104,9 @@ describe('custom endpoints — content negotiation', () => {
         { roles: [], produces: ['application/pdf'] },
         async (_req, res) => {
           res.setHeader?.('Content-Type', 'application/pdf')
-          ;(res.raw as { end(chunk: Buffer): void }).end(Buffer.from('%PDF-1.4\n%generated', 'utf8'))
+          ;(res.raw as { end(chunk: Buffer): void }).end(
+            Buffer.from('%PDF-1.4\n%generated', 'utf8')
+          )
         }
       )
   })

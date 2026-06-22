@@ -57,10 +57,18 @@
     "zod": ">=3.23"
   },
   "peerDependenciesMeta": {
-    "joi": { "optional": true },
-    "valibot": { "optional": true },
-    "yup": { "optional": true },
-    "zod": { "optional": true }
+    "joi": {
+      "optional": true
+    },
+    "valibot": {
+      "optional": true
+    },
+    "yup": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "joi": "^18.2.3",

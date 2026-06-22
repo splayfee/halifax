@@ -21,19 +21,28 @@ function makeServer() {
 
 function makeRepo(): Repository {
   return {
-    async getOne() { return { id: 1, name: 'x' } },
-    async getMany() { return { count: 0, results: [] } },
-    async createOne(d) { return d as never },
-    async createMany() { return [] },
-    async updateOne() { return null },
-    async deleteOne() { return false }
+    async getOne() {
+      return { id: 1, name: 'x' }
+    },
+    async getMany() {
+      return { count: 0, results: [] }
+    },
+    async createOne(d) {
+      return d as never
+    },
+    async createMany() {
+      return []
+    },
+    async updateOne() {
+      return null
+    },
+    async deleteOne() {
+      return false
+    }
   }
 }
 
-function makeReq(
-  method = 'GET',
-  overrides: Partial<HttpRequest> = {}
-): HttpRequest {
+function makeReq(method = 'GET', overrides: Partial<HttpRequest> = {}): HttpRequest {
   return {
     method,
     params: {},
@@ -51,10 +60,19 @@ function makeRes() {
   }
   const res: HttpResponse = {
     raw: {},
-    status(code) { sent.status = code; return this },
-    json(payload) { sent.body = payload },
-    send(payload) { sent.body = payload },
-    setHeader(name, value) { sent.headers[name] = value }
+    status(code) {
+      sent.status = code
+      return this
+    },
+    json(payload) {
+      sent.body = payload
+    },
+    send(payload) {
+      sent.body = payload
+    },
+    setHeader(name, value) {
+      sent.headers[name] = value
+    }
   }
   return { res, sent }
 }
@@ -165,58 +183,58 @@ describe('HalifaxApi.addCustomEndpoint — duplicate detection', () => {
     const { server } = makeServer()
     const api = registerCrudApi(server, [], {})
     api.addCustomEndpoint('GET', '/dup', [], async () => {})
-    expect(() =>
-      api.addCustomEndpoint('GET', '/dup', [], async () => {})
-    ).toThrow(ServerError)
+    expect(() => api.addCustomEndpoint('GET', '/dup', [], async () => {})).toThrow(ServerError)
   })
 
   it('error message names the conflicting method and path', () => {
     const { server } = makeServer()
     const api = registerCrudApi(server, [], {})
     api.addCustomEndpoint('POST', '/conflict', [], async () => {})
-    expect(() =>
-      api.addCustomEndpoint('POST', '/conflict', [], async () => {})
-    ).toThrow(/POST \/conflict/)
+    expect(() => api.addCustomEndpoint('POST', '/conflict', [], async () => {})).toThrow(
+      /POST \/conflict/
+    )
   })
 
   it('throws when the path conflicts with a generated CRUD route', () => {
     const { server } = makeServer()
-    const api = registerCrudApi(server, [
-      { routePrefix: 'items', fields: [{ name: 'id' }, { name: 'name' }], repository: makeRepo() }
-    ], {})
+    const api = registerCrudApi(
+      server,
+      [
+        { routePrefix: 'items', fields: [{ name: 'id' }, { name: 'name' }], repository: makeRepo() }
+      ],
+      {}
+    )
     // GET /items is registered by allowReadMany
-    expect(() =>
-      api.addCustomEndpoint('GET', '/items', [], async () => {})
-    ).toThrow(ServerError)
+    expect(() => api.addCustomEndpoint('GET', '/items', [], async () => {})).toThrow(ServerError)
   })
 
   it('throws when path conflicts with a CRUD item route', () => {
     const { server } = makeServer()
-    const api = registerCrudApi(server, [
-      { routePrefix: 'items', fields: [{ name: 'id' }, { name: 'name' }], repository: makeRepo() }
-    ], {})
+    const api = registerCrudApi(
+      server,
+      [
+        { routePrefix: 'items', fields: [{ name: 'id' }, { name: 'name' }], repository: makeRepo() }
+      ],
+      {}
+    )
     // PATCH /items/:id is registered by allowUpdateOne
-    expect(() =>
-      api.addCustomEndpoint('PATCH', '/items/:id', [], async () => {})
-    ).toThrow(ServerError)
+    expect(() => api.addCustomEndpoint('PATCH', '/items/:id', [], async () => {})).toThrow(
+      ServerError
+    )
   })
 
   it('does not throw for same path with a different method', () => {
     const { server } = makeServer()
     const api = registerCrudApi(server, [], {})
     api.addCustomEndpoint('GET', '/shared', [], async () => {})
-    expect(() =>
-      api.addCustomEndpoint('POST', '/shared', [], async () => {})
-    ).not.toThrow()
+    expect(() => api.addCustomEndpoint('POST', '/shared', [], async () => {})).not.toThrow()
   })
 
   it('does not throw for different paths with the same method', () => {
     const { server } = makeServer()
     const api = registerCrudApi(server, [], {})
     api.addCustomEndpoint('GET', '/a', [], async () => {})
-    expect(() =>
-      api.addCustomEndpoint('GET', '/b', [], async () => {})
-    ).not.toThrow()
+    expect(() => api.addCustomEndpoint('GET', '/b', [], async () => {})).not.toThrow()
   })
 })
 
