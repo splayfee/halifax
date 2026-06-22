@@ -31,8 +31,14 @@ function normalizeRows(result: unknown): unknown[] {
   const withRows = result as { rows?: unknown }
   if (Array.isArray(withRows.rows)) return withRows.rows // pg / node-postgres
   if (Array.isArray(result)) {
-    // mysql2 returns `[rows, fields]`; everything else is already a row array.
-    if (result.length > 0 && Array.isArray(result[0])) return result[0] as unknown[]
+    // mysql2 `db.execute()` returns `[rows, fields]` for SELECT queries, but for CALL the
+    // result-set is nested one level deeper: `[[rowset, OkPacket], field_buffers]`.
+    // Detect the CALL shape by checking whether result[0][0] is itself an array (the rowset).
+    if (result.length > 0 && Array.isArray(result[0])) {
+      const inner = result[0] as unknown[]
+      if (inner.length > 0 && Array.isArray(inner[0])) return inner[0] as unknown[] // CALL
+      return inner // SELECT
+    }
     return result
   }
   return []
