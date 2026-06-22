@@ -45,12 +45,16 @@ function isWrongObjectType(error: unknown): boolean {
   return msg.includes('is a procedure') || msg.includes('use call')
 }
 
-/** Normalizes the mysql2 CALL result shape into a flat row array. */
+/** Normalizes the Sequelize CALL/EXEC result shape into a flat row array. */
 function toRows(value: unknown): unknown[] {
   if (!Array.isArray(value)) return []
-  // mysql2 CALL via Sequelize RAW: [[resultRows, OkPacket], FieldMetadata]
-  // After destructuring the outer tuple we get: [[resultRows, OkPacket]]
-  // First element is an array → drill in; if that first element is itself an array → those are rows.
+  // Sequelize's MySQL/MariaDB dialect intercepts CALL queries via `isCallQuery()` before the
+  // RAW handler fires. It returns `data[0]` from mysql2's result (the first result set), so
+  // `sequelize.query()` resolves with the rows array directly: `[{col: val}, ...]`.
+  // For the MSSQL path (EXEC, not CALL), `isRawQuery()` fires instead and returns `[data, data]`
+  // — the caller unwraps to `data` before passing here, so we still receive the rows array.
+  // Either way, if the first element is itself an array we have a nested result-set structure
+  // and drill in one more level.
   if (value.length > 0 && Array.isArray(value[0])) {
     const inner = value[0] as unknown[]
     if (inner.length > 0 && Array.isArray(inner[0])) return inner[0] as unknown[]
@@ -90,11 +94,14 @@ export class SequelizeSqlExecutor implements SqlExecutor {
 
     if (this.dialect === 'mysql') {
       const marks = Array.from({ length: n }, () => '?').join(', ')
-      const result = (await this.seq.query(`CALL ${quoted}(${marks})`, {
+      // Sequelize's MySQL dialect handles CALL before RAW: `isCallQuery()` fires and returns
+      // `data[0]` from mysql2 (the first result set). `sequelize.query()` resolves with the
+      // rows array directly — no outer tuple to unwrap.
+      const result = await this.seq.query(`CALL ${quoted}(${marks})`, {
         replacements: params as unknown[],
         type: 'RAW'
-      })) as [unknown, unknown]
-      return toRows(result[0])
+      })
+      return toRows(result)
     }
 
     if (this.dialect === 'mssql') {
