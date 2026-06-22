@@ -21,6 +21,7 @@ import {
 import type { AnyColumn, SQL } from 'drizzle-orm'
 import type { IQueryFilter, ISort, QueryScalar } from '@edium/halifax-types'
 import { SqlComparison, SqlOperator, SqlOrder } from '@edium/halifax-types'
+import { buildComparison, type ComparisonStrategyTable } from '../ComparisonStrategy.js'
 
 export type ColumnMap = Record<string, AnyColumn>
 
@@ -29,49 +30,34 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&')
 }
 
-function comparisonToDrizzle(filter: IQueryFilter, col: AnyColumn): SQL | undefined {
-  const v1 = filter.value1
-  const v2 = filter.value2
-  const comparison = (filter.comparison?.toUpperCase() ?? '=') as SqlComparison
+/**
+ * Per-operator builders mapping each {@link SqlComparison} to a Drizzle SQL condition for one
+ * column. This table is the only place Drizzle comparison semantics live, mirroring
+ * `PRISMA_COMPARISONS` so both adapters stay behaviourally aligned.
+ */
+const DRIZZLE_COMPARISONS: ComparisonStrategyTable<SQL | undefined, AnyColumn> = {
+  [SqlComparison.Equal]: (col, { v1 }) => eq(col, v1 as QueryScalar),
+  [SqlComparison.NotEqual]: (col, { v1 }) => ne(col, v1 as QueryScalar),
+  [SqlComparison.GreaterThan]: (col, { v1 }) => gt(col, v1 as QueryScalar),
+  [SqlComparison.GreaterThanOrEqual]: (col, { v1 }) => gte(col, v1 as QueryScalar),
+  [SqlComparison.LessThan]: (col, { v1 }) => lt(col, v1 as QueryScalar),
+  [SqlComparison.LessThanOrEqual]: (col, { v1 }) => lte(col, v1 as QueryScalar),
+  [SqlComparison.In]: (col, { v1 }) => inArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[]),
+  [SqlComparison.NotIn]: (col, { v1 }) => notInArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[]),
+  [SqlComparison.Between]: (col, { v1, v2 }) => between(col, v1 as QueryScalar, v2 as QueryScalar),
+  [SqlComparison.NotBetween]: (col, { v1, v2 }) => notBetween(col, v1 as QueryScalar, v2 as QueryScalar),
+  [SqlComparison.IsNull]: (col) => isNull(col),
+  [SqlComparison.IsNotNull]: (col) => isNotNull(col),
+  [SqlComparison.Contains]: (col, { v1 }) => like(col, `%${escapeLike(String(v1 ?? ''))}%`),
+  [SqlComparison.StartsWith]: (col, { v1 }) => like(col, `${escapeLike(String(v1 ?? ''))}%`),
+  [SqlComparison.EndsWith]: (col, { v1 }) => like(col, `%${escapeLike(String(v1 ?? ''))}`),
+  [SqlComparison.Like]: (col, { v1 }) => like(col, String(v1 ?? '')),
+  [SqlComparison.NotLike]: (col, { v1 }) => notLike(col, String(v1 ?? ''))
+}
 
-  switch (comparison) {
-    case SqlComparison.Equal:
-      return eq(col, v1 as QueryScalar)
-    case SqlComparison.NotEqual:
-      return ne(col, v1 as QueryScalar)
-    case SqlComparison.GreaterThan:
-      return gt(col, v1 as QueryScalar)
-    case SqlComparison.GreaterThanOrEqual:
-      return gte(col, v1 as QueryScalar)
-    case SqlComparison.LessThan:
-      return lt(col, v1 as QueryScalar)
-    case SqlComparison.LessThanOrEqual:
-      return lte(col, v1 as QueryScalar)
-    case SqlComparison.In:
-      return inArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[])
-    case SqlComparison.NotIn:
-      return notInArray(col, (Array.isArray(v1) ? v1 : [v1]) as QueryScalar[])
-    case SqlComparison.Between:
-      return between(col, v1 as QueryScalar, v2 as QueryScalar)
-    case SqlComparison.NotBetween:
-      return notBetween(col, v1 as QueryScalar, v2 as QueryScalar)
-    case SqlComparison.IsNull:
-      return isNull(col)
-    case SqlComparison.IsNotNull:
-      return isNotNull(col)
-    case SqlComparison.Contains:
-      return like(col, `%${escapeLike(String(v1 ?? ''))}%`)
-    case SqlComparison.StartsWith:
-      return like(col, `${escapeLike(String(v1 ?? ''))}%`)
-    case SqlComparison.EndsWith:
-      return like(col, `%${escapeLike(String(v1 ?? ''))}`)
-    case SqlComparison.Like:
-      return like(col, String(v1 ?? ''))
-    case SqlComparison.NotLike:
-      return notLike(col, String(v1 ?? ''))
-    default:
-      return eq(col, v1 as QueryScalar)
-  }
+/** Converts a single {@link IQueryFilter} comparison into a Drizzle SQL condition for its column. */
+function comparisonToDrizzle(filter: IQueryFilter, col: AnyColumn): SQL | undefined {
+  return buildComparison(filter, col, DRIZZLE_COMPARISONS)
 }
 
 function nodeToDrizzle(filter: IQueryFilter, columns: ColumnMap): SQL | undefined {

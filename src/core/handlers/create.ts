@@ -24,7 +24,7 @@ export function registerCreate(
         ? await Promise.all(rawItems.map((d) => applyHook(hooks.beforeCreate, d, hookCtx)))
         : rawItems
       if (items.length === 1) {
-        const rawResult = await repo.createOne(items[0] as never)
+        const rawResult = await repo.createOne(items[0]!)
         const result = await applyHook(
           hooks?.afterCreate,
           rawResult as Record<string, unknown>,
@@ -33,7 +33,7 @@ export function registerCreate(
         await writeSuccess(res, 201, filterReadableFields(resource, result, auth), envelope)
         return
       }
-      const rawResults = await repo.createMany(items as never[])
+      const rawResults = await repo.createMany(items)
       const results = hooks?.afterCreate
         ? await Promise.all(
             rawResults.map((r) =>

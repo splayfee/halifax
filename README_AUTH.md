@@ -6,10 +6,12 @@ Halifax auth is handled by an `AuthStrategy` injected at router creation time. T
 interface AuthStrategy {
   authenticate(req: HttpRequest): AuthContext | Promise<AuthContext>
   authorize?(params: AuthorizeParams): boolean | Promise<boolean>
+  authorizeCustom?(params: CustomAuthorizeParams): boolean | Promise<boolean>
+  openApiScheme?(): SecurityScheme | undefined
 }
 ```
 
-`authenticate` runs on every request and returns an `AuthContext`. `authorize` is optional — when present it gates each action against the context. When absent, Halifax falls back to checking `requiredPermissions` directly against `auth.roles` and `auth.permissions`.
+`authenticate` runs on every request and returns an `AuthContext`. `authorize` is optional — when present it gates each **auto-CRUD** action against the context. When absent, Halifax falls back to checking `requiredPermissions` directly against `auth.roles` and `auth.permissions`. `authorizeCustom` is the analogous hook for **custom endpoints** (see [Authorizing custom endpoints](#authorizing-custom-endpoints) below).
 
 ## Built-in Strategies
 
@@ -198,6 +200,57 @@ class RoleBasedStrategy implements AuthStrategy {
   }
 }
 ```
+
+## Authorizing custom endpoints
+
+`authorize` only governs auto-CRUD actions. Custom endpoints (`addCustomEndpoint`) gate access on
+the `roles` array passed at registration, checked with a flat OR-match by default. To apply the
+**same** authorization model to custom endpoints that you apply to CRUD — most commonly a role
+hierarchy where a higher role implicitly satisfies a lower-role requirement — implement the optional
+`authorizeCustom` method. Halifax calls it for every custom endpoint that doesn't supply its own
+`authorize` predicate:
+
+```ts
+class RoleHierarchyStrategy implements AuthStrategy {
+  authenticate(req) { /* … → { roles, permissions, claims: { roleValue } } … */ }
+
+  // Auto-CRUD: caller passes when their role value is at or below the required threshold.
+  authorize({ auth, requiredPermissions }) {
+    return meetsThreshold(auth, requiredPermissions)
+  }
+
+  // Custom endpoints: identical rule, keyed on the route instead of a CRUD action.
+  authorizeCustom({ auth, method, path, requiredPermissions }) {
+    return meetsThreshold(auth, requiredPermissions)
+  }
+}
+```
+
+`CustomAuthorizeParams` is `{ auth, method, path, requiredPermissions, req }` — the endpoint's
+`roles` argument arrives as `requiredPermissions`. Strategies that omit `authorizeCustom` keep the
+flat OR-match, so this is backward compatible. See
+[README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md#hierarchical-authorization-with-authorizecustom)
+for the full custom-endpoint authorization story, including the per-endpoint `authorize` override.
+
+## `CompositeAuthStrategy` — multiple credentials per route
+
+`CompositeAuthStrategy` combines several strategies and adopts the **first** that authenticates a
+request, so one API can be reached by more than one credential — e.g. an interactive session **or** a
+programmatic API key:
+
+```ts
+import { CompositeAuthStrategy, ApiKeyAuthStrategy, PassportSessionStrategy } from '@edium/halifax'
+
+const authStrategy = new CompositeAuthStrategy([
+  new ApiKeyAuthStrategy(process.env.API_KEY!, 'x-api-key', ['devices:read']),
+  new PassportSessionStrategy()
+])
+```
+
+Each member strategy is tried in order; the first that resolves wins, and if none authenticate the
+last error is thrown. `authorize`, `authorizeCustom`, and `openApiScheme` are all delegated to the
+strategy that actually authenticated the request — so each credential keeps its own authorization
+rules and the OpenAPI spec advertises the first declared scheme.
 
 ## Environment Variables
 

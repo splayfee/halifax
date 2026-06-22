@@ -3,6 +3,96 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0]
+
+### Added
+
+- **Public (unauthenticated) custom endpoints** — `addCustomEndpoint` can now register a route
+  that skips authentication entirely, for health checks, login/activation, password reset, and
+  inbound webhooks. Pass `null` as the `roles` argument (`addCustomEndpoint('POST', '/login', null, handler)`)
+  or `{ auth: false }` in the options bag. The handler receives an unauthenticated context
+  (`ctx.auth === { isAuthenticated: false }`) and owns any further checks. Public operations are
+  marked `security: []` in the live OpenAPI spec so Swagger UI renders no lock for them.
+
+- **Per-endpoint content negotiation (`consumes` / `produces`)** — custom endpoints are no longer
+  restricted to `application/json`. The options bag accepts `consumes` (request `Content-Type`s the
+  route accepts — e.g. `['multipart/form-data']` for file uploads) and `produces` (response types
+  negotiated against `Accept` — e.g. `['application/pdf']` for streamed downloads). Both default to
+  `['application/json']`, so existing endpoints keep the same 415/406 behaviour. A `*/*` entry in
+  `consumes` accepts any body; a media-type family wildcard in `Accept` (e.g. `application/*`) is honoured.
+
+- **`AuthStrategy.authorizeCustom(params)`** — an optional strategy method, the custom-endpoint
+  counterpart of `authorize`. When implemented it is called (instead of the flat role OR-match) for
+  every custom endpoint that does not declare its own `authorize` predicate, so a strategy can apply
+  the **same** hierarchical / privilege-threshold authorization to custom routes that it already
+  applies to auto-CRUD. Receives `{ auth, method, path, requiredPermissions, req }`. Strategies that
+  do not implement it fall back to the existing OR-match — fully backward compatible.
+
+- **Per-endpoint `authorize` predicate** — the options bag accepts an `authorize(ctx)` callback
+  (`{ auth, req }`) for one-off, resource-specific authorization (e.g. ownership checks). When
+  present it is the **sole** authorization gate, overriding both `roles` matching and
+  `authorizeCustom`. Set `useStrategyAuthorize: false` to force the flat OR-match instead.
+
+- **`CompositeAuthStrategy`** — a new strategy that combines several strategies and adopts the first
+  one that authenticates a request, so a single route can be reached by more than one credential
+  (e.g. an interactive **session** *or* a programmatic **API key** whose scopes map to
+  `auth.permissions`). Authorization (`authorize` / `authorizeCustom`) and the OpenAPI security
+  scheme are delegated to whichever member strategy actually authenticated the request.
+
+- **Options-bag overload for `addCustomEndpoint`** — alongside the positional
+  `(method, path, roles, handler, openapi?)` form, `addCustomEndpoint(method, path, options, handler)`
+  accepts a `CustomEndpointOptions` object exposing `roles`, `auth`, `authorize`,
+  `useStrategyAuthorize`, `consumes`, `produces`, and `openapi`.
+
+### Changed
+
+- **`crudRouter.ts` decomposed into single-responsibility modules under `src/core/router/`** —
+  `trackingHttpServer.ts` (route tracking), `halifaxApi.ts` (the `HalifaxApi` class), `options.ts`
+  (`CrudApiOptions`/`TenantOptions`), `resolveResource.ts` (field/name normalization), `tenantScope.ts`
+  (tenant-field resolution + the cached, scoped `resolveRepo`), `resourceRoutes.ts` (per-resource
+  preparation + CRUD/405 registration), `graphqlRoutes.ts`, and `openApiRoutes.ts`. `crudRouter.ts`
+  is now a thin orchestrator (`registerCrudApi`) that re-exports the same public surface, so every
+  `@/core/crudRouter.js` import path is unchanged.
+- **Custom-endpoint logic extracted to `src/core/customEndpoint.ts`** — the registration, options
+  normalization, and authorization pipeline live in a focused module (re-exported from
+  `crudRouter.ts`). No behavioural change for the existing positional `addCustomEndpoint` call.
+- **GraphQL `resourceResolvers.ts` decomposed into `src/graphql/resolvers/`** — `resourceTypes.ts`
+  (per-resource GraphQL type construction + the shared `ResolverContext`), `queryResolvers.ts`
+  (`get`/`list`/`query`), and `mutationResolvers.ts` (create/update/upsert/delete + bulk variants).
+  `resourceResolvers.ts` is now a thin `addResourceFields` orchestrator; the generated schema is
+  byte-for-byte identical.
+- **Query AST comparison logic unified via a Strategy table** — the duplicated 17-case `switch` in
+  `astToPrisma.ts` and `astToDrizzle.ts` is replaced by per-adapter `ComparisonStrategyTable`s
+  dispatched through one shared `buildComparison` in `src/adapters/orm/ComparisonStrategy.ts` (GoF
+  Strategy). Operator normalization + fallback now live in exactly one place, keeping the Prisma and
+  Drizzle compilers behaviourally in lockstep; a total `Record` makes the compiler enforce that every
+  adapter maps all operators.
+- **`PrismaAdapter` split** — the intricate tenant-safe single-row write paths moved to
+  `prismaScopedWrites.ts` (`scopedUpdateOne`/`scopedUpsertOne`/`scopedDeleteOne`) and the
+  model-introspection helpers to `prismaSchema.ts`. `PrismaAdapter.ts` drops from 493 → 367 lines and
+  its worst cyclomatic hotspot (`upsertOne`, ~CC 20) is now small named functions. `PrismaAdapter.fieldsFromModel`/`relationsFromModel` remain as static members for compatibility.
+- **`filterWritableFields` is now generic** (`<T>(…) => Partial<T>`), removing all nine `as never`
+  casts at the repository write boundary in the handlers and GraphQL mutation resolvers.
+- **Design-pattern-explicit file names** — the read-through caching repository (GoF **Decorator**)
+  moved to `CachingRepositoryDecorator.ts`, and the comparison Strategy table to `ComparisonStrategy.ts`,
+  so each file advertises the pattern it implements (joining the existing `*Adapter`/`*Strategy`
+  conventions). Public export names (`createCachingRepository`, `buildComparison`) are unchanged.
+
+### Tests
+
+- **`tests/integration/customEndpointFeatures.integration.test.ts`** — a new end-to-end suite over a
+  real Express server (supertest) covering the 2.7 features: public endpoints, `consumes`/`produces`
+  content negotiation (incl. 415/406), `authorizeCustom` role hierarchy, the per-endpoint `authorize`
+  predicate, and `CompositeAuthStrategy`. Runs without a database. New unit suites cover the same
+  paths plus `CompositeAuthStrategy` in isolation.
+
+### Notes
+
+- **Backward compatible.** The positional `addCustomEndpoint(method, path, roles, handler, openapi?)`
+  call, default JSON-only content negotiation, always-authenticate-when-`roles`-is-an-array, and the
+  flat OR-match (when a strategy has no `authorizeCustom`) all behave exactly as in 2.6.0. The router
+  and resolver decomposition is internal only — the public API surface is unchanged.
+
 ## [2.6.0]
 
 ### Added

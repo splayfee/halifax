@@ -6,13 +6,18 @@ import { UnprocessableEntityError } from '@/errors/UnprocessableEntityError.js'
  * Strips non-writable fields from a request body and rejects unknown fields with a 422.
  * Fields with `writable: false` are dropped; fields gated by `writeRoles` the caller lacks
  * are also dropped.
+ *
+ * Generic in the payload type so callers preserve it: given a `TCreate`/`TUpdate` body the
+ * result is typed `Partial<T>` (every field is potentially stripped), letting the repository's
+ * typed write methods accept it without an `as never` cast.
+ *
  * @throws {@link UnprocessableEntityError} for keys not defined on the resource.
  */
-export function filterWritableFields(
+export function filterWritableFields<T extends Record<string, unknown>>(
   resource: ResourceDefinition,
-  data: Record<string, unknown>,
+  data: T,
   auth?: AuthContext
-): Record<string, unknown> {
+): Partial<T> {
   const fields = resource.fields ?? []
   const fieldMap = new Map(fields.map((f) => [f.name, f]))
   const unknownFields = Object.keys(data).filter((key) => !fieldMap.has(key))
@@ -31,7 +36,7 @@ export function filterWritableFields(
       }
       return true
     })
-  )
+  ) as Partial<T>
 }
 
 /**

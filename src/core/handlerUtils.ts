@@ -62,37 +62,59 @@ export function wantsCacheBust(req: HttpRequest, header: string): boolean {
   return true
 }
 
-function checkContentType(req: HttpRequest): void {
-  if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method.toUpperCase())) return
-  const contentType = getHeaderValue(req, 'content-type') ?? ''
-  if (contentType && !contentType.includes('application/json')) {
-    throw new UnsupportedMediaTypeError()
-  }
+/** Per-route content-negotiation config. Both default to `['application/json']`. */
+export interface ContentNegotiation {
+  /** Request body content types the route accepts (matched against `Content-Type`). */
+  consumes?: string[]
+  /** Response content types the route produces (matched against `Accept`). */
+  produces?: string[]
 }
 
-function checkAcceptHeader(req: HttpRequest): void {
+const JSON_ONLY = ['application/json']
+const BODY_METHODS = ['POST', 'PATCH', 'PUT', 'DELETE']
+
+/**
+ * Rejects a request body whose `Content-Type` is not among the route's accepted types.
+ * A request with no body or no `Content-Type` header always passes, and a wildcard entry
+ * (the `any` media-type) in `consumes` accepts anything.
+ */
+function checkContentType(req: HttpRequest, consumes: string[] = JSON_ONLY): void {
+  if (!BODY_METHODS.includes(req.method.toUpperCase())) return
+  const contentType = getHeaderValue(req, 'content-type') ?? ''
+  if (!contentType || consumes.includes('*/*')) return
+  if (!consumes.some((type) => contentType.includes(type))) throw new UnsupportedMediaTypeError()
+}
+
+/**
+ * Rejects a request whose `Accept` header cannot be satisfied by any type the route produces.
+ * An absent or `any` (`star-slash-star`) `Accept` passes, as does a matching media-type family
+ * wildcard (e.g. `application` followed by `/` then `*` matches `application/json`).
+ */
+function checkAcceptHeader(req: HttpRequest, produces: string[] = JSON_ONLY): void {
   const accept = getHeaderValue(req, 'accept') ?? ''
-  if (
-    accept &&
-    !accept.includes('*/*') &&
-    !accept.includes('application/*') &&
-    !accept.includes('application/json')
-  ) {
-    throw new NotAcceptableError()
-  }
+  if (!accept || accept.includes('*/*')) return
+  const satisfied = produces.some((type) => {
+    const family = type.slice(0, type.indexOf('/'))
+    return accept.includes(type) || (family !== '' && accept.includes(`${family}/*`))
+  })
+  if (!satisfied) throw new NotAcceptableError()
 }
 
 /**
  * Wraps a route handler with Content-Type / Accept checks, error serialisation,
- * and `X-Correlation-ID` echo-back.
+ * and `X-Correlation-ID` echo-back. Pass {@link ContentNegotiation} to accept/produce
+ * content types other than the default `application/json` (e.g. file uploads, binary downloads).
  */
-export function wrap(handler: (req: HttpRequest, res: HttpResponse) => Promise<void>) {
+export function wrap(
+  handler: (req: HttpRequest, res: HttpResponse) => Promise<void>,
+  negotiation?: ContentNegotiation
+) {
   return async (req: HttpRequest, res: HttpResponse): Promise<void> => {
     const correlationId = getHeaderValue(req, 'x-correlation-id')
     if (correlationId) res.setHeader?.('X-Correlation-ID', correlationId)
     try {
-      checkContentType(req)
-      checkAcceptHeader(req)
+      checkContentType(req, negotiation?.consumes)
+      checkAcceptHeader(req, negotiation?.produces)
       await handler(req, res)
     } catch (error) {
       await sendError(error, res)

@@ -39,7 +39,10 @@ function stableStringify(value: unknown): string {
 }
 
 /**
- * Wraps a {@link Repository} with read-through caching and write invalidation.
+ * Wraps a {@link Repository} with read-through caching and write invalidation — the GoF
+ * **Decorator** pattern: the returned object implements the same `Repository` interface as the
+ * one it wraps, transparently adding caching behaviour without the wrapped repository (or its
+ * callers) knowing. This factory builds the decorator.
  *
  * - **Reads** (`getOne`, `getMany`, `executeQuery`) are cached under a versioned key.
  * - **Writes** (`createOne/Many`, `updateOne/Many`, `upsertOne`, `deleteOne/Many`) bump the

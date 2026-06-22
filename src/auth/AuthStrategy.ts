@@ -1,10 +1,12 @@
 export type {
   AuthContext,
   AuthorizeParams,
+  CustomAuthorizeParams,
   SecurityScheme,
   AuthStrategy
 } from './strategies/types.js'
 export { AllowAllAuthStrategy } from './strategies/AllowAllAuthStrategy.js'
+export { CompositeAuthStrategy } from './strategies/CompositeAuthStrategy.js'
 export { ApiKeyAuthStrategy } from './strategies/ApiKeyAuthStrategy.js'
 export {
   JwtClaimsAuthStrategy,

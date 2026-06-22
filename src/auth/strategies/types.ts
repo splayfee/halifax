@@ -1,4 +1,4 @@
-import type { CrudAction, HttpRequest, ResourceDefinition } from '@/core/types.js'
+import type { CrudAction, HttpMethod, HttpRequest, ResourceDefinition } from '@/core/types.js'
 
 /** Resolved user identity and access information returned by {@link AuthStrategy.authenticate}. */
 export interface AuthContext {
@@ -23,6 +23,27 @@ export interface AuthorizeParams {
   /** The resource being accessed. */
   resource: ResourceDefinition
   /** Permissions required for this action on this resource. */
+  requiredPermissions: string[]
+  /** The incoming request. */
+  req: HttpRequest
+}
+
+/**
+ * Parameters passed to {@link AuthStrategy.authorizeCustom} — the custom-endpoint counterpart
+ * of {@link AuthorizeParams}. A custom endpoint has no CRUD action or resource, so authorization
+ * is keyed on the route (`method` + `path`) and the endpoint's declared `requiredPermissions`
+ * (the `roles` passed to `addCustomEndpoint`). This lets a strategy apply the **same**
+ * authorization model — including role hierarchies / privilege thresholds — that it applies to
+ * auto-CRUD via {@link AuthStrategy.authorize}.
+ */
+export interface CustomAuthorizeParams {
+  /** The resolved authentication context for the current request. */
+  auth: AuthContext
+  /** The HTTP verb of the custom endpoint. */
+  method: Exclude<HttpMethod, '*'>
+  /** The custom endpoint's route path (e.g. `'/orders/:id/fulfill'`). */
+  path: string
+  /** The roles/permissions declared on the endpoint (its `addCustomEndpoint` `roles` argument). */
   requiredPermissions: string[]
   /** The incoming request. */
   req: HttpRequest
@@ -69,6 +90,15 @@ export interface AuthStrategy {
    * @returns `true` to allow, `false` to deny.
    */
   authorize?(params: AuthorizeParams): Promise<boolean> | boolean
+  /**
+   * Determine whether the authenticated caller may invoke a **custom endpoint**.
+   * Optional. When implemented, Halifax calls it (instead of the flat role OR-match) for every
+   * custom endpoint that does not declare its own `authorize` predicate — so a strategy can apply
+   * the same hierarchical / threshold authorization to custom routes that it applies to auto-CRUD.
+   * @param params - The auth context, route, and the endpoint's required permissions.
+   * @returns `true` to allow, `false` to deny (403).
+   */
+  authorizeCustom?(params: CustomAuthorizeParams): Promise<boolean> | boolean
   /**
    * Describes this strategy's security scheme for OpenAPI spec generation.
    * When implemented, the spec generator automatically wires up `components/securitySchemes`

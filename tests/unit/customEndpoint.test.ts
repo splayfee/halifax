@@ -468,3 +468,224 @@ describe('registerCrudApi — returns HalifaxApi', () => {
     expect(routes.has('GET:/verify')).toBe(true)
   })
 })
+
+// ─── HalifaxApi.addCustomEndpoint — public endpoints (auth skipped) ───────────
+
+describe('HalifaxApi.addCustomEndpoint — public endpoints', () => {
+  it('roles: null skips authentication entirely', async () => {
+    const { server, routes } = makeServer()
+    const authenticate = vi.fn(() => {
+      throw new Error('authenticate must not be called for a public endpoint')
+    })
+    const api = registerCrudApi(server, [], { authStrategy: { authenticate } })
+
+    let receivedAuth: unknown
+    api.addCustomEndpoint('POST', '/login', null, async (_req, res, ctx) => {
+      receivedAuth = ctx.auth
+      await res.status(200).json({ ok: true })
+    })
+
+    const { res, sent } = makeRes()
+    await invoke(routes, 'POST', '/login', makeReq('POST'), res)
+    expect(authenticate).not.toHaveBeenCalled()
+    expect(sent.status).toBe(200)
+    expect(receivedAuth).toEqual({ isAuthenticated: false })
+  })
+
+  it('options { auth: false } is equivalent to public', async () => {
+    const { server, routes } = makeServer()
+    const authenticate = vi.fn(() => {
+      throw new Error('should not authenticate')
+    })
+    const api = registerCrudApi(server, [], { authStrategy: { authenticate } })
+
+    let reached = false
+    api.addCustomEndpoint('GET', '/health', { auth: false }, async (_req, res) => {
+      reached = true
+      await res.status(200).json({ status: 'ok' })
+    })
+
+    const { res } = makeRes()
+    await invoke(routes, 'GET', '/health', makeReq('GET'), res)
+    expect(reached).toBe(true)
+    expect(authenticate).not.toHaveBeenCalled()
+  })
+
+  it('marks a public endpoint with security: [] in the OpenAPI spec', async () => {
+    const { server, routes } = makeServer()
+    const api = registerCrudApi(server, [], { openapi: { enabled: true, title: 'T' } })
+    api.addCustomEndpoint('GET', '/ping', null, async () => {}, { summary: 'Ping' })
+
+    const { res, sent } = makeRes()
+    await invoke(routes, 'GET', '/openapi.json', makeReq('GET'), res)
+    const spec = JSON.parse(sent.body as string) as OpenApiSpec
+    expect(spec.paths['/ping']?.get?.security).toEqual([])
+  })
+})
+
+// ─── HalifaxApi.addCustomEndpoint — content negotiation (consumes/produces) ───
+
+describe('HalifaxApi.addCustomEndpoint — content negotiation', () => {
+  it('consumes allows a non-JSON request body (e.g. multipart upload)', async () => {
+    const { server, routes } = makeServer()
+    const api = registerCrudApi(server, [], { authStrategy: new ApiKeyAuthStrategy('k') })
+
+    let reached = false
+    api.addCustomEndpoint(
+      'POST',
+      '/logo',
+      { roles: [], consumes: ['multipart/form-data'] },
+      async (_req, res) => {
+        reached = true
+        await res.status(201).json({ uploaded: true })
+      }
+    )
+
+    const req = makeReq('POST', {
+      headers: { 'x-api-key': 'k', 'content-type': 'multipart/form-data; boundary=xyz' }
+    })
+    const { res, sent } = makeRes()
+    await invoke(routes, 'POST', '/logo', req, res)
+    expect(reached).toBe(true)
+    expect(sent.status).toBe(201)
+  })
+
+  it('still rejects an undeclared content type with 415', async () => {
+    const { server, routes } = makeServer()
+    const api = registerCrudApi(server, [], { authStrategy: new ApiKeyAuthStrategy('k') })
+    api.addCustomEndpoint('POST', '/json-only', { roles: [] }, async (_req, res) => {
+      await res.status(201).json({})
+    })
+
+    const req = makeReq('POST', {
+      headers: { 'x-api-key': 'k', 'content-type': 'multipart/form-data; boundary=xyz' }
+    })
+    const { res, sent } = makeRes()
+    await invoke(routes, 'POST', '/json-only', req, res)
+    expect(sent.status).toBe(415)
+  })
+
+  it('produces allows a non-JSON Accept (e.g. application/pdf)', async () => {
+    const { server, routes } = makeServer()
+    const api = registerCrudApi(server, [], { authStrategy: new ApiKeyAuthStrategy('k') })
+
+    let reached = false
+    api.addCustomEndpoint(
+      'GET',
+      '/report.pdf',
+      { roles: [], produces: ['application/pdf'] },
+      async (_req, res) => {
+        reached = true
+        res.setHeader?.('Content-Type', 'application/pdf')
+        res.send?.('%PDF-1.4')
+      }
+    )
+
+    const req = makeReq('GET', { headers: { 'x-api-key': 'k', accept: 'application/pdf' } })
+    const { res } = makeRes()
+    await invoke(routes, 'GET', '/report.pdf', req, res)
+    expect(reached).toBe(true)
+  })
+
+  it('rejects an Accept that excludes every produced type with 406', async () => {
+    const { server, routes } = makeServer()
+    const api = registerCrudApi(server, [], { authStrategy: new ApiKeyAuthStrategy('k') })
+    api.addCustomEndpoint('GET', '/data', { roles: [] }, async (_req, res) => {
+      await res.status(200).json({})
+    })
+
+    const req = makeReq('GET', { headers: { 'x-api-key': 'k', accept: 'text/html' } })
+    const { res, sent } = makeRes()
+    await invoke(routes, 'GET', '/data', req, res)
+    expect(sent.status).toBe(406)
+  })
+})
+
+// ─── HalifaxApi.addCustomEndpoint — authorizeCustom & authorize predicate ─────
+
+describe('HalifaxApi.addCustomEndpoint — strategy.authorizeCustom', () => {
+  it('delegates to authorizeCustom and allows when it returns true', async () => {
+    const { server, routes } = makeServer()
+    const authorizeCustom = vi.fn().mockResolvedValue(true)
+    const strategy = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, claims: { roleValue: 2 } }),
+      authorizeCustom
+    }
+    const api = registerCrudApi(server, [], { authStrategy: strategy })
+
+    let reached = false
+    api.addCustomEndpoint('POST', '/invite', ['role:3'], async (_req, res) => {
+      reached = true
+      await res.status(200).json({})
+    })
+
+    await invoke(routes, 'POST', '/invite', makeReq('POST'), makeRes().res)
+    expect(reached).toBe(true)
+    expect(authorizeCustom).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'POST', path: '/invite', requiredPermissions: ['role:3'] })
+    )
+  })
+
+  it('denies with 403 when authorizeCustom returns false', async () => {
+    const { server, routes } = makeServer()
+    const strategy = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true }),
+      authorizeCustom: vi.fn().mockResolvedValue(false)
+    }
+    const api = registerCrudApi(server, [], { authStrategy: strategy })
+    api.addCustomEndpoint('GET', '/restricted', ['role:1'], async (_req, res) => {
+      await res.status(200).json({})
+    })
+
+    const { res, sent } = makeRes()
+    await invoke(routes, 'GET', '/restricted', makeReq('GET'), res)
+    expect(sent.status).toBe(403)
+  })
+
+  it('useStrategyAuthorize: false falls back to the flat OR-match', async () => {
+    const { server, routes } = makeServer()
+    const authorizeCustom = vi.fn().mockResolvedValue(true)
+    const strategy = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, roles: ['viewer'] }),
+      authorizeCustom
+    }
+    const api = registerCrudApi(server, [], { authStrategy: strategy })
+    api.addCustomEndpoint(
+      'GET',
+      '/flat',
+      { roles: ['admin'], useStrategyAuthorize: false },
+      async (_req, res) => {
+        await res.status(200).json({})
+      }
+    )
+
+    const { res, sent } = makeRes()
+    await invoke(routes, 'GET', '/flat', makeReq('GET'), res)
+    expect(authorizeCustom).not.toHaveBeenCalled()
+    expect(sent.status).toBe(403)
+  })
+
+  it('a per-endpoint authorize predicate is the sole gate and overrides authorizeCustom', async () => {
+    const { server, routes } = makeServer()
+    const authorizeCustom = vi.fn().mockResolvedValue(true)
+    const strategy = {
+      authenticate: vi.fn().mockResolvedValue({ isAuthenticated: true, userId: '7' }),
+      authorizeCustom
+    }
+    const api = registerCrudApi(server, [], { authStrategy: strategy })
+
+    api.addCustomEndpoint(
+      'GET',
+      '/owned/:id',
+      { authorize: ({ auth }) => auth.userId === '99' },
+      async (_req, res) => {
+        await res.status(200).json({})
+      }
+    )
+
+    const { res, sent } = makeRes()
+    await invoke(routes, 'GET', '/owned/:id', makeReq('GET'), res)
+    expect(authorizeCustom).not.toHaveBeenCalled()
+    expect(sent.status).toBe(403)
+  })
+})

@@ -3,6 +3,9 @@ import type { AuthStrategy } from '@/auth/strategies/types.js'
 import type { CrudHooks } from '@/core/hooks.js'
 import type { CrudAction, HttpRequest, Repository, ResourceDefinition } from '@/core/types.js'
 
+/** The lazily-imported `graphql` module — the optional peer dependency, loaded only when enabled. */
+export type GqlModule = typeof import('graphql')
+
 /** Configuration for the Halifax GraphQL endpoint. */
 export interface GraphQLOptions {
   /**

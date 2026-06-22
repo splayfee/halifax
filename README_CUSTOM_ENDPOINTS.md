@@ -93,19 +93,54 @@ api.addCustomEndpoint(/* ... */)
 
 ## API reference
 
-### `api.addCustomEndpoint(method, path, roles, handler, openapi?)`
+`addCustomEndpoint` has two call forms. Use whichever reads better:
+
+```ts
+// Positional — roles + optional OpenAPI metadata
+api.addCustomEndpoint(method, path, roles, handler, openapi?)
+
+// Options bag — unlocks auth toggles, per-endpoint authorize, and content negotiation
+api.addCustomEndpoint(method, path, options, handler)
+```
+
+### Positional form — `api.addCustomEndpoint(method, path, roles, handler, openapi?)`
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `method` | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` | HTTP verb |
 | `path` | `string` | Route path, e.g. `'/reports/summary'` or `'/orders/:id/invoice'`. Path params are available via `req.params`. |
-| `roles` | `string[]` | Required roles or permission slugs. **OR logic** — any single match in `auth.roles` or `auth.permissions` grants access. Pass `[]` to allow any authenticated caller. |
+| `roles` | `string[] \| null` | Required roles or permission slugs. **OR logic** — any single match in `auth.roles` or `auth.permissions` grants access. Pass `[]` to allow any authenticated caller, or **`null` to make the endpoint public** (authentication is skipped — see [Public endpoints](#public-unauthenticated-endpoints)). |
 | `handler` | `CustomEndpointHandler` | Your business logic (see below). |
 | `openapi` | `CustomEndpointOpenApi \| undefined` | Optional OpenAPI 3.1 metadata merged into the live spec. |
 
 Returns `this` for chaining.
 
 **Throws `ServerError`** when `method + path` is already registered — either by Halifax's own CRUD routes or by a prior `addCustomEndpoint` call. This prevents silent route shadowing.
+
+### Options-bag form — `api.addCustomEndpoint(method, path, options, handler)`
+
+```ts
+interface CustomEndpointOptions {
+  /** Roles/permissions (OR logic). [] / omitted → any authenticated caller. null → public. */
+  roles?: string[] | null
+  /** Public-endpoint toggle. `false` skips authentication (same as `roles: null`). Default true. */
+  auth?: boolean
+  /** One-off authorization predicate. When set it is the SOLE gate (overrides roles + authorizeCustom). */
+  authorize?: (ctx: { auth: AuthContext; req: HttpRequest }) => boolean | Promise<boolean>
+  /** Route role-gating through AuthStrategy.authorizeCustom when available. Default true. */
+  useStrategyAuthorize?: boolean
+  /** Accepted request Content-Types (e.g. ['multipart/form-data']). Default ['application/json']. */
+  consumes?: string[]
+  /** Produced response types negotiated against Accept (e.g. ['application/pdf']). Default ['application/json']. */
+  produces?: string[]
+  /** OpenAPI 3.1 metadata merged into the live spec. */
+  openapi?: CustomEndpointOpenApi
+}
+```
+
+Every field is optional, and the defaults reproduce the positional call exactly — so
+`addCustomEndpoint('GET', '/x', [], handler)` and `addCustomEndpoint('GET', '/x', { roles: [] }, handler)`
+are equivalent.
 
 ### `CustomEndpointHandler`
 
@@ -117,7 +152,9 @@ type CustomEndpointHandler = (
 ) => Promise<void> | void
 
 interface CustomEndpointContext {
-  auth: AuthContext   // resolved by the configured auth strategy before your handler is called
+  // Resolved by the configured auth strategy before your handler is called.
+  // For a PUBLIC endpoint this is `{ isAuthenticated: false }` — the handler owns any checks.
+  auth: AuthContext
 }
 ```
 
@@ -146,11 +183,181 @@ Every custom endpoint automatically receives the same middleware stack Halifax a
 
 | Feature | Behaviour |
 |---------|-----------|
-| **Authentication** | `authStrategy.authenticate(req)` runs before your handler. Unauthenticated requests are rejected with the strategy's error (typically 401). |
-| **Role enforcement** | If `roles` is non-empty, any caller whose `auth.roles` or `auth.permissions` contains at least one of the listed values is allowed; all others receive 403. |
+| **Authentication** | `authStrategy.authenticate(req)` runs before your handler. Unauthenticated requests are rejected with the strategy's error (typically 401). Skipped entirely for [public endpoints](#public-unauthenticated-endpoints) (`roles: null` / `auth: false`). |
+| **Authorization** | When `roles` is non-empty, the caller must hold at least one (OR logic). A strategy that implements [`authorizeCustom`](#hierarchical-authorization-with-authorizecustom) gets to apply its own model (e.g. a role hierarchy) instead of the flat match; a per-endpoint [`authorize` predicate](#per-endpoint-authorize-predicate) overrides both. Denied callers receive 403. |
 | **Error serialization** | Throw any Halifax error class (`NotFoundError`, `BadRequestError`, `AuthorizationError`, `UnprocessableEntityError`, …) and Halifax serializes it as `{ errors: [{ code, message }] }` with the correct status code. Unhandled exceptions become 500. |
-| **Content-Type negotiation** | `POST`/`PUT`/`PATCH`/`DELETE` requests with a non-JSON body receive 415. Requests with an `Accept` header that excludes `application/json` receive 406. |
+| **Content-Type negotiation** | By default `POST`/`PUT`/`PATCH`/`DELETE` requests with a non-JSON body receive 415, and a request whose `Accept` excludes `application/json` receives 406. Override per endpoint with [`consumes` / `produces`](#content-negotiation-uploads--binary-responses). |
 | **`X-Correlation-ID` echo** | When the request carries an `X-Correlation-ID` header, the same value is echoed back on the response. |
+
+---
+
+## Public (unauthenticated) endpoints
+
+Some routes must be reachable with no session or token — health checks, `login`, account
+activation, password reset, and inbound webhooks. Pass **`null`** as `roles` (positional form) or
+**`{ auth: false }`** (options bag) and Halifax skips `authStrategy.authenticate` entirely:
+
+```ts
+// Positional — null roles = public
+api.addCustomEndpoint('GET', '/health', null, async (_req, res) => {
+  await res.status(200).json({ status: 'ok' })
+})
+
+// Options bag — auth: false is equivalent
+api.addCustomEndpoint('POST', '/login', { auth: false }, async (req, res) => {
+  const session = await authenticateUser(req.body)          // your own login logic
+  if (!session) throw new BadRequestError('Invalid credentials.')
+  await res.status(200).json({ ok: true })
+})
+```
+
+The handler still gets error serialization, content negotiation, and `X-Correlation-ID` echo — it
+just isn't authenticated, so `ctx.auth` is `{ isAuthenticated: false }`. In the OpenAPI spec a
+public operation is marked `security: []`, so Swagger UI renders no lock icon for it.
+
+> Authentication is the only thing skipped. If your public handler needs request validation or rate
+> limiting, do it inside the handler (or with framework middleware mounted on the route) — Halifax
+> does not run those for you.
+
+---
+
+## Hierarchical authorization with `authorizeCustom`
+
+By default, a non-empty `roles` array is checked with a **flat OR-match**: the caller is allowed if
+`auth.roles` or `auth.permissions` contains any listed value. That is perfect for slug-style
+permissions (`['reports:read']`) but not for a **role hierarchy** where "admin" should implicitly
+satisfy a "manager"-gated route.
+
+Implement the optional **`authorizeCustom`** method on your `AuthStrategy` — the custom-endpoint
+counterpart of `authorize` — and Halifax calls it (instead of the flat match) for every custom
+endpoint that doesn't declare its own `authorize` predicate. This lets custom endpoints reuse the
+exact authorization model you already apply to auto-CRUD via `requiredPermissions`:
+
+```ts
+class SessionAuthStrategy implements AuthStrategy {
+  authenticate(req) { /* … resolve { roles, permissions, claims: { roleValue } } … */ }
+
+  // CRUD routes — value-threshold check (lower value = more privileged)
+  authorize({ auth, requiredPermissions }) {
+    return passesThreshold(auth, requiredPermissions)
+  }
+
+  // Custom endpoints — SAME rule, keyed on the route instead of a CRUD action
+  authorizeCustom({ auth, requiredPermissions }) {
+    return passesThreshold(auth, requiredPermissions)
+  }
+}
+```
+
+```ts
+// Now a Manager-gated custom endpoint is satisfied by Manager AND any higher role:
+api.addCustomEndpoint('POST', '/invite', ['role:3'], inviteHandler)   // role:3 = Manager threshold
+```
+
+`authorizeCustom` receives `{ auth, method, path, requiredPermissions, req }` (the `roles` array you
+passed becomes `requiredPermissions`). Strategies that don't implement it fall back to the flat
+OR-match — so this is fully backward compatible. To force the flat match on a single endpoint even
+when the strategy implements `authorizeCustom`, pass `useStrategyAuthorize: false`.
+
+---
+
+## Per-endpoint `authorize` predicate
+
+For one-off, resource-specific rules (typically ownership checks) pass an `authorize` callback in
+the options bag. When present it is the **sole** authorization gate — it overrides both `roles`
+matching and `authorizeCustom`:
+
+```ts
+api.addCustomEndpoint(
+  'GET',
+  '/orders/:id',
+  {
+    authorize: async ({ auth, req }) => {
+      const order = await db.order.findUnique({ where: { id: Number(req.params.id) } })
+      return order?.ownerId === auth.userId      // false → 403
+    }
+  },
+  async (req, res) => {
+    const order = await db.order.findUnique({ where: { id: Number(req.params.id) } })
+    await res.status(200).json(order)
+  }
+)
+```
+
+The endpoint is still authenticated first (unless it is also public); the predicate runs only for an
+authenticated caller and decides access. Return `false` (or reject) to deny with 403.
+
+---
+
+## Content negotiation: uploads & binary responses
+
+Custom endpoints default to JSON in and JSON out, but real apps need file uploads and binary
+downloads. The options bag exposes two arrays:
+
+- **`consumes`** — request `Content-Type`s the route accepts (matched against `Content-Type`).
+- **`produces`** — response types the route can return (negotiated against `Accept`).
+
+Both default to `['application/json']`, preserving the standard 415/406 behaviour.
+
+```ts
+// File upload — accept multipart bodies (parse with multer/busboy on req.raw or app middleware)
+api.addCustomEndpoint(
+  'PATCH',
+  '/companies/:id/logo',
+  { roles: ['admin'], consumes: ['multipart/form-data'] },
+  async (req, res) => {
+    const url = await uploadLogoFromRequest(req.raw)        // your multipart handling
+    await res.status(200).json({ logoUrl: url })
+  }
+)
+
+// Binary response — stream a PDF
+api.addCustomEndpoint(
+  'POST',
+  '/reports/scans/:id',
+  { roles: ['viewer', 'admin'], produces: ['application/pdf'] },
+  async (req, res) => {
+    const pdf = await renderScanReport(req.params.id)       // a Buffer
+    res.setHeader?.('Content-Type', 'application/pdf')
+    res.raw.end(pdf)                                        // stream via the raw framework response
+  }
+)
+```
+
+Notes:
+
+- A `'*/*'` entry in `consumes` accepts **any** request body; a media-type family wildcard in the
+  request's `Accept` (e.g. `application/*`) is honoured against `produces`.
+- Halifax does **not** parse multipart bodies for you — it just stops rejecting them. Parse via
+  `req.raw` (busboy) or mount your framework's upload middleware on the path before Halifax.
+- For responses, write through `res.raw` (the underlying Express/Fastify/… response) so you control
+  streaming and headers.
+
+---
+
+## Multiple credentials with `CompositeAuthStrategy`
+
+When a single route must be reachable by **more than one** kind of credential — e.g. an interactive
+**session** *or* a programmatic **API key** — combine strategies with `CompositeAuthStrategy`. It
+tries each in order and adopts the first that authenticates the request:
+
+```ts
+import { CompositeAuthStrategy, ApiKeyAuthStrategy, PassportSessionStrategy } from '@edium/halifax'
+
+const authStrategy = new CompositeAuthStrategy([
+  // API-key callers carry their scopes as permissions → usable as custom-endpoint roles
+  new ApiKeyAuthStrategy(process.env.API_KEY!, 'x-api-key', ['devices:read']),
+  new PassportSessionStrategy()
+])
+
+const api = registerCrudApi(server, resources, { authStrategy })
+
+// Reachable by a session user OR an API key holding the 'devices:read' scope
+api.addCustomEndpoint('GET', '/devices', ['devices:read'], listDevicesHandler)
+```
+
+`authorize`, `authorizeCustom`, and the OpenAPI security scheme are all delegated to whichever member
+strategy actually authenticated the request, so each credential keeps its own authorization rules.
 
 ---
 

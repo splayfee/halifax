@@ -40,7 +40,7 @@ export function registerUpdateMany(
           'updateMany requires at least one WHERE filter to prevent unintended bulk updates.'
         )
       if (hooks?.beforeUpdateMany) await hooks.beforeUpdateMany(query, filteredUpdate, hookCtx)
-      const rawResult = await repo.updateMany(query, filteredUpdate as never)
+      const rawResult = await repo.updateMany(query, filteredUpdate)
       const result = await applyHook(
         hooks?.afterUpdateMany,
         rawResult as UpdateManyResult<Record<string, unknown>>,

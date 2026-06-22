@@ -160,9 +160,10 @@ Contract for pluggable authentication and authorization strategies. Implement th
 
 | Member          | Signature                                                   | Required | Description                                                                                                                                    |
 | --------------- | ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `authenticate`  | `(req: HttpRequest) => AuthContext \| Promise<AuthContext>` | yes      | Authenticate the request. Throw `AuthenticationError` (→ 401) or `AuthorizationError` (→ 403) on failure.                                      |
-| `authorize`     | `(params: AuthorizeParams) => boolean \| Promise<boolean>`  | no       | Gate each action against the auth context. When absent, Halifax checks `requiredPermissions` against `auth.roles`/`auth.permissions` directly. |
-| `openApiScheme` | `() => SecurityScheme \| undefined`                         | no       | Return the security scheme to document in the OpenAPI spec (wires up the Swagger UI "Authorize" button).                                       |
+| `authenticate`    | `(req: HttpRequest) => AuthContext \| Promise<AuthContext>`      | yes      | Authenticate the request. Throw `AuthenticationError` (→ 401) or `AuthorizationError` (→ 403) on failure.                                      |
+| `authorize`       | `(params: AuthorizeParams) => boolean \| Promise<boolean>`       | no       | Gate each **auto-CRUD** action against the auth context. When absent, Halifax checks `requiredPermissions` against `auth.roles`/`auth.permissions` directly. |
+| `authorizeCustom` | `(params: CustomAuthorizeParams) => boolean \| Promise<boolean>` | no       | Gate each **custom endpoint** against the auth context. When absent, Halifax uses the flat OR-match of the endpoint's `roles`. Lets a strategy apply a role hierarchy to custom routes. |
+| `openApiScheme`   | `() => SecurityScheme \| undefined`                              | no       | Return the security scheme to document in the OpenAPI spec (wires up the Swagger UI "Authorize" button).                                       |
 
 ---
 
@@ -195,6 +196,40 @@ Passed to `AuthStrategy.authorize` on every request.
 | `resource`            | `ResourceDefinition` | The resource being accessed.                           |
 | `requiredPermissions` | `string[]`           | Permissions required for this action on this resource. |
 | `req`                 | `HttpRequest`        | The incoming HTTP request.                             |
+
+---
+
+### `CustomAuthorizeParams`
+
+Import: `@edium/halifax`
+
+Passed to `AuthStrategy.authorizeCustom` for every custom endpoint (the custom-endpoint counterpart of `AuthorizeParams`). A custom endpoint has no CRUD action or resource, so authorization is keyed on the route.
+
+| Property              | Type                                              | Description                                                              |
+| --------------------- | ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `auth`                | `AuthContext`                                     | The resolved authentication context.                                     |
+| `method`              | `'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'` | The HTTP verb of the custom endpoint.                                    |
+| `path`                | `string`                                          | The endpoint's route path (e.g. `'/orders/:id/fulfill'`).               |
+| `requiredPermissions` | `string[]`                                        | The roles/permissions declared on the endpoint (its `roles` argument).   |
+| `req`                 | `HttpRequest`                                     | The incoming HTTP request.                                               |
+
+---
+
+### `CustomEndpointOptions`
+
+Import: `@edium/halifax`
+
+The options-bag argument to `HalifaxApi.addCustomEndpoint(method, path, options, handler)`. Every field is optional; defaults reproduce the positional `roles`-array call.
+
+| Property               | Type                                                                  | Default                  | Description                                                                                          |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `roles`                | `string[] \| null`                                                    | `[]`                     | Roles/permissions (OR logic). `[]` → any authenticated caller; `null` → **public** (auth skipped).   |
+| `auth`                 | `boolean`                                                             | `true`                   | `false` makes the endpoint public (same as `roles: null`).                                           |
+| `authorize`            | `(ctx: { auth: AuthContext; req: HttpRequest }) => boolean \| Promise<boolean>` | —              | One-off authorization predicate. When set, the **sole** gate (overrides `roles` + `authorizeCustom`).|
+| `useStrategyAuthorize` | `boolean`                                                             | `true`                   | Route role-gating through `AuthStrategy.authorizeCustom` when available. `false` forces the flat match.|
+| `consumes`             | `string[]`                                                            | `['application/json']`   | Accepted request `Content-Type`s (e.g. `['multipart/form-data']`).                                   |
+| `produces`             | `string[]`                                                            | `['application/json']`   | Response types negotiated against `Accept` (e.g. `['application/pdf']`).                              |
+| `openapi`              | `CustomEndpointOpenApi`                                               | —                        | OpenAPI 3.1 metadata merged into the live spec.                                                      |
 
 ---
 

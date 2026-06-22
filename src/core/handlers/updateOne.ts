@@ -27,7 +27,7 @@ export function registerUpdateOne(
       const body = hooks?.beforeUpdateOne
         ? ((await hooks.beforeUpdateOne(id, rawBody, hookCtx)) ?? rawBody)
         : rawBody
-      const rawResult = await repo.updateOne(id, body as never)
+      const rawResult = await repo.updateOne(id, body)
       if (!rawResult) throw new NotFoundError()
       const result = await applyHook(
         hooks?.afterUpdateOne,

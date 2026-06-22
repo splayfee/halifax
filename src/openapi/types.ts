@@ -109,6 +109,11 @@ export type OpenApiOperation = {
     string,
     { description: string; content?: { 'application/json': { schema: JsonSchema } } }
   >
+  /**
+   * Per-operation security requirement. An empty array (`[]`) marks the operation as public,
+   * overriding the global `security` requirement — used for public custom endpoints.
+   */
+  security?: Array<Record<string, []>>
 }
 
 export type OpenApiSecuritySchemeObject =

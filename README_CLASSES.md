@@ -43,6 +43,32 @@ new ApiKeyAuthStrategy(expectedApiKey: string, headerName?: string, roles?: stri
 
 ---
 
+### `CompositeAuthStrategy`
+
+Import: `@edium/halifax`
+
+Combines several strategies and adopts the **first** that authenticates a request, so one route can be reached by more than one credential (e.g. an interactive session **or** a programmatic API key).
+
+```ts
+new CompositeAuthStrategy(strategies: AuthStrategy[])
+```
+
+| Parameter    | Default  | Description                                          |
+| ------------ | -------- | ---------------------------------------------------- |
+| `strategies` | required | Strategies to try, in priority order (first match wins). Throws if empty. |
+
+- Tries each strategy in order; the first to resolve wins. If none authenticate, the last error is thrown.
+- `authorize`, `authorizeCustom`, and `openApiScheme` are delegated to the strategy that authenticated the request (falling back to a flat permission match / the first declared scheme).
+
+```ts
+const authStrategy = new CompositeAuthStrategy([
+  new ApiKeyAuthStrategy(process.env.API_KEY!, 'x-api-key', ['devices:read']),
+  new PassportSessionStrategy()
+])
+```
+
+---
+
 ### `JwtClaimsAuthStrategy`
 
 Import: `@edium/halifax`

@@ -4,7 +4,6 @@ import type {
   FieldDefinition,
   ListOptions,
   ListResult,
-  ModelSchema,
   QueryResult,
   RelationDefinition,
   Repository,
@@ -14,17 +13,13 @@ import type {
 } from '@/core/types.js'
 import type { PrismaAdapterOptions, PrismaDelegate } from './types.js'
 import { ConflictError } from '@/errors/ConflictError.js'
-import { NotFoundError } from '@/errors/NotFoundError.js'
 import { NotImplementedError } from '@/errors/NotImplementedError.js'
 import { ServerError } from '@/errors/ServerError.js'
 import { astToPrismaOrderBy, astToPrismaWhere } from './astToPrisma.js'
 import { toInclude, toOrderBy, toSelect } from './helpers.js'
-import {
-  isNotFoundError,
-  isDuplicateError,
-  isIdentityInsertError,
-  prismaTypeToOpenApi
-} from './prismaUtils.js'
+import { isNotFoundError, isDuplicateError } from './prismaUtils.js'
+import { fieldsFromModel, relationsFromModel } from './prismaSchema.js'
+import { scopedDeleteOne, scopedUpdateOne, scopedUpsertOne } from './prismaScopedWrites.js'
 import { scopedWhere, stripTenant, stampTenant, resolveScopedQuery } from './tenantScoping.js'
 
 /**
@@ -32,6 +27,9 @@ import { scopedWhere, stripTenant, stampTenant, resolveScopedQuery } from './ten
  * database operations. It handles CRUD plus the query-builder/bulk paths by compiling the
  * query AST to portable Prisma Client calls (no raw SQL), so it works on every Prisma
  * provider. It also extracts field and relation definitions from a provided model schema.
+ *
+ * The intricate tenant-safe single-row write paths live in `./prismaScopedWrites.js`, and the
+ * model-introspection helpers in `./prismaSchema.js`, so this class stays an orchestration layer.
  */
 export class PrismaAdapter<
   TRecord = unknown,
@@ -56,6 +54,11 @@ export class PrismaAdapter<
   /** An array of relation definitions for the model (present when built with a `model`). */
   public readonly relations?: RelationDefinition[]
 
+  /** Derives {@link FieldDefinition}s from a Prisma model schema. @see fieldsFromModel */
+  public static readonly fieldsFromModel = fieldsFromModel
+  /** Derives {@link RelationDefinition}s from a Prisma model schema. @see relationsFromModel */
+  public static readonly relationsFromModel = relationsFromModel
+
   /**
    * Constructs a new instance of PrismaAdapter with the provided options.
    * @param options - The Prisma delegate plus optional id field, return-created flag, and model schema.
@@ -73,8 +76,8 @@ export class PrismaAdapter<
     }
 
     if (options.model) {
-      this.fields = PrismaAdapter.fieldsFromModel(options.model)
-      this.relations = PrismaAdapter.relationsFromModel(options.model)
+      this.fields = fieldsFromModel(options.model)
+      this.relations = relationsFromModel(options.model)
     }
   }
 
@@ -87,34 +90,6 @@ export class PrismaAdapter<
    */
   public withScope(scope: TenantScope): PrismaAdapter<TRecord, TCreate, TUpdate> {
     return new PrismaAdapter<TRecord, TCreate, TUpdate>({ ...this.options, scope })
-  }
-
-  /**
-   * Extracts field definitions from a Prisma model schema.
-   * @param model - The Prisma model schema.
-   * @returns An array of field definitions.
-   */
-  public static fieldsFromModel(model: ModelSchema): FieldDefinition[] {
-    return model.fields
-      .filter((f) => f.kind !== 'object')
-      .map((f) => ({
-        name: f.name,
-        filterable: true,
-        sortable: true,
-        writable: !f.isId && !f.isReadOnly,
-        ...prismaTypeToOpenApi(f.type)
-      }))
-  }
-
-  /**
-   * Extracts relation definitions from a Prisma model schema.
-   * @param model - The Prisma model schema.
-   * @returns
-   */
-  public static relationsFromModel(model: ModelSchema): RelationDefinition[] {
-    return model.fields
-      .filter((f) => f.kind === 'object')
-      .map((f) => ({ name: f.name, includable: true }))
   }
 
   /**
@@ -222,33 +197,20 @@ export class PrismaAdapter<
 
   /**
    * Updates a single record identified by its ID with the provided data. If the record does not exist, it returns null.
+   * The tenant-scoped path is delegated to {@link scopedUpdateOne} (atomic, fail-closed).
    * @param id - The ID of the record to be updated.
    * @param data - An object containing the data to update the record with.
    * @returns A promise that resolves to the updated record or null if the record does not exist.
-   * @throws ServerError if the Prisma delegate does not support the update method.
    */
   public async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     if (this.scope) {
-      const whereClause = scopedWhere(this.scope, { [this.idField]: id })
-
-      // Preferred path: delegate.updateMany lets us do a single atomic statement whose
-      // WHERE enforces the tenant boundary, eliminating the TOCTOU window.
-      if (this.delegate.updateMany && this.delegate.findFirst) {
-        const { count } = await this.delegate.updateMany({
-          where: whereClause,
-          data: stripTenant(this.scope, data)
-        })
-        if (count === 0) return null
-        return (await this.delegate.findFirst({ where: whereClause })) as TRecord | null
-      }
-
-      // updateMany is unavailable — we cannot perform a single atomic scoped update.
-      // A two-step findFirst + unscoped update would introduce a TOCTOU window where a
-      // record could be transferred to another tenant between the check and the write.
-      // Refuse rather than risk a cross-tenant modification.
-      throw new ServerError(
-        'Prisma delegate does not support updateMany (required for safe tenant-scoped updateOne).'
-      )
+      return (await scopedUpdateOne(
+        this.delegate,
+        this.scope,
+        this.idField,
+        id,
+        data as Record<string, unknown>
+      )) as TRecord | null
     }
     try {
       return (await this.delegate.update({ where: { [this.idField]: id }, data })) as TRecord
@@ -288,96 +250,23 @@ export class PrismaAdapter<
   }
 
   /**
-   * Upserts a single record identified by its ID with the provided data. If the record does not exist, it creates a new one.
-   * If it exists, it updates the existing record. This method requires the Prisma delegate to support the upsert operation.
+   * Upserts a single record by its ID, creating it when absent and updating it when present.
+   * The tenant-scoped path is delegated to {@link scopedUpsertOne}, which enforces the tenant
+   * constraint at every statement (never via `delegate.upsert`, whose update branch ignores it).
    * @param id - The ID of the record to be upserted.
-   * @param data - An object containing the data to upsert the record with. This data will be used for both creating a new record if it does not exist and updating the existing record if it does exist.
-   * @returns A promise that resolves to the upserted record, whether it was created or updated.
-   * @throws NotImplementedError if the Prisma delegate does not support the upsert method.
-   * @throws ServerError if the Prisma delegate does not support the required methods for upserting records.
+   * @param data - The fields to create or update with.
+   * @returns A promise that resolves to the upserted record.
+   * @throws NotImplementedError if an unscoped delegate does not support upsert.
    */
   public async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
-    // Scoped upsert: do NOT use delegate.upsert with a bare id where-clause — Prisma's upsert
-    // would execute its `update` branch against any matching record regardless of tenant, giving
-    // a cross-tenant write if a race places another tenant's row at that id. Instead we decompose
-    // into a scoped findFirst + a scoped updateMany (create on miss) so the tenant constraint is
-    // enforced at every statement.
     if (this.scope) {
-      if (!this.delegate.findFirst) {
-        throw new ServerError(
-          'Prisma delegate does not support findFirst (required for tenant scoping).'
-        )
-      }
-      const whereClause = scopedWhere(this.scope, { [this.idField]: id })
-      const existing = (await this.delegate.findFirst({
-        where: whereClause
-      })) as Record<string, unknown> | null
-
-      // Defense-in-depth: even though whereClause already filters by tenant, verify the
-      // returned record actually belongs to this tenant before treating it as owned.
-      if (existing && existing[this.scope.field] !== this.scope.value) {
-        throw new NotFoundError()
-      }
-
-      if (existing) {
-        // Record exists for this tenant — update it atomically via updateMany(whereClause)
-        // so the tenant constraint is enforced in the same SQL statement as the write.
-        if (this.delegate.updateMany) {
-          const { count } = await this.delegate.updateMany({
-            where: whereClause,
-            data: stripTenant(this.scope, data)
-          })
-          if (count === 0) {
-            // Deleted in the tiny window between findFirst and updateMany — treat as a
-            // fresh create so the caller gets a record back (consistent with upsert semantics).
-            try {
-              return (await this.delegate.create({
-                data: stampTenant(this.scope, { ...data, [this.idField]: id } as TCreate)
-              })) as TRecord
-            } catch (error) {
-              if (isDuplicateError(error)) throw new ConflictError()
-              if (isIdentityInsertError(error)) {
-                const anyMatch = await this.delegate.findFirst!({ where: { [this.idField]: id } })
-                if (anyMatch) throw new ConflictError()
-                return (await this.delegate.create({ data: stampTenant(this.scope, data as TCreate) })) as TRecord
-              }
-              throw error
-            }
-          }
-          return (await this.delegate.findFirst({ where: whereClause })) as TRecord
-        }
-        // Fallback when updateMany is unavailable (non-standard delegate). The update is still
-        // scoped via the earlier findFirst; the TOCTOU window here is only closeable with a
-        // transaction, which we cannot guarantee across providers.
-        try {
-          return (await this.delegate.update({
-            where: { [this.idField]: id },
-            data: stripTenant(this.scope, data)
-          })) as TRecord
-        } catch (error) {
-          if (isNotFoundError(error)) throw new NotFoundError()
-          if (isDuplicateError(error)) throw new ConflictError()
-          throw error
-        }
-      }
-
-      // Record does not exist for this tenant — create it with the tenant stamped.
-      try {
-        return (await this.delegate.create({
-          data: stampTenant(this.scope, { ...data, [this.idField]: id } as TCreate)
-        })) as TRecord
-      } catch (error) {
-        if (isDuplicateError(error)) throw new ConflictError()
-        if (isIdentityInsertError(error)) {
-          // MSSQL IDENTITY columns reject any explicit-ID insert. Probe to distinguish a
-          // cross-tenant ID collision (another tenant owns this ID → ConflictError) from a
-          // genuinely new row (let the DB assign the ID instead).
-          const anyMatch = await this.delegate.findFirst!({ where: { [this.idField]: id } })
-          if (anyMatch) throw new ConflictError()
-          return (await this.delegate.create({ data: stampTenant(this.scope, data as TCreate) })) as TRecord
-        }
-        throw error
-      }
+      return (await scopedUpsertOne(
+        this.delegate,
+        this.scope,
+        this.idField,
+        id,
+        data as Record<string, unknown>
+      )) as TRecord
     }
 
     if (!this.delegate.upsert) {
@@ -398,28 +287,13 @@ export class PrismaAdapter<
 
   /**
    * Deletes a single record identified by its ID. If the record does not exist, it returns false.
-   * If the deletion is successful, it returns true. This method requires the Prisma delegate to support the delete operation.
+   * The tenant-scoped path is delegated to {@link scopedDeleteOne} (atomic, fail-closed).
    * @param id - The ID of the record to be deleted.
-   * @returns A promise that resolves to true if the record was successfully deleted, or false if the record did not exist.
-   * @throws NotImplementedError if the Prisma delegate does not support the delete method.
-   * @throws ServerError if the Prisma delegate does not support the required methods for deleting records.
+   * @returns A promise that resolves to true if the record was deleted, or false if it did not exist.
    */
   public async deleteOne(id: string | number): Promise<boolean> {
-    // When scoped, delete through deleteMany with the tenant predicate so the ownership
-    // check and the delete are a single atomic statement (no TOCTOU window). A row in
-    // another tenant simply matches nothing and reports as "not found".
     if (this.scope) {
-      if (this.delegate.deleteMany) {
-        const result = await this.delegate.deleteMany({
-          where: scopedWhere(this.scope, { [this.idField]: id })
-        })
-        return (result?.count ?? 0) > 0
-      }
-      // deleteMany is unavailable — we cannot do an atomic scoped delete. A two-step
-      // findFirst + unscoped delete would introduce a TOCTOU cross-tenant deletion risk.
-      throw new ServerError(
-        'Prisma delegate does not support deleteMany (required for safe tenant-scoped deleteOne).'
-      )
+      return scopedDeleteOne(this.delegate, this.scope, this.idField, id)
     }
     try {
       await this.delegate.delete({ where: { [this.idField]: id } })

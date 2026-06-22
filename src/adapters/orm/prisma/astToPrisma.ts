@@ -1,5 +1,6 @@
 import { SqlComparison, SqlOperator, SqlOrder } from '@edium/halifax-types'
 import type { IQueryFilter, QueryScalar, ISort } from '@edium/halifax-types'
+import { buildComparison, type ComparisonStrategyTable } from '../ComparisonStrategy.js'
 
 /** A Prisma `where` fragment — an arbitrary nested object of field conditions and AND/OR/NOT groups. */
 export type PrismaWhere = Record<string, unknown>
@@ -29,59 +30,34 @@ function likeToPrisma(value: QueryScalar | QueryScalar[] | undefined): Record<st
 }
 
 /**
- * Converts a single {@link IQueryFilter} comparison into a Prisma `where` fragment for one field.
- *
- * Most comparisons map to `{ [field]: { <op>: value } }`; `NOT BETWEEN` and `NOT LIKE`
- * expand to `OR` / `NOT` groups. This is the only place comparison semantics live, so the
- * delegate query path and the (validated) AST stay in lockstep.
- *
- * @param filter - The filter whose `field`, `comparison`, `value1`, and `value2` are read.
- * @returns A Prisma `where` fragment expressing the comparison.
+ * Per-operator builders mapping each {@link SqlComparison} to a Prisma `where` fragment for one
+ * field. Most comparisons map to `{ [field]: { <op>: value } }`; `NOT BETWEEN` and `NOT LIKE`
+ * expand to `OR` / `NOT` groups. This table is the only place Prisma comparison semantics live,
+ * so the delegate query path and the (validated) AST stay in lockstep.
  */
-function comparisonToPrisma(filter: IQueryFilter): PrismaWhere {
-  const field = filter.field
-  const v1 = filter.value1
-  const v2 = filter.value2
-  const comparison = (filter.comparison?.toUpperCase() ?? '=') as SqlComparison
+const PRISMA_COMPARISONS: ComparisonStrategyTable<PrismaWhere, string> = {
+  [SqlComparison.Equal]: (field, { v1 }) => ({ [field]: { equals: v1 } }),
+  [SqlComparison.NotEqual]: (field, { v1 }) => ({ [field]: { not: v1 } }),
+  [SqlComparison.GreaterThan]: (field, { v1 }) => ({ [field]: { gt: v1 } }),
+  [SqlComparison.GreaterThanOrEqual]: (field, { v1 }) => ({ [field]: { gte: v1 } }),
+  [SqlComparison.LessThan]: (field, { v1 }) => ({ [field]: { lt: v1 } }),
+  [SqlComparison.LessThanOrEqual]: (field, { v1 }) => ({ [field]: { lte: v1 } }),
+  [SqlComparison.In]: (field, { v1 }) => ({ [field]: { in: Array.isArray(v1) ? v1 : [v1] } }),
+  [SqlComparison.NotIn]: (field, { v1 }) => ({ [field]: { notIn: Array.isArray(v1) ? v1 : [v1] } }),
+  [SqlComparison.Between]: (field, { v1, v2 }) => ({ [field]: { gte: v1, lte: v2 } }),
+  [SqlComparison.NotBetween]: (field, { v1, v2 }) => ({ OR: [{ [field]: { lt: v1 } }, { [field]: { gt: v2 } }] }),
+  [SqlComparison.IsNull]: (field) => ({ [field]: null }),
+  [SqlComparison.IsNotNull]: (field) => ({ [field]: { not: null } }),
+  [SqlComparison.Contains]: (field, { v1 }) => ({ [field]: { contains: String(v1 ?? '') } }),
+  [SqlComparison.StartsWith]: (field, { v1 }) => ({ [field]: { startsWith: String(v1 ?? '') } }),
+  [SqlComparison.EndsWith]: (field, { v1 }) => ({ [field]: { endsWith: String(v1 ?? '') } }),
+  [SqlComparison.Like]: (field, { v1 }) => ({ [field]: likeToPrisma(v1) }),
+  [SqlComparison.NotLike]: (field, { v1 }) => ({ NOT: { [field]: likeToPrisma(v1) } })
+}
 
-  switch (comparison) {
-    case SqlComparison.Equal:
-      return { [field]: { equals: v1 } }
-    case SqlComparison.NotEqual:
-      return { [field]: { not: v1 } }
-    case SqlComparison.GreaterThan:
-      return { [field]: { gt: v1 } }
-    case SqlComparison.GreaterThanOrEqual:
-      return { [field]: { gte: v1 } }
-    case SqlComparison.LessThan:
-      return { [field]: { lt: v1 } }
-    case SqlComparison.LessThanOrEqual:
-      return { [field]: { lte: v1 } }
-    case SqlComparison.In:
-      return { [field]: { in: Array.isArray(v1) ? v1 : [v1] } }
-    case SqlComparison.NotIn:
-      return { [field]: { notIn: Array.isArray(v1) ? v1 : [v1] } }
-    case SqlComparison.Between:
-      return { [field]: { gte: v1, lte: v2 } }
-    case SqlComparison.NotBetween:
-      return { OR: [{ [field]: { lt: v1 } }, { [field]: { gt: v2 } }] }
-    case SqlComparison.IsNull:
-      return { [field]: null }
-    case SqlComparison.IsNotNull:
-      return { [field]: { not: null } }
-    case SqlComparison.Contains:
-      return { [field]: { contains: String(v1 ?? '') } }
-    case SqlComparison.StartsWith:
-      return { [field]: { startsWith: String(v1 ?? '') } }
-    case SqlComparison.EndsWith:
-      return { [field]: { endsWith: String(v1 ?? '') } }
-    case SqlComparison.Like:
-      return { [field]: likeToPrisma(v1) }
-    case SqlComparison.NotLike:
-      return { NOT: { [field]: likeToPrisma(v1) } }
-    default:
-      return { [field]: { equals: v1 } }
-  }
+/** Converts a single {@link IQueryFilter} comparison into a Prisma `where` fragment for its field. */
+function comparisonToPrisma(filter: IQueryFilter): PrismaWhere {
+  return buildComparison(filter, filter.field, PRISMA_COMPARISONS)
 }
 
 /**

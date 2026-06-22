@@ -28,7 +28,7 @@ export function registerUpsertOne(
       const body = hooks?.beforeUpsertOne
         ? ((await hooks.beforeUpsertOne(id, rawBody, hookCtx)) ?? rawBody)
         : rawBody
-      const rawResult = await repo.upsertOne(id, body as never)
+      const rawResult = await repo.upsertOne(id, body)
       const result = await applyHook(
         hooks?.afterUpsertOne,
         rawResult as Record<string, unknown>,

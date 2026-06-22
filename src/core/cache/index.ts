@@ -1,5 +1,5 @@
 export * from './CacheStore.js'
-export * from './createCachingRepository.js'
+export * from './CachingRepositoryDecorator.js'
 export * from './in-memory/InMemoryCacheStore.js'
 export * from './redis/RedisLikeClient.js'
 export * from './redis/RedisCacheStore.js'
