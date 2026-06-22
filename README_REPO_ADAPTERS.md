@@ -188,7 +188,7 @@ Halifax's `peerDependencies` allow `@prisma/client >=6.0.0`, so it runs on **Pri
 
 **Tenant-scoped paths require `updateMany` and `deleteMany` on the delegate.** When multi-tenant isolation is active, `updateOne` uses `updateMany(scopedWhere)` for an atomic ownership-enforced write, and `deleteOne` uses `deleteMany(scopedWhere)` for the same reason. If the delegate does not expose these methods, both operations throw `ServerError`. Standard Prisma delegates always expose them; this only affects non-standard or mock delegates.
 
-> **Caveats.** Halifax's CI matrix exercises **Prisma 7 only** — Prisma 6 is supported on the strength of that stable delegate surface, not a dedicated CI leg, so treat it as best-effort and pin/test your own app against it. Prisma 7 is the recommended path; the main reason to stay on (or drop to) Prisma 6 today is **MongoDB**, which Prisma 7 does not yet support. When Prisma 7 restores MongoDB, prefer upgrading over remaining on 6.
+> **Caveats.** Halifax's CI matrix exercises **Prisma 7 only** — Prisma 6 is supported on the strength of that stable delegate surface, not a dedicated CI leg, so treat it as best-effort and pin/test your own app against it. Prisma 7 is the recommended path.
 
 What you implement differently on Prisma 6 (everything below is your project's Prisma setup — no Halifax code changes):
 
@@ -198,7 +198,6 @@ What you implement differently on Prisma 6 (everything below is your project's P
 | `prisma.config.ts` | Required (CLI reads the url from it)                             | Not used — the CLI reads the url from the schema                                           |
 | Runtime client     | **Must** pass a driver adapter (`new PrismaClient({ adapter })`) | Plain `new PrismaClient()` works (built-in engine); driver adapters are opt-in (see below) |
 | Driver adapters    | Default, no flag                                                 | Behind `previewFeatures = ["driverAdapters"]` in the `generator` block, if you want them   |
-| MongoDB            | Not supported                                                    | **Supported** via the built-in connector — `new PrismaClient()`, `provider = "mongodb"`    |
 
 A minimal Prisma 6 setup (engine-based client, no adapter):
 
@@ -221,14 +220,6 @@ import { PrismaClient } from '@prisma/client'
 export const prisma = new PrismaClient()
 ```
 
-```ts
-// MongoDB on Prisma 6 — ObjectId keys; Halifax's :id validation already accepts them
-model Post {
-  id    String @id @default(auto()) @map("_id") @db.ObjectId
-  title String
-}
-```
-
 From there, the `PrismaAdapter` usage (`new PrismaAdapter({ delegate: prisma.post })`) and everything else in this guide is identical.
 
 ## Supported Databases
@@ -244,8 +235,6 @@ The **same `PrismaAdapter`** works with every database Prisma supports — there
 | SQLite          | `sqlite`          | `@prisma/adapter-better-sqlite3` |
 
 The integration suite runs unchanged against **all six** engines in CI — PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, and SQLite, one matrix leg each (`HALIFAX_DB=<db>`) — so the "behaviour is identical across engines" claim is enforced, not asserted.
-
-**MongoDB note.** MongoDB is absent from the table above because **Prisma 7 dropped its MongoDB connector** (it's "coming soon" in v7) — and the table/CI matrix target Prisma 7. MongoDB still works **on Prisma 6**, which Halifax also supports (see the Prisma 6 section above) — Mongo keys are 24-character `ObjectId` strings (`@id @default(auto()) @map("_id") @db.ObjectId`), and Halifax's `:id` route validation already accepts integers, UUIDs, **and** ObjectIds, so id-based routes work on Mongo out of the box. The forward-ready `schema.mongodb.prisma` and an ObjectId-aware integration suite rejoin the CI matrix unchanged the moment Prisma 7 supports MongoDB again.
 
 ## Drizzle ORM Adapter
 
@@ -272,14 +261,36 @@ const usersResource: ResourceDefinition = {
 
 ### Supported databases
 
-`DrizzleAdapter` works with any driver Drizzle supports. The commonly used ones:
+`DrizzleAdapter` (CRUD) and `DrizzleSqlExecutor` (stored procedures) have separate database
+coverage — they share the same Drizzle connection but support different databases.
 
-| Database       | Drizzle driver import        |
-| -------------- | ---------------------------- |
-| PostgreSQL     | `drizzle-orm/postgres-js`    |
-| MySQL          | `drizzle-orm/mysql2`         |
-| SQLite         | `drizzle-orm/better-sqlite3` |
-| LibSQL / Turso | `drizzle-orm/libsql`         |
+| Database        | CRUD (`DrizzleAdapter`)            | Execute (`DrizzleSqlExecutor`) | Drizzle driver import        |
+| --------------- | ---------------------------------- | ------------------------------ | ---------------------------- |
+| PostgreSQL      | ✅                                 | ✅ `SELECT fn()` + `CALL`      | `drizzle-orm/node-postgres`  |
+| CockroachDB     | ✅ (postgres dialect)              | ⚠️ UDFs on CockroachDB ≥22.2   | `drizzle-orm/node-postgres`  |
+| SQLite / LibSQL | ✅                                 | ❌ no stored routines          | `drizzle-orm/better-sqlite3` |
+| MySQL           | ✅ `dialect: 'mysql'` (see note)   | ✅ `CALL` via text protocol    | `drizzle-orm/mysql2`         |
+| MariaDB         | ✅ `dialect: 'mysql'` (see note)   | ✅ `CALL` via text protocol    | `drizzle-orm/mysql2`         |
+| SQL Server      | ❌ no Drizzle driver               | ❌ no Drizzle driver           | —                            |
+
+> **MySQL/MariaDB CRUD — two-round-trip writes.** MySQL and MariaDB lack a native `RETURNING`
+> clause, so Drizzle's mysql2 builders omit `.returning()`. Pass `{ dialect: 'mysql' }` to
+> `DrizzleAdapterConfig` and the adapter uses an INSERT→SELECT / UPDATE→SELECT path instead:
+> two queries per write rather than one, but no atomicity loss for single-row operations.
+>
+> ```ts
+> import { drizzle } from 'drizzle-orm/mysql2'
+> import { DrizzleAdapter } from '@edium/halifax/drizzle'
+>
+> const db = drizzle(connection)
+> const adapter = new DrizzleAdapter(db, usersTable, { dialect: 'mysql' })
+> ```
+>
+> **Stored procedures on MySQL/MariaDB** via `DrizzleSqlExecutor` — Drizzle's `db.execute()`
+> routes through mysql2's text protocol, not prepared statements. This avoids the error-1295
+> limitation that blocks `PrismaSqlExecutor` on `@prisma/adapter-mariadb`.
+>
+> See [README_LIMITATIONS.md](./README_LIMITATIONS.md) for the full feature × database matrix.
 
 ### Type introspection
 
@@ -420,3 +431,187 @@ export class InMemoryRepository<T extends { id: number }> implements Repository<
   }
 }
 ```
+
+## Sequelize v6 Adapter
+
+`SequelizeAdapter` implements the full `Repository` interface against any Sequelize v6 Model. It
+lives behind a sub-path export so `sequelize` is never a hard dependency when unused:
+
+```bash
+pnpm add sequelize
+# Plus the database driver your project needs:
+pnpm add pg pg-hstore          # PostgreSQL
+pnpm add mysql2                # MySQL or MariaDB
+pnpm add tedious               # SQL Server
+pnpm add sqlite3               # SQLite
+```
+
+```ts
+import { Sequelize, DataTypes } from 'sequelize'
+import { SequelizeAdapter } from '@edium/halifax/sequelize'
+import type { SeqModel } from '@edium/halifax/sequelize'
+
+const sequelize = new Sequelize(process.env.DATABASE_URL!, { dialect: 'postgres', logging: false })
+
+const Post = sequelize.define('Post', {
+  id:        { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  title:     { type: DataTypes.STRING,  allowNull: false, defaultValue: '' },
+  content:   { type: DataTypes.TEXT,    allowNull: true },
+  published: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+}, { tableName: 'posts', timestamps: false })
+
+await sequelize.sync()
+
+const postResource: ResourceDefinition = {
+  routePrefix: 'posts',
+  repository: new SequelizeAdapter(Post as unknown as SeqModel)
+  // Fields are derived automatically from rawAttributes — no `fields` array needed.
+}
+```
+
+### Supported databases
+
+| Database    | CRUD | Query Builder | Relations (`?include=`) | Driver package |
+| ----------- | ---- | ------------- | ----------------------- | -------------- |
+| PostgreSQL  | ✅   | ✅            | ✅                      | `pg`           |
+| MySQL       | ✅   | ✅            | ✅                      | `mysql2`       |
+| MariaDB     | ✅   | ✅            | ✅                      | `mysql2`       |
+| SQL Server  | ✅   | ✅            | ✅                      | `tedious`      |
+| SQLite      | ✅   | ✅            | ✅                      | `sqlite3`      |
+| CockroachDB | ❌ ⁽ᵃ⁾ | ❌          | ❌                      | —              |
+
+> ⁽ᵃ⁾ CockroachDB is not in the tested matrix. Use `PrismaAdapter` for CockroachDB.
+
+### Constructor options
+
+```ts
+new SequelizeAdapter(model, config?, scope?)
+```
+
+| Parameter        | Type                  | Description                                                                            |
+| ---------------- | --------------------- | -------------------------------------------------------------------------------------- |
+| `model`          | `SeqModel`            | Your Sequelize Model class (static side), cast via `as unknown as SeqModel`.           |
+| `config.idField` | `string` (optional)   | Primary key field name. Defaults to auto-detecting the `primaryKey: true` attribute.   |
+| `scope`          | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly.                  |
+
+### Type introspection
+
+`SequelizeAdapter` reads `model.rawAttributes` and maps each attribute's `type.key` to its
+Halifax/OpenAPI equivalent:
+
+| Sequelize type key             | OpenAPI type  | Format      |
+| ------------------------------ | ------------- | ----------- |
+| `STRING`, `TEXT`, `UUID`, …    | `string`      | —           |
+| `INTEGER`, `BIGINT`, …         | `integer`     | —           |
+| `FLOAT`, `DOUBLE`, `DECIMAL`   | `number`      | —           |
+| `BOOLEAN`                      | `boolean`     | —           |
+| `DATE`, `DATEONLY`             | `string`      | `date-time` |
+| `JSON`, `JSONB`                | `object`      | —           |
+
+### Relations / `?include=`
+
+`SequelizeAdapter` reports `capabilities.supportsIncludes: true`. To use eager loading,
+pass Sequelize association include option objects (cast to `string[]`) in `ListOptions.include`.
+The associations must be set up before the adapter is used:
+
+```ts
+Author.hasMany(Post, { foreignKey: 'authorId', as: 'posts' })
+Post.belongsTo(Author, { foreignKey: 'authorId', as: 'author' })
+
+// In a request handler:
+const result = await repo.getMany({
+  include: [{ model: Author, as: 'author' }] as unknown as string[]
+})
+```
+
+### `createMany` and returned records
+
+`SequelizeAdapter.createMany` delegates to Sequelize's `bulkCreate`, which returns the created
+instances on all supported dialects. `capabilities.supportsCreateManyReturn` is always `true` —
+passing an empty array returns `[]` immediately without a database round-trip.
+
+### Conflict errors (409)
+
+`createOne`, `createMany`, and `updateOne` catch `SequelizeUniqueConstraintError` (unique-index
+violations) and re-throw them as Halifax's `ConflictError` (HTTP 409). This means the client
+receives a consistent `409` shape rather than an opaque `500` — identical to how `PrismaAdapter`
+and `DrizzleAdapter` handle the same constraint.
+
+### `upsertOne` — non-atomic check-then-write
+
+`upsertOne` does a `getOne` check followed by either `updateOne` or `createOne`. This is
+non-atomic: under concurrent load, two simultaneous upserts for the same absent ID may both reach
+the `createOne` branch and receive a `ConflictError` (409). For true atomicity, implement a custom
+repository that calls Sequelize's `upsert()` method directly.
+
+### `updateOne` dialect differences
+
+On PostgreSQL and SQL Server, `updateOne` uses a single `UPDATE … RETURNING` query. On MySQL,
+MariaDB, and SQLite (which lack `RETURNING`), it runs `UPDATE` then `SELECT` — two queries per
+update. Both paths produce the same result; the two-query path has a narrow TOCTOU window on
+concurrent deletes, which is an acceptable trade-off for cross-dialect portability.
+
+### Static field derivation
+
+```ts
+import { SequelizeAdapter } from '@edium/halifax/sequelize'
+import type { SeqModel } from '@edium/halifax/sequelize'
+
+const fields = SequelizeAdapter.fieldsFromModel(MyModel as unknown as SeqModel)
+```
+
+### Stored-procedure endpoints — `SequelizeSqlExecutor`
+
+`SequelizeSqlExecutor` gives Sequelize parity with `PrismaSqlExecutor` and `DrizzleSqlExecutor`.
+It takes the Sequelize **instance** (not a Model) and auto-detects the dialect:
+
+```ts
+import { SequelizeSqlExecutor } from '@edium/halifax/sequelize'
+
+const executor = new SequelizeSqlExecutor(sequelize) // dialect auto-detected
+
+const api = registerCrudApi(server, resources, {
+  execute: {
+    executor,
+    procedures: [
+      {
+        name: 'send_invoice',
+        params: [
+          { name: 'orderId', type: 'number', required: true },
+          { name: 'email',   type: 'string', required: true }
+        ]
+      }
+    ]
+  }
+})
+```
+
+| Dialect                | Call style                      | Param binding              |
+| ---------------------- | ------------------------------- | -------------------------- |
+| PostgreSQL             | `SELECT * FROM "fn"($1, …)` → `CALL "fn"($1, …)` on 42809 | `bind` (real prepared stmts) |
+| MySQL / MariaDB        | `CALL \`fn\`(?, …)`             | `replacements` (text protocol — no ER_UNSUPPORTED_PS) |
+| SQL Server             | `EXEC [fn] ?, …`                | `replacements`             |
+
+The dialect is auto-detected from `sequelize.getDialect()`. Pass `{ dialect: 'postgres' | 'mysql' | 'mssql' }` to override. SQLite throws `NotImplementedError` — it has no stored routines.
+
+### GraphQL
+
+`SequelizeAdapter` is fully GraphQL-compatible. The GraphQL type system is driven by
+`resource.fields`, which is derived automatically from `model.rawAttributes` — the same field
+schema used by REST. No extra configuration is required:
+
+```ts
+registerCrudApi(server, resources, {
+  graphql: { enabled: true }
+})
+// SequelizeAdapter-backed resources appear in the GraphQL schema identically to
+// PrismaAdapter or DrizzleAdapter resources.
+```
+
+All query, mutation, filter, sort, and field-level permission features work identically over GraphQL and REST for Sequelize-backed resources.
+
+### Multi-tenancy
+
+`SequelizeAdapter` supports per-resource tenant scoping via `withScope()` exactly like
+`PrismaAdapter`. See [README_MULTITENANCY.md](./README_MULTITENANCY.md) for how to configure it
+on the resource.

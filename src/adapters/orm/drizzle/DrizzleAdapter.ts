@@ -1,4 +1,5 @@
 import { ConflictError } from '@/errors/ConflictError.js'
+import { ServerError } from '@/errors/ServerError.js'
 import { count, eq, getTableColumns, and, inArray, asc, desc } from 'drizzle-orm'
 import type { AnyColumn, SQL, Table } from 'drizzle-orm'
 import type { IQueryOptions, QueryScalar } from '@edium/halifax-types'
@@ -18,18 +19,12 @@ import { astToDrizzleWhere, astToDrizzleOrderBy, type ColumnMap } from './astToD
 // Drizzle doesn't export a single unified DB type across all drivers.
 // These structural interfaces cover the common query-builder surface all drivers share.
 //
-// Drizzle uses a progressive builder pattern where each chained call removes the just-used
-// method from the return type (to prevent double-calling). Calling `.$dynamic()` on the
-// builder opts out of that restriction and returns a stable self-referential type where
-// all methods remain available at every step. This adapter calls `.$dynamic()` in
-// `buildSelect()` so the structural interface can be a simple self-referential chain.
+// `returning()` is optional here — MySQL/MariaDB drivers don't expose it (MySQL has no
+// native RETURNING clause). Callers check `this.dialect === 'mysql'` and use alternate
+// paths. Chains extend PromiseLike so they can be `await`ed directly for those paths.
 
 type DrizzleOrderByArg = SQL | AnyColumn | ((aliases: Record<string, AnyColumn>) => unknown)
 
-/**
- * A dynamic Drizzle SELECT chain (returned after calling `.$dynamic()`).
- * All methods remain on the type regardless of call order.
- */
 interface DrizzleDynamicSelect extends PromiseLike<unknown[]> {
   where(cond?: SQL): DrizzleDynamicSelect
   orderBy(...cols: DrizzleOrderByArg[]): DrizzleDynamicSelect
@@ -37,7 +32,6 @@ interface DrizzleDynamicSelect extends PromiseLike<unknown[]> {
   offset(n: number): DrizzleDynamicSelect
 }
 
-/** The builder returned from `.from()` before dynamic mode is activated. */
 interface DrizzleSelectBuilder extends PromiseLike<unknown[]> {
   $dynamic(): DrizzleDynamicSelect
   where(cond?: SQL): PromiseLike<unknown[]>
@@ -47,8 +41,16 @@ interface DrizzleFromChain {
   from(table: Table): DrizzleSelectBuilder
 }
 
-interface DrizzleUpdateWhereChain {
-  returning(): Promise<unknown[]>
+interface DrizzleInsertValuesChain extends PromiseLike<unknown> {
+  returning?(): Promise<unknown[]>
+}
+
+interface DrizzleInsertChain {
+  values(data: unknown): DrizzleInsertValuesChain
+}
+
+interface DrizzleUpdateWhereChain extends PromiseLike<unknown> {
+  returning?(): Promise<unknown[]>
 }
 
 interface DrizzleUpdateSetChain {
@@ -59,20 +61,12 @@ interface DrizzleUpdateChain {
   set(data: Record<string, unknown>): DrizzleUpdateSetChain
 }
 
-interface DrizzleDeleteWhereChain {
-  returning(): Promise<unknown[]>
+interface DrizzleDeleteWhereChain extends PromiseLike<unknown> {
+  returning?(): Promise<unknown[]>
 }
 
 interface DrizzleDeleteChain {
   where(cond?: SQL): DrizzleDeleteWhereChain
-}
-
-interface DrizzleInsertValuesChain {
-  returning(): Promise<unknown[]>
-}
-
-interface DrizzleInsertChain {
-  values(data: unknown): DrizzleInsertValuesChain
 }
 
 export interface AnyDrizzleDB {
@@ -88,6 +82,12 @@ export interface DrizzleAdapterConfig {
    * Set explicitly when using composite PKs or a non-standard naming convention.
    */
   idField?: string
+  /**
+   * SQL dialect. Defaults to `'postgres'` (also correct for SQLite and CockroachDB).
+   * Set to `'mysql'` when connecting via drizzle-orm/mysql2 — this disables the `.returning()`
+   * path on writes and uses a SELECT round-trip instead, since MySQL has no native RETURNING.
+   */
+  dialect?: 'postgres' | 'mysql' | 'sqlite'
 }
 
 /** Detects unique constraint violations across PostgreSQL (23505), MySQL (1062/ER_DUP_ENTRY), and SQLite. */
@@ -125,31 +125,12 @@ function drizzleTypeToOpenApi(col: AnyColumn): { type?: FieldType; format?: stri
 /**
  * Drizzle ORM repository adapter for `@edium/halifax`.
  *
- * Install `drizzle-orm` as a peer dependency alongside your preferred Drizzle driver
- * (`drizzle-orm/better-sqlite3`, `drizzle-orm/postgres-js`, `drizzle-orm/mysql2`, etc.)
- * then pass the `db` instance and your table schema:
+ * Supports PostgreSQL, SQLite, and CockroachDB (use default `dialect: 'postgres'`) as well as
+ * MySQL and MariaDB (`dialect: 'mysql'`). MySQL lacks a native RETURNING clause, so write
+ * operations use an extra SELECT round-trip instead of the single-query RETURNING path.
  *
- * ```ts
- * import { DrizzleAdapter } from '@edium/halifax/drizzle'
- * import { drizzle } from 'drizzle-orm/postgres-js'
- * import postgres from 'postgres'
- * import { usersTable } from './schema'
- *
- * const db = drizzle(postgres(process.env.DATABASE_URL!))
- *
- * const usersResource: ResourceDefinition = {
- *   routePrefix: 'users',
- *   repository: new DrizzleAdapter(db, usersTable),
- * }
- * ```
- *
- * Field schema and types are inferred automatically from the Drizzle table definition.
- * Multi-tenant isolation via `withScope()` and the advanced query builder via
- * `executeQuery()` are both supported.
- *
- * @template TRecord - Shape of the records returned from the database.
- * @template TCreate - Shape of the data used for inserts (defaults to `Partial<TRecord>`).
- * @template TUpdate - Shape of the data used for updates (defaults to `Partial<TRecord>`).
+ * Relations / `?include=` are not supported — `capabilities.supportsIncludes` is `false`.
+ * Use `PrismaAdapter` for resources that need eager relation loading.
  */
 export class DrizzleAdapter<
   TRecord = Record<string, unknown>,
@@ -158,11 +139,12 @@ export class DrizzleAdapter<
 > implements Repository<TRecord, TCreate, TUpdate> {
   public readonly fields: FieldDefinition[]
   public readonly idField: string
-  /** Drizzle uses `.returning()` for inserts/updates, so it always returns created records. */
+  /** Drizzle uses `.returning()` for postgres/sqlite and a re-fetch for mysql. */
   public readonly capabilities = { supportsIncludes: false, supportsCreateManyReturn: true }
 
   private readonly columns: ColumnMap
   private readonly scope: TenantScope | null
+  private readonly dialect: 'postgres' | 'mysql' | 'sqlite'
 
   constructor(
     private readonly db: AnyDrizzleDB,
@@ -172,6 +154,7 @@ export class DrizzleAdapter<
   ) {
     this.columns = getTableColumns(table) as ColumnMap
     this.idField = config.idField ?? this.detectPrimaryKey()
+    this.dialect = config.dialect ?? 'postgres'
     this.fields = DrizzleAdapter.fieldsFromTable(table, this.idField)
     this.scope = scope
   }
@@ -183,13 +166,6 @@ export class DrizzleAdapter<
     return 'id'
   }
 
-  /**
-   * Derives a Halifax field schema from a Drizzle table definition.
-   * Column types are mapped to their OpenAPI equivalents automatically.
-   * @param table - The Drizzle table schema.
-   * @param idField - The primary-key field name (auto-detected when omitted).
-   * @returns The resolved field definition list.
-   */
   static fieldsFromTable(table: Table, idField?: string): FieldDefinition[] {
     const cols = getTableColumns(table) as ColumnMap
     const pkField =
@@ -206,11 +182,6 @@ export class DrizzleAdapter<
     }))
   }
 
-  /**
-   * Returns a dynamic SELECT builder so the chain type stays stable across `.where()`,
-   * `.orderBy()`, `.limit()`, and `.offset()` calls — Drizzle's `.$dynamic()` opts out
-   * of the progressive-omit type narrowing.
-   */
   private buildSelect(fields?: string[]): DrizzleDynamicSelect {
     if (fields?.length) {
       const sel: Record<string, AnyColumn> = {}
@@ -291,11 +262,15 @@ export class DrizzleAdapter<
   }
 
   async createOne(data: TCreate): Promise<TRecord> {
+    const stamped = this.scope
+      ? { ...(data as Record<string, unknown>), [this.scope.field]: this.scope.value }
+      : data
     try {
-      const rows = (await this.db
-        .insert(this.table)
-        .values(this.scope ? { ...data, [this.scope.field]: this.scope.value } : data)
-        .returning()) as (TRecord | undefined)[]
+      if (this.dialect === 'mysql') {
+        return await this.createOneMysql(stamped as Record<string, unknown>)
+      }
+      const chain = this.db.insert(this.table).values(stamped)
+      const rows = (await chain.returning!()) as (TRecord | undefined)[]
       return rows[0] as TRecord
     } catch (error) {
       if (isDuplicateError(error)) throw new ConflictError()
@@ -303,13 +278,40 @@ export class DrizzleAdapter<
     }
   }
 
+  private async createOneMysql(stamped: Record<string, unknown>): Promise<TRecord> {
+    // MySQL has no RETURNING — insert then re-fetch by inserted ID.
+    const raw = await (this.db.insert(this.table).values(stamped) as unknown as Promise<
+      [{ insertId?: number | bigint }, unknown]
+    >)
+    const providedId = stamped[this.idField]
+    const autoId = raw[0]?.insertId != null ? Number(raw[0].insertId) : 0
+    const insertedId = providedId ?? (autoId > 0 ? autoId : undefined)
+    if (insertedId == null) {
+      throw new ServerError(
+        'MySQL createOne: cannot determine inserted row ID. Use an auto-increment PK or provide the id in the data.'
+      )
+    }
+    const rows = (await this.buildSelect().where(
+      eq(this.columns[this.idField]!, insertedId as QueryScalar)
+    )) as TRecord[]
+    if (!rows[0]) throw new ServerError('MySQL createOne: row not found after insert')
+    return rows[0]
+  }
+
   async createMany(data: TCreate[]): Promise<TRecord[]> {
     if (!data.length) return []
+    if (this.dialect === 'mysql') {
+      // Serial createOne — avoids insertId arithmetic for non-auto-increment PKs.
+      return await Promise.all(data.map((item) => this.createOne(item)))
+    }
     const stamped = this.scope
-      ? data.map((d) => ({ ...d, [this.scope!.field]: this.scope!.value }))
+      ? data.map((d) => ({
+          ...(d as Record<string, unknown>),
+          [this.scope!.field]: this.scope!.value
+        }))
       : data
     try {
-      const rows = (await this.db.insert(this.table).values(stamped).returning()) as TRecord[]
+      const rows = (await this.db.insert(this.table).values(stamped).returning!()) as TRecord[]
       return rows
     } catch (error) {
       if (isDuplicateError(error)) throw new ConflictError()
@@ -320,12 +322,20 @@ export class DrizzleAdapter<
   async updateOne(id: string | number, data: TUpdate): Promise<TRecord | null> {
     const idWhere = eq(this.columns[this.idField]!, id as QueryScalar)
     const where = this.withScopeWhere(idWhere)
+    const cleanData = this.stripScope(data as Record<string, unknown>)
     try {
-      const rows = (await this.db
-        .update(this.table)
-        .set(this.stripScope(data as Record<string, unknown>))
-        .where(where)
-        .returning()) as (TRecord | undefined)[]
+      if (this.dialect === 'mysql') {
+        await (this.db
+          .update(this.table)
+          .set(cleanData)
+          .where(where) as unknown as Promise<unknown>)
+        const rows = (await this.buildSelect().where(where)) as (TRecord | undefined)[]
+        return rows[0] ?? null
+      }
+      const rows = (await this.db.update(this.table).set(cleanData).where(where).returning!()) as (
+        | TRecord
+        | undefined
+      )[]
       return rows[0] ?? null
     } catch (error) {
       if (isDuplicateError(error)) throw new ConflictError()
@@ -334,12 +344,8 @@ export class DrizzleAdapter<
   }
 
   async upsertOne(id: string | number, data: TCreate & TUpdate): Promise<TRecord> {
-    // Non-atomic: the getOne check and the subsequent write are separate statements.
-    // Under concurrent load, two simultaneous upserts for the same absent ID can both
-    // pass the getOne check and then race on createOne — the loser gets a ConflictError.
-    // Drizzle has no single portable INSERT…ON CONFLICT across all databases, so this
-    // is the safest cross-provider implementation. Callers that need true atomicity
-    // should implement a custom repository using a database-specific ON CONFLICT clause.
+    // Non-atomic check-then-write. Concurrent upserts for the same absent ID may race on
+    // createOne and get a ConflictError. Use a DB-specific ON CONFLICT clause for true atomicity.
     const existing = await this.getOne(id)
     if (existing) {
       const updated = await this.updateOne(id, data as unknown as TUpdate)
@@ -350,11 +356,26 @@ export class DrizzleAdapter<
 
   async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
     const where = this.withScopeWhere(astToDrizzleWhere(query.where, this.columns))
-    const rows = (await this.db
-      .update(this.table)
-      .set(this.stripScope(data as Record<string, unknown>))
-      .where(where)
-      .returning()) as TRecord[]
+    const cleanData = this.stripScope(data as Record<string, unknown>)
+
+    if (this.dialect === 'mysql') {
+      const before = (await this.buildSelect([this.idField]).where(where)) as Record<
+        string,
+        unknown
+      >[]
+      const ids = before.map((r) => r[this.idField])
+      await (this.db.update(this.table).set(cleanData).where(where) as unknown as Promise<unknown>)
+      const results =
+        ids.length > 0
+          ? ((await this.buildSelect().where(
+              inArray(this.columns[this.idField]!, ids as QueryScalar[])
+            )) as TRecord[])
+          : []
+      return { updated: ids, results }
+    }
+
+    const rows = (await this.db.update(this.table).set(cleanData).where(where)
+      .returning!()) as TRecord[]
     const ids = (rows as Record<string, unknown>[]).map((r) => r[this.idField])
     return { updated: ids, results: rows }
   }
@@ -362,13 +383,35 @@ export class DrizzleAdapter<
   async deleteOne(id: string | number): Promise<boolean> {
     const idWhere = eq(this.columns[this.idField]!, id as QueryScalar)
     const where = this.withScopeWhere(idWhere)
-    const rows = await this.db.delete(this.table).where(where).returning()
+
+    if (this.dialect === 'mysql') {
+      // Use affectedRows from the DELETE result — avoids an extra SELECT round-trip.
+      const raw = await (this.db.delete(this.table).where(where) as unknown as Promise<
+        [{ affectedRows?: number }, unknown]
+      >)
+      return (raw[0]?.affectedRows ?? 0) > 0
+    }
+
+    const rows = await this.db.delete(this.table).where(where).returning!()
     return rows.length > 0
   }
 
   async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
     const where = this.withScopeWhere(astToDrizzleWhere(query.where, this.columns))
-    const rows = (await this.db.delete(this.table).where(where).returning()) as Record<
+
+    if (this.dialect === 'mysql') {
+      const rows = (await this.buildSelect([this.idField]).where(where)) as Record<
+        string,
+        unknown
+      >[]
+      const deleted = rows.map((r) => r[this.idField])
+      if (deleted.length > 0) {
+        await (this.db.delete(this.table).where(where) as unknown as Promise<unknown>)
+      }
+      return { deleted }
+    }
+
+    const rows = (await this.db.delete(this.table).where(where).returning!()) as Record<
       string,
       unknown
     >[]
@@ -399,7 +442,7 @@ export class DrizzleAdapter<
     return new DrizzleAdapter<TRecord, TCreate, TUpdate>(
       this.db,
       this.table,
-      { idField: this.idField },
+      { idField: this.idField, dialect: this.dialect },
       scope
     )
   }

@@ -14,7 +14,7 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🚀 **Zero-boilerplate CRUD** — define a resource once and get standards-compliant REST endpoints (list, read, create, update, upsert, delete, bulk) with correct status codes and a consistent error shape.
 - 🧩 **Adapter-driven & swappable** — your HTTP framework, ORM/database, and auth provider are injected, not baked in. Switch any layer without touching your resource definitions.
 - 🌐 **4 HTTP frameworks, identical behavior** — Express 4/5, Fastify, HyperExpress, and Ultimate Express, all verified against one shared conformance suite.
-- 🗄️ **Two ORM adapters, six databases** — `PrismaAdapter` covers PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, and SQLite; `DrizzleAdapter` (sub-path `@edium/halifax/drizzle`) covers PostgreSQL, MySQL, SQLite, and LibSQL. Both compile to ORM calls (never raw SQL) so the same query behaves identically across engines.
+- 🗄️ **Three ORM adapters** — `PrismaAdapter` covers all six SQL databases (PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, SQLite) with full CRUD, query builder, relations, and GraphQL. `DrizzleAdapter` (sub-path `@edium/halifax/drizzle`) covers PostgreSQL, MySQL, MariaDB, CockroachDB, and SQLite for CRUD plus stored-procedure endpoints via `DrizzleSqlExecutor`. `SequelizeAdapter` (sub-path `@edium/halifax/sequelize`) covers PostgreSQL, MySQL, MariaDB, SQL Server, and SQLite with full CRUD, query builder, relation includes, GraphQL, and stored-procedure endpoints via `SequelizeSqlExecutor`. See [README_LIMITATIONS.md](./README_LIMITATIONS.md) for the full feature × database × adapter matrix.
 - 🔎 **Dynamic query-builder endpoint** — let the front-end compose rich filtered/sorted/paginated queries "for free" (`AND`/`OR`/nesting, `IN`, `BETWEEN`, `CONTAINS`, …) without hand-writing endpoints. Fully validated — bad fields/operators return structured `4xx` errors, never leaked DB internals.
 - 📄 **OpenAPI 3.1 generation** — zero-annotation spec generated from your resource definitions at startup. Prisma and Drizzle types are introspected automatically; custom repos annotate individual fields. Swagger UI at `/docs`, raw spec at `/openapi.json`. Disable with `enabled: false` for zero production overhead.
 - 🏢 **Multi-tenancy built in** — per-resource tenant scoping with fail-closed guarantees; one tenant can never read or write another's rows. Privileged roles (admin, super-admin) can optionally bypass scoping to read across all tenants, with per-resource granularity. See [README_MULTITENANCY.md](./README_MULTITENANCY.md).
@@ -24,18 +24,21 @@ The package is split into small, replaceable layers — nothing is imported into
 - 🪝 **Lifecycle hooks** — inject custom logic before or after any CRUD operation per resource (`beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, …). Stamp audit fields, emit events, enforce ownership, or transform results without writing a custom repository. See [README_HOOKS.md](./README_HOOKS.md).
 - 🛠️ **Custom endpoints with full Halifax context** — `registerCrudApi()` returns a `HalifaxApi` singleton. Call `api.addCustomEndpoint(method, path, roles, handler, openapi?)` to register any route — aggregates (`GROUP BY` / `HAVING`), complex joins, business actions, external-service calls — while inheriting auth, role enforcement, error serialization, content negotiation, and live OpenAPI documentation automatically. Make a route **public** (skip auth) for health checks/login/webhooks, accept **file uploads** or stream **binary responses** with per-endpoint `consumes`/`produces`, apply a **role hierarchy** via `authorizeCustom`, or gate one route with an inline `authorize` predicate. Or disable all auto-CRUD on a resource and roll every route yourself. See [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md).
 - ✅ **Validator-agnostic request validation** — attach a schema to any custom endpoint via `validate: { body, query, params }` and Halifax validates + coerces the request (422 with `details.fieldErrors` on failure) **and auto-generates the OpenAPI request schema** from it. Bring your own validator: official adapters for **Yup, Zod, Joi, and Valibot** ship as opt-in subpaths (`@edium/halifax/{yup,zod,joi,valibot}`), and **all four emit JSON Schema out of the box**, so the schemas you already have document themselves with zero rewrites. See [README_VALIDATION.md](./README_VALIDATION.md).
-- 🗄️ **Stored-procedure endpoints** — register a database routine and Halifax exposes it as its own auto-documented `POST /execute/<name>` route (kebab-cased, overridable), with typed/named parameters, per-procedure role gating, and OpenAPI generated from the parameter declarations. Off by default; works for routines that return rows **or** void on PostgreSQL, MySQL/MariaDB, and SQL Server. See [README_EXECUTE.md](./README_EXECUTE.md).
+- 🗄️ **Stored-procedure endpoints** — register a database routine and Halifax exposes it as its own auto-documented `POST /execute/<name>` route (kebab-cased, overridable), with typed/named parameters, per-procedure role gating, and OpenAPI generated from the parameter declarations. Off by default; works for routines that return rows **or** void on PostgreSQL, MySQL/MariaDB, and SQL Server via `PrismaSqlExecutor`, `DrizzleSqlExecutor`, or `SequelizeSqlExecutor`. See [README_EXECUTE.md](./README_EXECUTE.md).
 - 🔒 **Secure-by-default permissions** — single-record CRUD, the query-builder, and single-row upsert are enabled by default; the bulk whole-collection writes (`updateMany`, `deleteMany`) are **off** unless a resource explicitly opts in, so one bad filter can't mutate or wipe a table.
 - 📦 **Companion browser client** — [`@edium/halifax-client`](https://www.npmjs.com/package/@edium/halifax-client) is a typed, zero-dependency client with a fluent query builder and built-in TanStack Query helpers (queries + mutation auto-invalidation). Bring your own HTTP library (fetch, axios, ky, ofetch, superagent).
 - 🧪 **Type-safe & battle-tested** — strict TypeScript, ESM, ships full `.d.ts`; hundreds of unit tests plus the full integration suite run against six real databases + Redis in CI.
 
 > [!NOTE]
 > **New in 3.0 (breaking):** validator-agnostic **request validation** with auto-generated OpenAPI
-> (Yup/Zod/Joi/Valibot adapters — see [README_VALIDATION.md](./README_VALIDATION.md)); **stored-procedure
-> endpoints** via `execute` (see [README_EXECUTE.md](./README_EXECUTE.md)); and **secure-by-default
-> permissions** — the bulk writes `allowUpdateMany`/`allowDeleteMany` now default to `false` and must
-> be opted in per resource. See the [CHANGELOG](./CHANGELOG.md) for the full 3.0.0 entry and migration
-> notes.
+> (Yup/Zod/Joi/Valibot adapters — see [README_VALIDATION.md](./README_VALIDATION.md));
+> **`SequelizeAdapter`** — full Repository implementation for Sequelize v6 covering PostgreSQL,
+> MySQL, MariaDB, SQL Server, and SQLite, with relation includes, GraphQL, and stored procedures via
+> `SequelizeSqlExecutor`; **`DrizzleAdapter` MySQL/MariaDB CRUD** — pass `{ dialect: 'mysql' }` for
+> full MySQL/MariaDB support; **stored-procedure endpoints** via `execute` for all three adapters
+> (see [README_EXECUTE.md](./README_EXECUTE.md)); and **secure-by-default permissions** — the bulk
+> writes `allowUpdateMany`/`allowDeleteMany` now default to `false` and must be opted in per resource.
+> See the [CHANGELOG](./CHANGELOG.md) for the full 3.0.0 entry and migration notes.
 >
 > **New in 2.7 — Custom Endpoints, fully unblocked:** custom endpoints can host _any_ route an
 > app needs. Make one **public** (skip auth) with `roles: null`/`{ auth: false }`; accept **file
@@ -55,7 +58,7 @@ The package is split into small, replaceable layers — nothing is imported into
 | Layer          | Supported                                                                                                            |
 | -------------- | -------------------------------------------------------------------------------------------------------------------- |
 | HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                                                                 |
-| ORM / database | Prisma 6 or 7 (Postgres, MySQL, MariaDB, SQL Server, CockroachDB, SQLite); Drizzle (Postgres, MySQL, SQLite, LibSQL) |
+| ORM / database | Prisma 6 or 7 (Postgres, MySQL, MariaDB, SQL Server, CockroachDB, SQLite); Drizzle (Postgres, MySQL, MariaDB, CockroachDB, SQLite); Sequelize v6 (Postgres, MySQL, MariaDB, SQL Server, SQLite) |
 | Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`; role or permission slug                     |
 | Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)                                                  |
 | API docs       | OpenAPI 3.1 spec + Swagger UI (optional, zero overhead when disabled)                                                |
@@ -71,17 +74,6 @@ to portable Prisma Client calls (never raw SQL), so the **same client request be
 identically on every database** — switch engines by changing only the Prisma `provider`. The
 integration suite runs unchanged against all six engines — Postgres, MySQL, MariaDB, SQL Server,
 CockroachDB, and SQLite — in CI (one matrix leg per engine) to keep that honest.
-
-> **MongoDB — coming back.** MongoDB is absent from the list above for one reason only:
-> **Prisma ORM v7 dropped its MongoDB connector** (Prisma's own guidance is to stay on v6 for
-> Mongo; v7 support is "coming soon"). This is a Prisma limitation, not a Halifax one —
-> `PrismaAdapter` is database-agnostic and never touches the connection. The
-> `schema.mongodb.prisma` and an `ObjectId`-aware integration suite are already in the repo, so
-> **the moment Prisma restores MongoDB support in v7, Halifax will add it back** — it rejoins
-> the CI matrix unchanged, with no API changes for you. Need MongoDB today? It still works on
-> **Prisma 6**, which Halifax also supports — see [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md).
->
-> **Roadmap** — community-written adapters for Sequelize, etc. are also welcome.
 
 ## Monorepo packages
 
@@ -188,7 +180,8 @@ app.listen(3000)
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | [README_CLIENT.md](./README_CLIENT.md)                     | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples        |
 | [README_AUTOCRUD.md](./README_AUTOCRUD.md)                 | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
-| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)       | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, capabilities, custom repositories             |
+| [README_LIMITATIONS.md](./README_LIMITATIONS.md)           | Full adapter × database × feature compatibility matrix; known limitations and workarounds                |
+| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)       | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, `SequelizeAdapter`, custom repositories       |
 | [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md)       | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |
 | [README_AUTH.md](./README_AUTH.md)                         | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, per-field `readRoles`/`writeRoles` |
 | [README_MULTITENANCY.md](./README_MULTITENANCY.md)         | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour            |
@@ -197,7 +190,7 @@ app.listen(3000)
 | [README_HOOKS.md](./README_HOOKS.md)                       | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook    |
 | [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md) | Custom endpoints: `HalifaxApi`, `addCustomEndpoint`, aggregate queries, business actions, disabling CRUD |
 | [README_VALIDATION.md](./README_VALIDATION.md)             | Validator-agnostic request validation: `ISchemaValidator`, Yup/Zod/Joi/Valibot adapters, auto-OpenAPI    |
-| [README_EXECUTE.md](./README_EXECUTE.md)                   | Stored-procedure endpoints: `execute`, per-SP routes, typed named params, `PrismaSqlExecutor`/`Drizzle`  |
+| [README_EXECUTE.md](./README_EXECUTE.md)                   | Stored-procedure endpoints: `execute`, per-SP routes, typed named params, `PrismaSqlExecutor`, `DrizzleSqlExecutor`, `SequelizeSqlExecutor` |
 | [README_GRAPHQL.md](./README_GRAPHQL.md)                   | GraphQL endpoint: opt-in setup, auto-generated schema, GraphiQL IDE, auth, tenant bypass for admins      |
 | [README_OPENAPI.md](./README_OPENAPI.md)                   | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use          |
 | [README_TYPES.md](./README_TYPES.md)                       | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants             |
@@ -218,36 +211,52 @@ you can start with `pnpm tsx examples/<file>.ts`:
 
 ## Running Integration Tests
 
-The integration suite runs the full stack against a **real database**, and the _same_ suite runs
-unchanged against every supported engine. `docker-compose.test.yml` brings up one container per
-engine (SQLite is embedded, so it needs none); `HALIFAX_DB` + `DATABASE_URL` select which one a
-run targets, and `globalSetup` runs `prisma generate` + `prisma db push` automatically.
+Halifax has two integration test layers. **Prisma tests** run the full CRUD + query-builder + HTTP
+stack against a real database engine. **Sequelize tests** run the same repository contract against
+real SQLite in-memory (always, no Docker needed) and optionally against a live database of your
+choice.
 
-### Run against every database
+### Prisma integration tests
+
+The Prisma suite runs the full stack (CRUD, query-builder, HTTP adapters, stored procedures) against
+a real database. `docker-compose.test.yml` brings up one container per engine (SQLite is embedded, so
+it needs none); `HALIFAX_DB` + `DATABASE_URL` select the target, and `globalSetup` runs
+`prisma generate` + `prisma db push` automatically.
 
 ```bash
+# All six engines at once:
 docker compose -f docker-compose.test.yml up -d --wait   # postgres, mysql, mariadb, mssql, cockroachdb, redis
-pnpm test:integration:all                                 # runs the suite against all six engines
-docker compose -f docker-compose.test.yml down -v         # tear everything down
-```
+pnpm test:integration:all
+docker compose -f docker-compose.test.yml down -v
 
-### Run against a single database
-
-`pnpm test:integration` targets PostgreSQL by default (via `.env.test`). To target one specific
-engine, use the matrix script — it sets the right `DATABASE_URL` for you:
-
-```bash
+# One specific engine (matrix script sets DATABASE_URL for you):
 docker compose -f docker-compose.test.yml up -d --wait cockroachdb redis
 bash scripts/integration-matrix.sh cockroachdb       # or: postgres | mysql | mariadb | mssql | sqlite
-```
 
-Or the classic single-Postgres flow with a `.env.test` file:
-
-```bash
-# .env.test
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/halifax_test"
-```
-
-```bash
+# Classic single-Postgres flow:
+# .env.test → DATABASE_URL="postgresql://postgres:postgres@localhost:5432/halifax_test"
 pnpm test:integration
+```
+
+### Sequelize integration tests
+
+The Sequelize tests use the shared repository contract (57 scenarios: full CRUD, all 17 comparison
+operators, AND/OR/nesting, tenant isolation) plus a stored-procedure executor suite.
+
+```bash
+# Always runs — real SQLite in-memory, no Docker needed:
+pnpm vitest run tests/integration/sequelize.integration.test.ts
+
+# Against a live database (HALIFAX_DB + DATABASE_URL — same env vars as the Prisma matrix):
+HALIFAX_DB=postgres DATABASE_URL="postgresql://..." \
+  pnpm vitest run tests/integration/sequelize.integration.test.ts
+
+HALIFAX_DB=mysql    DATABASE_URL="mysql://..."      pnpm vitest run tests/integration/sequelize.integration.test.ts
+HALIFAX_DB=mariadb  DATABASE_URL="mysql://..."      pnpm vitest run tests/integration/sequelize.integration.test.ts
+HALIFAX_DB=mssql    DATABASE_URL="sqlserver://..."  pnpm vitest run tests/integration/sequelize.integration.test.ts
+HALIFAX_DB=sqlite   DATABASE_URL="file:./test.db"   pnpm vitest run tests/integration/sequelize.integration.test.ts
+
+# Stored-procedure executor (postgres, mysql, mssql — requires a live database):
+HALIFAX_DB=postgres DATABASE_URL="postgresql://..." \
+  pnpm vitest run tests/integration/sequelizeExecute.integration.test.ts
 ```

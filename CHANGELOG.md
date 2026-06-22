@@ -5,8 +5,7 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [3.0.0]
 
-`@edium/halifax`, `@edium/halifax-types`, and `@edium/halifax-client` are all released together at
-`3.0.0`.
+`@edium/halifax`, `@edium/halifax-types`, and `@edium/halifax-client` are all released together at `3.0.0`.
 
 ### Changed — BREAKING
 
@@ -25,6 +24,35 @@ All notable changes to this project are documented here. This project adheres to
   ```
 
 ### Added
+
+- **`SequelizeAdapter`** (`@edium/halifax/sequelize`) — full `Repository` implementation for
+  Sequelize v6 covering PostgreSQL, MySQL, MariaDB, SQL Server, and SQLite. Field schema is
+  derived automatically from `model.rawAttributes`; `updateOne` uses a single `RETURNING` query on
+  PostgreSQL + MSSQL and a two-round-trip UPDATE→SELECT on MySQL/MariaDB/SQLite; `withScope()`
+  stamps and filters the tenant column on every read and write; `capabilities.supportsIncludes: true`
+  lets Sequelize associations flow through `?include=`; **fully GraphQL-compatible** — no extra
+  configuration needed beyond `graphql: { enabled: true }`. Install: `pnpm add sequelize` plus
+  the dialect's native driver (`pg`, `mysql2`, `tedious`, or `sqlite3`).
+  See [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md#sequelize-v6-adapter).
+
+- **`SequelizeSqlExecutor`** (`@edium/halifax/sequelize`) — stored-procedure executor for
+  Sequelize, giving it full parity with `PrismaSqlExecutor` and `DrizzleSqlExecutor`. Dialect is
+  auto-detected from `sequelize.getDialect()`; pass `{ dialect }` to override. Supported dialects:
+  - **PostgreSQL** — `SELECT * FROM "fn"($1, …)` with `bind` params; automatic `CALL` fallback on
+    SQLSTATE 42809 (cached per routine name).
+  - **MySQL / MariaDB** — `CALL \`fn\`(?, …)` via Sequelize `replacements` (text protocol). This
+    avoids the `ER_UNSUPPORTED_PS` error-1295 limitation that blocks `PrismaSqlExecutor` with
+    `@prisma/adapter-mariadb`.
+  - **SQL Server** — `EXEC [fn] ?, …` via `replacements`.
+  See [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md#stored-procedure-endpoints--sequelizesqlexecutor)
+  and [README_EXECUTE.md](./README_EXECUTE.md).
+
+- **`DrizzleAdapter` MySQL/MariaDB CRUD** — new `dialect: 'mysql'` option in `DrizzleAdapterConfig`
+  enables full CRUD for MySQL and MariaDB. With `dialect: 'mysql'`, writes use a two-round-trip
+  path (INSERT → `insertId` → SELECT; UPDATE → SELECT; DELETE → `affectedRows`) since MySQL lacks
+  a native `RETURNING` clause. Fully tested against real MySQL and MariaDB via the integration
+  matrix. Pass `{ dialect: 'mysql' }` when constructing a `DrizzleAdapter` with a `drizzle-orm/mysql2`
+  connection.
 
 - **Validator-agnostic request validation for custom endpoints.** `addCustomEndpoint`'s options bag
   accepts `validate: { body?, query?, params? }`, each an `ISchemaValidator`. The request part is
@@ -48,10 +76,10 @@ All notable changes to this project are documented here. This project adheres to
   or a `path` you supply. Parameters are declared (`{ name, type, required }`), the JSON request body
   is keyed by those names, validated (`422` on missing/unknown/wrong-typed), then bound positionally.
   Each procedure takes its own `roles`; an unregistered name simply has no route (clean `404`). Ships
-  `PrismaSqlExecutor` (PostgreSQL, MySQL/MariaDB, SQL Server) and `DrizzleSqlExecutor` (PostgreSQL,
-  MySQL), which "just work" for routines that return rows **or** void — Postgres falls back from
-  `SELECT * FROM fn(…)` to `CALL proc(…)` automatically, MySQL uses `CALL`, and SQL Server uses `EXEC`.
-  SQLite has no stored routines (the executor throws). See [README_EXECUTE.md](./README_EXECUTE.md).
+  `PrismaSqlExecutor` (PostgreSQL, MySQL/MariaDB, SQL Server), `DrizzleSqlExecutor` (PostgreSQL,
+  MySQL/MariaDB via text protocol), and `SequelizeSqlExecutor` (PostgreSQL, MySQL/MariaDB, SQL Server
+  — same text-protocol advantage for CALL; no ER_UNSUPPORTED_PS). SQLite has no stored routines.
+  See [README_EXECUTE.md](./README_EXECUTE.md).
 
 ## [2.7.0]
 
@@ -660,6 +688,15 @@ First public release.
 - **Auth & field-level security** — API key, JWT/Bearer, and Passport strategies; per-action
   required permissions; and `filterable`/`sortable`/`selectable`/`writable` field flags.
 
+[3.0.0]: https://github.com/splayfee/halifax/releases/tag/v3.0.0
+[2.7.0]: https://github.com/splayfee/halifax/releases/tag/v2.7.0
+[2.6.0]: https://github.com/splayfee/halifax/releases/tag/v2.6.0
+[2.5.0]: https://github.com/splayfee/halifax/releases/tag/v2.5.0
+[2.4.0]: https://github.com/splayfee/halifax/releases/tag/v2.4.0
+[2.3.0]: https://github.com/splayfee/halifax/releases/tag/v2.3.0
+[2.2.3]: https://github.com/splayfee/halifax/releases/tag/v2.2.3
+[2.2.2]: https://github.com/splayfee/halifax/releases/tag/v2.2.2
+[2.2.1]: https://github.com/splayfee/halifax/releases/tag/v2.2.1
 [2.2.0]: https://github.com/splayfee/halifax/releases/tag/v2.2.0
 [2.1.0]: https://github.com/splayfee/halifax/releases/tag/v2.1.0
 [2.0.0]: https://github.com/splayfee/halifax/releases/tag/v2.0.0

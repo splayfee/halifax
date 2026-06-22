@@ -46,6 +46,11 @@
       "import": "./dist/adapters/orm/drizzle/index.js",
       "default": "./dist/adapters/orm/drizzle/index.js"
     },
+    "./sequelize": {
+      "types": "./dist/adapters/orm/sequelize/index.d.ts",
+      "import": "./dist/adapters/orm/sequelize/index.js",
+      "default": "./dist/adapters/orm/sequelize/index.js"
+    },
     "./yup": {
       "types": "./dist/validators/yup.d.ts",
       "import": "./dist/validators/yup.js",
@@ -100,6 +105,7 @@
   "peerDependencies": {
     "@prisma/client": ">=6.0.0",
     "drizzle-orm": ">=0.30.0",
+    "sequelize": ">=6.0.0",
     "express": "^4.17.0 || ^5.0.0",
     "fastify": ">=4.0.0",
     "graphql": ">=16.0.0",
@@ -115,6 +121,9 @@
       "optional": true
     },
     "drizzle-orm": {
+      "optional": true
+    },
+    "sequelize": {
       "optional": true
     },
     "express": {
@@ -172,6 +181,9 @@
     "mysql2": "^3.22.5",
     "pg": "^8.21.0",
     "prettier": "^3.8.4",
+    "sequelize": "^6.37.7",
+    "sqlite3": "^5.1.7",
+    "tedious": "^18.0.0",
     "prisma": "^7.8.0",
     "redis": "^6.0.0",
     "supertest": "^7.2.2",
