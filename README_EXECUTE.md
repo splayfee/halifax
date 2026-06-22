@@ -117,14 +117,14 @@ new DrizzleSqlExecutor(db, { dialect: 'postgres' }) // Drizzle: postgres | mysql
 
 The shipped executors target the SQL dialects that have first-class stored routines:
 
-| Database        | Prisma `provider` | Dialect           | Stored procedures                                                |
-| --------------- | ----------------- | ----------------- | ---------------------------------------------------------------- |
-| PostgreSQL      | `postgresql`      | `postgres` (auto) | ✅ functions + `CALL` procedures                                 |
-| MySQL           | `mysql`           | `mysql` (auto)    | ✅ `CALL` procedures                                             |
-| MariaDB         | `mysql`           | `mysql` (auto)    | ✅ `CALL` procedures                                             |
-| SQL Server      | `sqlserver`       | `mssql` (auto)    | ✅ `EXEC` procedures (Prisma only — Drizzle has no MSSQL driver) |
-| CockroachDB     | `cockroachdb`     | `postgres` (auto) | ⚠️ UDFs/procedures only on recent CockroachDB versions           |
-| SQLite / LibSQL | `sqlite`          | —                 | ➖ N/A — SQLite has no stored routines (executor throws)         |
+| Database        | Prisma `provider` | Dialect           | Stored procedures                                                                                       |
+| --------------- | ----------------- | ----------------- | ------------------------------------------------------------------------------------------------------- |
+| PostgreSQL      | `postgresql`      | `postgres` (auto) | ✅ functions + `CALL` procedures                                                                        |
+| MySQL           | `mysql`           | `mysql` (auto)    | ✅ `CALL` procedures — **native connector only**; `@prisma/adapter-mariadb` rejects `CALL` (error 1295) |
+| MariaDB         | `mysql`           | `mysql` (auto)    | ✅ `CALL` procedures — **native connector only**; `@prisma/adapter-mariadb` rejects `CALL` (error 1295) |
+| SQL Server      | `sqlserver`       | `mssql` (auto)    | ✅ `EXEC` procedures (Prisma only — Drizzle has no MSSQL driver)                                        |
+| CockroachDB     | `cockroachdb`     | `postgres` (auto) | ⚠️ UDFs/procedures only on recent CockroachDB versions                                                  |
+| SQLite / LibSQL | `sqlite`          | —                 | ➖ N/A — SQLite has no stored routines (executor throws)                                                |
 
 `PrismaSqlExecutor` auto-detects the dialect from the client's active provider (Postgres, MySQL,
 MariaDB, SQL Server, CockroachDB); for SQLite — or any unrecognized provider — it throws a clear

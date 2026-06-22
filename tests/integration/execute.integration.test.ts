@@ -3,8 +3,11 @@
  *
  * Run with: `pnpm test:integration` (selects the engine via `HALIFAX_DB`, needs `DATABASE_URL`).
  * Skipped unless `DATABASE_URL` is set AND the selected engine supports stored procedures
- * (PostgreSQL, MySQL, MariaDB, SQL Server). SQLite/Mongo/CockroachDB are skipped — SQLite/Mongo have
- * no stored routines, and CockroachDB's routine support is version-dependent.
+ * (PostgreSQL, SQL Server). SQLite/Mongo/CockroachDB are skipped — no stored routines.
+ * MySQL and MariaDB are skipped when using `@prisma/adapter-mariadb` (the integration harness
+ * connector): the adapter routes all raw queries through the prepared-statement protocol, which
+ * rejects both `CREATE PROCEDURE` DDL (MySQL, error 1295) and `CALL` DML (MariaDB). The feature
+ * works for MySQL/MariaDB with the native Prisma connector.
  *
  * Each run creates a routine `halifax_sum_two(a, b)` that returns `{ total: a + b }` and raises an
  * error when `a < 0`, then exercises the full HTTP path through `POST /api/execute/halifax-sum-two`.
@@ -29,14 +32,18 @@ type RawClient = {
   _activeProvider?: string
 }
 
-type Dialect = 'postgres' | 'mysql' | 'mssql'
+type Dialect = 'postgres' | 'mssql'
 
 // Map the selected engine to the executor dialect, or null when the feature doesn't apply.
+// MySQL and MariaDB are null: `@prisma/adapter-mariadb` sends all raw queries through the
+// prepared-statement protocol, which rejects both `CREATE PROCEDURE` DDL (MySQL, error 1295)
+// and `CALL proc(?, …)` DML (MariaDB, same error). The feature works against Postgres and
+// SQL Server; a future Prisma driver-adapter update may lift this restriction.
 const DIALECT: Record<string, Dialect | null> = {
   postgres: 'postgres',
   cockroachdb: null,
-  mysql: 'mysql',
-  mariadb: 'mysql',
+  mysql: null,
+  mariadb: null,
   mssql: 'mssql',
   sqlite: null,
   mongodb: null
@@ -62,19 +69,6 @@ function ddl(d: Dialect): { setup: string[]; teardown: string[] } {
          END; $$`
       ],
       teardown: [`DROP FUNCTION IF EXISTS ${PROC}(integer, integer)`]
-    }
-  }
-  if (d === 'mysql') {
-    return {
-      setup: [
-        `DROP PROCEDURE IF EXISTS ${PROC}`,
-        `CREATE PROCEDURE ${PROC}(IN a INT, IN b INT)
-         BEGIN
-           IF a < 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'negative not allowed'; END IF;
-           SELECT a + b AS total;
-         END`
-      ],
-      teardown: [`DROP PROCEDURE IF EXISTS ${PROC}`]
     }
   }
   // mssql

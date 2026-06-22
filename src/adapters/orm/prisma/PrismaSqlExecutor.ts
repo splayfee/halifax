@@ -54,7 +54,11 @@ function detectDialect(client: PrismaRawClient, explicit?: SqlDialect): SqlDiale
  * parameter-bound arguments and returns its rows.
  *
  * **"Just works" across routine kinds:**
- * - **MySQL** — issued as `CALL name(?, …)` (returns result sets for both procedures and functions).
+ * - **MySQL** — issued as `CALL name(?, …)` (returns result sets for procedures and functions).
+ *   **Limitation:** `@prisma/adapter-mariadb` (used for both MySQL and MariaDB by the Halifax
+ *   integration harness) routes all raw queries through the MySQL prepared-statement protocol,
+ *   which rejects `CALL` with error 1295. This feature works reliably against MySQL/MariaDB only
+ *   when using the native Prisma connector (without a driver adapter).
  * - **SQL Server** — issued as `EXEC name @P1, … ` (stored procedures return their result sets directly).
  * - **Postgres** — issued as `SELECT * FROM name($1, …)` (functions); if the routine turns out to be
  *   a `PROCEDURE` (SQLSTATE 42809), it transparently falls back to `CALL name($1, …)` and returns
