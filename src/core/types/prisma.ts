@@ -11,19 +11,20 @@ export interface ModelField {
   isId: boolean
   /** True for fields that are auto-managed by Prisma (e.g. relation FKs, read-only scalars). */
   isReadOnly: boolean
-  /** True when Prisma provides a default value (e.g. `@default(autoincrement())`). */
-  hasDefault: boolean
   /** Prisma scalar type name (e.g. `'String'`, `'Int'`, `'Boolean'`, `'DateTime'`). Used for OpenAPI type inference. */
   type?: string
 }
 
-/** Minimal shape of a Prisma DMMF model — structurally compatible with `Prisma.DMMF.Model`. */
+/**
+ * Minimal shape of a Prisma DMMF model — structurally compatible with `Prisma.DMMF.Model`, so
+ * `Prisma.dmmf.datamodel.models` (deeply readonly) can be passed as is.
+ */
 export interface ModelSchema {
   /** Prisma model name (PascalCase). */
   name?: string
   /** Underlying database table name, or `null` to use the model name. */
   dbName?: string | null
-  fields: ModelField[]
+  fields: readonly ModelField[]
 }
 
 /** Per-model overrides for {@link createPrismaResources}. */

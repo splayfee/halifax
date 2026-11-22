@@ -560,7 +560,6 @@ Minimal shape of a Prisma DMMF field — structurally compatible with `Prisma.DM
 | `kind`       | `string`  | Prisma field kind: `'scalar'`, `'object'` (relation), `'enum'`, `'unsupported'`.                              |
 | `isId`       | `boolean` | `true` when this field is the primary key.                                                                    |
 | `isReadOnly` | `boolean` | `true` for Prisma-managed fields (relation FKs, read-only scalars).                                           |
-| `hasDefault` | `boolean` | `true` when Prisma provides a default value.                                                                  |
 | `type`       | `string`  | Prisma scalar type name (`'String'`, `'Int'`, `'Boolean'`, `'DateTime'`, …). Used for OpenAPI type inference. |
 
 ---

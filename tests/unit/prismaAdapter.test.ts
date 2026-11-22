@@ -338,12 +338,12 @@ describe('PrismaAdapter — executeQuery (delegate)', () => {
 describe('PrismaAdapter — schema introspection', () => {
   const model: ModelSchema = {
     fields: [
-      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true },
-      { name: 'email', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false },
-      { name: 'createdAt', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: true },
-      { name: 'authorId', kind: 'scalar', isId: false, isReadOnly: true, hasDefault: false },
-      { name: 'author', kind: 'object', isId: false, isReadOnly: false, hasDefault: false },
-      { name: 'posts', kind: 'object', isId: false, isReadOnly: false, hasDefault: false }
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false },
+      { name: 'email', kind: 'scalar', isId: false, isReadOnly: false },
+      { name: 'createdAt', kind: 'scalar', isId: false, isReadOnly: false },
+      { name: 'authorId', kind: 'scalar', isId: false, isReadOnly: true },
+      { name: 'author', kind: 'object', isId: false, isReadOnly: false },
+      { name: 'posts', kind: 'object', isId: false, isReadOnly: false }
     ]
   }
 
@@ -543,9 +543,9 @@ describe('createPrismaResources', () => {
     name: 'User',
     dbName: 'users',
     fields: [
-      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true },
-      { name: 'email', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false },
-      { name: 'posts', kind: 'object', isId: false, isReadOnly: false, hasDefault: false }
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false },
+      { name: 'email', kind: 'scalar', isId: false, isReadOnly: false },
+      { name: 'posts', kind: 'object', isId: false, isReadOnly: false }
     ]
   }
 
@@ -553,15 +553,15 @@ describe('createPrismaResources', () => {
     name: 'BlogPost',
     dbName: 'blog_posts',
     fields: [
-      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true },
-      { name: 'title', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false }
+      { name: 'id', kind: 'scalar', isId: true, isReadOnly: false },
+      { name: 'title', kind: 'scalar', isId: false, isReadOnly: false }
     ]
   }
 
   const auditLogModel = {
     name: 'AuditLog',
     dbName: 'audit_logs',
-    fields: [{ name: 'id', kind: 'scalar', isId: true, isReadOnly: false, hasDefault: true }]
+    fields: [{ name: 'id', kind: 'scalar', isId: true, isReadOnly: false }]
   }
 
   function makeClient() {
@@ -654,8 +654,7 @@ describe('prismaTypeToOpenApi — Prisma scalar types map to OpenAPI types', () 
       ...f,
       kind: 'scalar',
       isId: false,
-      isReadOnly: false,
-      hasDefault: false
+      isReadOnly: false
     }))
   })
 

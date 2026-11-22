@@ -262,9 +262,9 @@ describe('PrismaAdapter.withScope — query/bulk paths (delegate)', () => {
 const MODEL = {
   name: 'Widget',
   fields: [
-    { name: 'id', kind: 'scalar', isId: true, isReadOnly: true, hasDefault: true },
-    { name: 'companyId', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false },
-    { name: 'name', kind: 'scalar', isId: false, isReadOnly: false, hasDefault: false }
+    { name: 'id', kind: 'scalar', isId: true, isReadOnly: true },
+    { name: 'companyId', kind: 'scalar', isId: false, isReadOnly: false },
+    { name: 'name', kind: 'scalar', isId: false, isReadOnly: false }
   ]
 }
 

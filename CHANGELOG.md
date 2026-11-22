@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2]
+
+`@edium/halifax` only.
+
+### Fixed
+
+- **`Prisma.dmmf` is assignable to `ModelSchema` again.** The documented
+  `createPrismaResources(prisma, Prisma.dmmf.datamodel.models)` and `new PrismaAdapter({ delegate, model })` did not
+  compile against Prisma 7's DMMF types: `ModelField` required a `hasDefault` property that Prisma calls
+  `hasDefaultValue` (and Halifax never read), and `ModelSchema.fields` was mutable while the DMMF is deeply
+  readonly. `hasDefault` is gone and `fields` is `readonly ModelField[]`. A new `examples/prisma-resources.ts`
+  compiles both calls against a real generated client in the examples type-check, so they stay in step.
+
 ## [3.0.1]
 
 `@edium/halifax` and `@edium/halifax-client` are released at `3.0.1`; `@edium/halifax-types` stays at `3.0.0`.

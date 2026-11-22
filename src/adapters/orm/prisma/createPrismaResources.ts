@@ -12,7 +12,7 @@ import { toRoutePrefix } from './helpers.js'
  */
 export function createPrismaResources(
   prismaClient: object,
-  schema: ReadonlyArray<{ name: string; dbName?: string | null; fields: ModelField[] }>,
+  schema: ReadonlyArray<{ name: string; dbName?: string | null; fields: readonly ModelField[] }>,
   options: CreatePrismaResourcesOptions = {}
 ): ResourceDefinition[] {
   const client = prismaClient as Record<string, PrismaDelegate>
