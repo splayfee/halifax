@@ -132,7 +132,8 @@ export function resolveCustomEndpoint(
 ): ResolvedCustomEndpoint {
   const positional = rolesOrOptions === null || Array.isArray(rolesOrOptions)
   const opts: CustomEndpointOptions = positional ? {} : rolesOrOptions
-  const roles = positional ? rolesOrOptions : (opts.roles ?? [])
+  // `?? []` would turn an explicit `roles: null` (public) into `[]`; only a missing `roles` defaults.
+  const roles = positional ? rolesOrOptions : opts.roles === undefined ? [] : opts.roles
   return {
     roles: Array.isArray(roles) ? roles : [],
     isPublic: roles === null || opts.auth === false,

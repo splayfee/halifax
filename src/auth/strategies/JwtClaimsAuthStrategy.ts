@@ -1,4 +1,5 @@
 import { AuthenticationError } from '@/errors/AuthenticationError.js'
+import { HttpError } from '@/errors/HttpError.js'
 import type { HttpRequest } from '@/core/types.js'
 import { checkRequiredPermissions } from './types.js'
 import type { AuthContext, AuthorizeParams, AuthStrategy, SecurityScheme } from './types.js'
@@ -29,7 +30,14 @@ export class JwtClaimsAuthStrategy implements AuthStrategy {
     if (!match) {
       throw new AuthenticationError('Missing bearer token')
     }
-    return await this.verifyToken(match[1]!, req)
+    try {
+      return await this.verifyToken(match[1]!, req)
+    } catch (err) {
+      // A verifier's own error (jsonwebtoken, jose, …) means the token is bad: answer 401, not 500.
+      // An HttpError it throws on purpose (say, 403 for a banned user) passes through unchanged.
+      if (err instanceof HttpError) throw err
+      throw new AuthenticationError('Invalid bearer token')
+    }
   }
 
   /**

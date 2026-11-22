@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { AuthenticationError } from '@/errors/AuthenticationError.js'
+import { AuthorizationError } from '@/errors/AuthorizationError.js'
 import {
   AllowAllAuthStrategy,
   ApiKeyAuthStrategy,
@@ -82,6 +84,32 @@ describe('JwtClaimsAuthStrategy', () => {
     const ctx = await strategy.authenticate(req({ authorization: 'Bearer my-token' }))
     expect(ctx.isAuthenticated).toBe(true)
     expect(ctx.userId).toBe('my-token')
+  })
+
+  it('turns an error thrown by verifyToken into a 401 AuthenticationError', async () => {
+    const failing = new JwtClaimsAuthStrategy(() => {
+      throw new Error('jwt malformed')
+    })
+    await expect(failing.authenticate(req({ authorization: 'Bearer bad' }))).rejects.toBeInstanceOf(
+      AuthenticationError
+    )
+    const rejecting = new JwtClaimsAuthStrategy(() =>
+      Promise.reject(new TypeError('bad signature'))
+    )
+    await expect(
+      rejecting.authenticate(req({ authorization: 'Bearer bad' }))
+    ).rejects.toMatchObject({
+      status: 401
+    })
+  })
+
+  it('passes through an HttpError that verifyToken throws on purpose', async () => {
+    const banning = new JwtClaimsAuthStrategy(() => {
+      throw new AuthorizationError('banned')
+    })
+    await expect(banning.authenticate(req({ authorization: 'Bearer ok' }))).rejects.toBeInstanceOf(
+      AuthorizationError
+    )
   })
 
   it('is case-insensitive on Bearer scheme', async () => {

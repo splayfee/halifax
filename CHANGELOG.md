@@ -3,6 +3,21 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1]
+
+`@edium/halifax` only.
+
+### Fixed
+
+- **`addCustomEndpoint` options form: `roles: null` is public again**, as documented. The options bag
+  coalesced `null` to `[]` (`opts.roles ?? []`), so `{ roles: null }` required authentication; only the
+  positional `null` and `{ auth: false }` made an endpoint public. A missing `roles` still means "any
+  authenticated caller".
+- **`JwtClaimsAuthStrategy` answers a failing verifier with 401**, as documented. An error thrown by the
+  `verifyToken` callback (for example `jose`'s or `jsonwebtoken`'s "invalid signature") reached the client as
+  a 500; it now becomes an `AuthenticationError`. An `HttpError` the verifier throws on purpose (such as a 403
+  for a banned user) passes through unchanged. `Auth0JwtStrategy` and `FirebaseJwtStrategy` share the fix.
+
 ## [3.0.0]
 
 `@edium/halifax`, `@edium/halifax-types`, and `@edium/halifax-client` are all released together at `3.0.0`.
@@ -40,12 +55,11 @@ All notable changes to this project are documented here. This project adheres to
   auto-detected from `sequelize.getDialect()`; pass `{ dialect }` to override. Supported dialects:
   - **PostgreSQL** — `SELECT * FROM "fn"($1, …)` with `bind` params; automatic `CALL` fallback on
     SQLSTATE 42809 (cached per routine name).
-  - **MySQL / MariaDB** — `CALL \`fn\`(?, …)` via Sequelize `replacements` (text protocol). This
-    avoids the `ER_UNSUPPORTED_PS` error-1295 limitation that blocks `PrismaSqlExecutor` with
-    `@prisma/adapter-mariadb`.
+  - **MySQL / MariaDB** — `CALL \`fn\`(?, …)`via Sequelize`replacements`(text protocol). This
+avoids the`ER_UNSUPPORTED_PS`error-1295 limitation that blocks`PrismaSqlExecutor`with`@prisma/adapter-mariadb`.
   - **SQL Server** — `EXEC [fn] ?, …` via `replacements`.
-  See [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md#stored-procedure-endpoints--sequelizesqlexecutor)
-  and [README_EXECUTE.md](./README_EXECUTE.md).
+    See [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md#stored-procedure-endpoints--sequelizesqlexecutor)
+    and [README_EXECUTE.md](./README_EXECUTE.md).
 
 - **`DrizzleAdapter` MySQL/MariaDB CRUD** — new `dialect: 'mysql'` option in `DrizzleAdapterConfig`
   enables full CRUD for MySQL and MariaDB. With `dialect: 'mysql'`, writes use a two-round-trip

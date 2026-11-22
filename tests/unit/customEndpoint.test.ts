@@ -529,6 +529,35 @@ describe('HalifaxApi.addCustomEndpoint — public endpoints', () => {
     expect(authenticate).not.toHaveBeenCalled()
   })
 
+  it('options { roles: null } is public too', async () => {
+    const { server, routes } = makeServer()
+    const authenticate = vi.fn(() => {
+      throw new Error('should not authenticate')
+    })
+    const api = registerCrudApi(server, [], { authStrategy: { authenticate } })
+    api.addCustomEndpoint('POST', '/signup', { roles: null }, async (_req, res) => {
+      await res.status(202).json({ ok: true })
+    })
+
+    const { res, sent } = makeRes()
+    await invoke(routes, 'POST', '/signup', makeReq('POST'), res)
+    expect(authenticate).not.toHaveBeenCalled()
+    expect(sent.status).toBe(202)
+  })
+
+  it('options without roles still require authentication', async () => {
+    const { server, routes } = makeServer()
+    const authenticate = vi.fn(() => ({ isAuthenticated: true }))
+    const api = registerCrudApi(server, [], { authStrategy: { authenticate } })
+    api.addCustomEndpoint('GET', '/me', {}, async (_req, res) => {
+      await res.status(200).json({ ok: true })
+    })
+
+    const { res } = makeRes()
+    await invoke(routes, 'GET', '/me', makeReq('GET'), res)
+    expect(authenticate).toHaveBeenCalledOnce()
+  })
+
   it('marks a public endpoint with security: [] in the OpenAPI spec', async () => {
     const { server, routes } = makeServer()
     const api = registerCrudApi(server, [], { openapi: { enabled: true, title: 'T' } })
