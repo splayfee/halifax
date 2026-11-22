@@ -23,8 +23,7 @@ export type JsonSchema = Record<string, unknown>
  * value is returned; on failure a non-empty list of {@link FieldError}s explains what was wrong.
  */
 export type ValidationResult<T = unknown> =
-  | { success: true; value: T }
-  | { success: false; errors: FieldError[] }
+  { success: true; value: T } | { success: false; errors: FieldError[] }
 
 /**
  * Validator-agnostic schema adapter. Halifax never depends on a concrete validation library;

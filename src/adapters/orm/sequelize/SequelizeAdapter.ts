@@ -50,15 +50,26 @@ function isDuplicateError(error: unknown): boolean {
 }
 
 const SEQ_TYPE_MAP: Record<string, { type?: FieldType; format?: string }> = {
-  STRING: { type: 'string' }, TEXT: { type: 'string' }, CITEXT: { type: 'string' },
-  UUID: { type: 'string' }, CHAR: { type: 'string' },
-  INTEGER: { type: 'integer' }, BIGINT: { type: 'integer' }, SMALLINT: { type: 'integer' },
-  TINYINT: { type: 'integer' }, MEDIUMINT: { type: 'integer' },
-  FLOAT: { type: 'number' }, DOUBLE: { type: 'number' }, DECIMAL: { type: 'number' },
-  REAL: { type: 'number' }, NUMERIC: { type: 'number' },
+  STRING: { type: 'string' },
+  TEXT: { type: 'string' },
+  CITEXT: { type: 'string' },
+  UUID: { type: 'string' },
+  CHAR: { type: 'string' },
+  INTEGER: { type: 'integer' },
+  BIGINT: { type: 'integer' },
+  SMALLINT: { type: 'integer' },
+  TINYINT: { type: 'integer' },
+  MEDIUMINT: { type: 'integer' },
+  FLOAT: { type: 'number' },
+  DOUBLE: { type: 'number' },
+  DECIMAL: { type: 'number' },
+  REAL: { type: 'number' },
+  NUMERIC: { type: 'number' },
   BOOLEAN: { type: 'boolean' },
-  DATE: { type: 'string', format: 'date-time' }, DATEONLY: { type: 'string', format: 'date-time' },
-  JSON: { type: 'object' }, JSONB: { type: 'object' }
+  DATE: { type: 'string', format: 'date-time' },
+  DATEONLY: { type: 'string', format: 'date-time' },
+  JSON: { type: 'object' },
+  JSONB: { type: 'object' }
 }
 
 function seqTypeToFieldType(attr: SeqAttributeDefinition): { type?: FieldType; format?: string } {

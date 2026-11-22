@@ -13,12 +13,7 @@ export type ExecuteParams = Record<string, ExecuteValue>
 
 /** The JSON type of a declared stored-procedure parameter. */
 export type ExecuteParamType =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'string[]'
-  | 'number[]'
-  | 'boolean[]'
+  'string' | 'number' | 'boolean' | 'string[]' | 'number[]' | 'boolean[]'
 
 /**
  * Declares one parameter of a stored procedure: its name, JSON type, and whether it is required.

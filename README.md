@@ -55,14 +55,14 @@ The package is split into small, replaceable layers — nothing is imported into
 
 ## Current Support
 
-| Layer          | Supported                                                                                                            |
-| -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                                                                 |
+| Layer          | Supported                                                                                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP server    | Express 4/5, Fastify, HyperExpress, Ultimate Express                                                                                                                                            |
 | ORM / database | Prisma 6 or 7 (Postgres, MySQL, MariaDB, SQL Server, CockroachDB, SQLite); Drizzle (Postgres, MySQL, MariaDB, CockroachDB, SQLite); Sequelize v6 (Postgres, MySQL, MariaDB, SQL Server, SQLite) |
-| Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`; role or permission slug                     |
-| Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)                                                  |
-| API docs       | OpenAPI 3.1 spec + Swagger UI (optional, zero overhead when disabled)                                                |
-| GraphQL        | Auto-generated schema from resource definitions; opt-in; GraphiQL IDE; requires `graphql` ≥ 16 peer dep              |
+| Auth           | API key, JWT/Bearer, Passport + JWT; per-field `readRoles`/`writeRoles`; role or permission slug                                                                                                |
+| Caching        | Pluggable read-through cache (in-memory default; bring Redis, etc.)                                                                                                                             |
+| API docs       | OpenAPI 3.1 spec + Swagger UI (optional, zero overhead when disabled)                                                                                                                           |
+| GraphQL        | Auto-generated schema from resource definitions; opt-in; GraphiQL IDE; requires `graphql` ≥ 16 peer dep                                                                                         |
 
 Every HTTP adapter is interchangeable and behaves identically — same routes, status codes,
 error-body shape, and content negotiation — so you can switch frameworks without touching
@@ -176,26 +176,26 @@ app.listen(3000)
 
 ## Documentation
 
-| Guide                                                      | Contents                                                                                                 |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [README_CLIENT.md](./README_CLIENT.md)                     | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples        |
-| [README_AUTOCRUD.md](./README_AUTOCRUD.md)                 | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes            |
-| [README_LIMITATIONS.md](./README_LIMITATIONS.md)           | Full adapter × database × feature compatibility matrix; known limitations and workarounds                |
-| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)       | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, `SequelizeAdapter`, custom repositories       |
-| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md)       | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                     |
-| [README_AUTH.md](./README_AUTH.md)                         | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, per-field `readRoles`/`writeRoles` |
-| [README_MULTITENANCY.md](./README_MULTITENANCY.md)         | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour            |
-| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)         | Query-builder payload, comparisons, nested filters, portable execution                                   |
-| [README_CACHE.md](./README_CACHE.md)                       | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                          |
-| [README_HOOKS.md](./README_HOOKS.md)                       | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook    |
-| [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md) | Custom endpoints: `HalifaxApi`, `addCustomEndpoint`, aggregate queries, business actions, disabling CRUD |
-| [README_VALIDATION.md](./README_VALIDATION.md)             | Validator-agnostic request validation: `ISchemaValidator`, Yup/Zod/Joi/Valibot adapters, auto-OpenAPI    |
+| Guide                                                      | Contents                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [README_CLIENT.md](./README_CLIENT.md)                     | `@edium/halifax-client` — install, transports, query builder, React & Vue TanStack Query examples                                           |
+| [README_AUTOCRUD.md](./README_AUTOCRUD.md)                 | Resource definitions, field flags, ID types, pagination, query-string filtering, error shapes                                               |
+| [README_LIMITATIONS.md](./README_LIMITATIONS.md)           | Full adapter × database × feature compatibility matrix; known limitations and workarounds                                                   |
+| [README_REPO_ADAPTERS.md](./README_REPO_ADAPTERS.md)       | Prisma 7 (and 6) setup, `PrismaAdapter`, `DrizzleAdapter`, `SequelizeAdapter`, custom repositories                                          |
+| [README_HTTP_ADAPTERS.md](./README_HTTP_ADAPTERS.md)       | Express, Fastify, HyperExpress & Ultimate Express adapters, and custom HTTP adapters                                                        |
+| [README_AUTH.md](./README_AUTH.md)                         | Auth strategies (`ApiKey`, `JWT`, `Passport`), `requiredPermissions`, per-field `readRoles`/`writeRoles`                                    |
+| [README_MULTITENANCY.md](./README_MULTITENANCY.md)         | Tenant isolation: `tenant` options, auto-detection, scoping guarantees, fail-closed behaviour                                               |
+| [README_QUERYBUILDER.md](./README_QUERYBUILDER.md)         | Query-builder payload, comparisons, nested filters, portable execution                                                                      |
+| [README_CACHE.md](./README_CACHE.md)                       | Read-through caching: in-memory & Redis stores, never-expire, cache-bust header                                                             |
+| [README_HOOKS.md](./README_HOOKS.md)                       | Lifecycle hooks: `beforeCreate`, `afterCreate`, `beforeReadMany`, `beforeQuery`, and every other hook                                       |
+| [README_CUSTOM_ENDPOINTS.md](./README_CUSTOM_ENDPOINTS.md) | Custom endpoints: `HalifaxApi`, `addCustomEndpoint`, aggregate queries, business actions, disabling CRUD                                    |
+| [README_VALIDATION.md](./README_VALIDATION.md)             | Validator-agnostic request validation: `ISchemaValidator`, Yup/Zod/Joi/Valibot adapters, auto-OpenAPI                                       |
 | [README_EXECUTE.md](./README_EXECUTE.md)                   | Stored-procedure endpoints: `execute`, per-SP routes, typed named params, `PrismaSqlExecutor`, `DrizzleSqlExecutor`, `SequelizeSqlExecutor` |
-| [README_GRAPHQL.md](./README_GRAPHQL.md)                   | GraphQL endpoint: opt-in setup, auto-generated schema, GraphiQL IDE, auth, tenant bypass for admins      |
-| [README_OPENAPI.md](./README_OPENAPI.md)                   | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use          |
-| [README_TYPES.md](./README_TYPES.md)                       | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants             |
-| [README_INTERFACES.md](./README_INTERFACES.md)             | All exported interfaces — resource, auth, HTTP, repository, cache, Prisma, Drizzle, query AST            |
-| [README_CLASSES.md](./README_CLASSES.md)                   | All exported classes — auth strategies, HTTP adapters, ORM adapters, cache stores, error types           |
+| [README_GRAPHQL.md](./README_GRAPHQL.md)                   | GraphQL endpoint: opt-in setup, auto-generated schema, GraphiQL IDE, auth, tenant bypass for admins                                         |
+| [README_OPENAPI.md](./README_OPENAPI.md)                   | OpenAPI 3.1 spec generation, Swagger UI, type introspection, security schemes, programmatic use                                             |
+| [README_TYPES.md](./README_TYPES.md)                       | All exported type aliases, enums (`SqlComparison`, `SqlOperator`, `SqlOrder`), and constants                                                |
+| [README_INTERFACES.md](./README_INTERFACES.md)             | All exported interfaces — resource, auth, HTTP, repository, cache, Prisma, Drizzle, query AST                                               |
+| [README_CLASSES.md](./README_CLASSES.md)                   | All exported classes — auth strategies, HTTP adapters, ORM adapters, cache stores, error types                                              |
 
 ## Examples
 

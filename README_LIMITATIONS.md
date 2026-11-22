@@ -46,14 +46,14 @@ runs on every supported provider without any per-database code path.
 `DrizzleAdapter` (CRUD) and `DrizzleSqlExecutor` (stored procedures) have separate database
 coverage — they share the same Drizzle connection but support different databases.
 
-| Database        | CRUD REST | Query Builder | Relations (`?include=`) | Execute Endpoint              | GraphQL  |
-| --------------- | --------- | ------------- | ----------------------- | ----------------------------- | -------- |
-| **PostgreSQL**  | ✅        | ✅            | ❌ ³                    | ✅ `SELECT fn()` + `CALL`     | ✅       |
-| **MySQL**       | ✅ ⁴      | ✅            | ❌                      | ✅ `CALL` via text protocol ⁵ | ✅       |
-| **MariaDB**     | ✅ ⁴      | ✅            | ❌                      | ✅ `CALL` via text protocol ⁵ | ✅       |
-| **SQL Server**  | ❌ no driver | ❌          | ❌                      | ❌ no driver                  | ❌       |
-| **CockroachDB** | ✅        | ✅            | ❌                      | ⚠️ use `dialect: 'postgres'`  | ✅       |
-| **SQLite**      | ✅        | ✅            | ❌                      | ❌ no stored routines         | ✅       |
+| Database        | CRUD REST    | Query Builder | Relations (`?include=`) | Execute Endpoint              | GraphQL |
+| --------------- | ------------ | ------------- | ----------------------- | ----------------------------- | ------- |
+| **PostgreSQL**  | ✅           | ✅            | ❌ ³                    | ✅ `SELECT fn()` + `CALL`     | ✅      |
+| **MySQL**       | ✅ ⁴         | ✅            | ❌                      | ✅ `CALL` via text protocol ⁵ | ✅      |
+| **MariaDB**     | ✅ ⁴         | ✅            | ❌                      | ✅ `CALL` via text protocol ⁵ | ✅      |
+| **SQL Server**  | ❌ no driver | ❌            | ❌                      | ❌ no driver                  | ❌      |
+| **CockroachDB** | ✅           | ✅            | ❌                      | ⚠️ use `dialect: 'postgres'`  | ✅      |
+| **SQLite**      | ✅           | ✅            | ❌                      | ❌ no stored routines         | ✅      |
 
 ---
 
@@ -62,14 +62,14 @@ coverage — they share the same Drizzle connection but support different databa
 Sequelize v6 supports five SQL databases out of the box and uses Op symbol-based query translation
 that mirrors the Prisma and Drizzle adapters' ComparisonStrategy contract.
 
-| Database        | CRUD REST | Query Builder | Relations (`?include=`) | Execute Endpoint              | GraphQL |
-| --------------- | --------- | ------------- | ----------------------- | ----------------------------- | ------- |
-| **PostgreSQL**  | ✅        | ✅            | ✅ ⁶                    | ✅ `SELECT fn()` + `CALL` ⁷   | ✅      |
-| **MySQL**       | ✅        | ✅            | ✅                      | ✅ `CALL` via replacements ⁷  | ✅      |
-| **MariaDB**     | ✅        | ✅            | ✅                      | ✅ `CALL` via replacements ⁷  | ✅      |
-| **SQL Server**  | ✅        | ✅            | ✅                      | ✅ `EXEC` via replacements ⁷  | ✅      |
-| **CockroachDB** | ❌ ⁸      | ❌            | ❌                      | ❌                            | ❌      |
-| **SQLite**      | ✅        | ✅            | ✅                      | ❌ no stored routines         | ✅      |
+| Database        | CRUD REST | Query Builder | Relations (`?include=`) | Execute Endpoint             | GraphQL |
+| --------------- | --------- | ------------- | ----------------------- | ---------------------------- | ------- |
+| **PostgreSQL**  | ✅        | ✅            | ✅ ⁶                    | ✅ `SELECT fn()` + `CALL` ⁷  | ✅      |
+| **MySQL**       | ✅        | ✅            | ✅                      | ✅ `CALL` via replacements ⁷ | ✅      |
+| **MariaDB**     | ✅        | ✅            | ✅                      | ✅ `CALL` via replacements ⁷ | ✅      |
+| **SQL Server**  | ✅        | ✅            | ✅                      | ✅ `EXEC` via replacements ⁷ | ✅      |
+| **CockroachDB** | ❌ ⁸      | ❌            | ❌                      | ❌                           | ❌      |
+| **SQLite**      | ✅        | ✅            | ✅                      | ❌ no stored routines        | ✅      |
 
 ---
 
@@ -142,8 +142,8 @@ must be done before passing the model to the adapter.
 - **Postgres** — `SELECT * FROM "fn"($1, …)` using `bind` parameters (real prepared statements);
   falls back to `CALL "fn"($1, …)` on SQLSTATE 42809 when the routine is a PROCEDURE, caching the
   classification per name.
-- **MySQL / MariaDB** — `CALL \`fn\`(?, …)` using `replacements` (Sequelize text protocol). This
-  avoids the prepared-statement `ER_UNSUPPORTED_PS` error-1295 that blocks `PrismaSqlExecutor`
+- **MySQL / MariaDB** — `CALL \`fn\`(?, …)`using`replacements`(Sequelize text protocol). This
+avoids the prepared-statement`ER_UNSUPPORTED_PS`error-1295 that blocks`PrismaSqlExecutor`
   with the Prisma 7 driver adapter.
 - **SQL Server** — `EXEC [fn] ?, …` using `replacements`.
 
@@ -174,16 +174,16 @@ Use `PrismaAdapter` for CockroachDB (Prisma handles the dialect transparently).
 
 ## Choosing an adapter
 
-| Situation                                | Recommended adapter                                                                                   |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| PostgreSQL, CockroachDB                  | Any — all three work equally well (PrismaAdapter or DrizzleAdapter for GraphQL)                       |
-| MySQL or MariaDB CRUD                    | **Prisma**, **Drizzle** (`dialect: 'mysql'`), or **Sequelize** — all supported                       |
-| MySQL or MariaDB stored procedures       | **Drizzle** (`DrizzleSqlExecutor`) or **Sequelize** (`SequelizeSqlExecutor`) — both use text protocol; avoid `PrismaSqlExecutor` with Prisma 7 driver adapter |
-| SQL Server                               | **Prisma** or **Sequelize** — Drizzle has no MSSQL driver                                            |
-| SQLite (edge / embedded)                 | Any — all three tested                                                                                |
-| Relation eager loading (`?include=`)     | **Prisma** or **Sequelize** — `DrizzleAdapter` explicitly does not support includes                   |
-| Stored-procedure endpoints               | **Prisma** (`PrismaSqlExecutor`), **Drizzle** (`DrizzleSqlExecutor`), or **Sequelize** (`SequelizeSqlExecutor`) — all three ship an executor |
-| Maximum GraphQL coverage                 | Any — all three adapters support GraphQL on their respective databases                                |
-| `createMany` returns records             | Any — all three return records from `createMany`                                                      |
-| Existing Sequelize schema / models       | **Sequelize** — drop-in; pass your existing Sequelize model class directly                            |
-| Schema migrations via code               | **Sequelize** (`sequelize.sync`) or **Prisma** (`prisma migrate`) — Drizzle requires its own tooling  |
+| Situation                            | Recommended adapter                                                                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL, CockroachDB              | Any — all three work equally well (PrismaAdapter or DrizzleAdapter for GraphQL)                                                                               |
+| MySQL or MariaDB CRUD                | **Prisma**, **Drizzle** (`dialect: 'mysql'`), or **Sequelize** — all supported                                                                                |
+| MySQL or MariaDB stored procedures   | **Drizzle** (`DrizzleSqlExecutor`) or **Sequelize** (`SequelizeSqlExecutor`) — both use text protocol; avoid `PrismaSqlExecutor` with Prisma 7 driver adapter |
+| SQL Server                           | **Prisma** or **Sequelize** — Drizzle has no MSSQL driver                                                                                                     |
+| SQLite (edge / embedded)             | Any — all three tested                                                                                                                                        |
+| Relation eager loading (`?include=`) | **Prisma** or **Sequelize** — `DrizzleAdapter` explicitly does not support includes                                                                           |
+| Stored-procedure endpoints           | **Prisma** (`PrismaSqlExecutor`), **Drizzle** (`DrizzleSqlExecutor`), or **Sequelize** (`SequelizeSqlExecutor`) — all three ship an executor                  |
+| Maximum GraphQL coverage             | Any — all three adapters support GraphQL on their respective databases                                                                                        |
+| `createMany` returns records         | Any — all three return records from `createMany`                                                                                                              |
+| Existing Sequelize schema / models   | **Sequelize** — drop-in; pass your existing Sequelize model class directly                                                                                    |
+| Schema migrations via code           | **Sequelize** (`sequelize.sync`) or **Prisma** (`prisma migrate`) — Drizzle requires its own tooling                                                          |

@@ -6,13 +6,7 @@ import path from 'node:path'
  * each — the whole point of compiling the query AST to portable Prisma Client calls.
  */
 export type IntegrationDbName =
-  | 'postgres'
-  | 'cockroachdb'
-  | 'mysql'
-  | 'mariadb'
-  | 'mssql'
-  | 'sqlite'
-  | 'mongodb'
+  'postgres' | 'cockroachdb' | 'mysql' | 'mariadb' | 'mssql' | 'sqlite' | 'mongodb'
 
 /** The database selected for this run via `HALIFAX_DB` (defaults to `postgres`). */
 export function integrationDbName(): IntegrationDbName {

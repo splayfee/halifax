@@ -333,8 +333,7 @@ export class DrizzleAdapter<
         return rows[0] ?? null
       }
       const rows = (await this.db.update(this.table).set(cleanData).where(where).returning!()) as (
-        | TRecord
-        | undefined
+        TRecord | undefined
       )[]
       return rows[0] ?? null
     } catch (error) {

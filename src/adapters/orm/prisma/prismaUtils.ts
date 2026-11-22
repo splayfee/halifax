@@ -20,16 +20,25 @@ export function isDuplicateError(error: unknown): boolean {
   )
 }
 
+/** SQL Server's error number for an explicit value inserted into an IDENTITY column. */
+const MSSQL_IDENTITY_INSERT_OFF = 544
+
 /**
  * Returns true for SQL Server's "IDENTITY_INSERT is set to OFF" error (code 544).
  * MSSQL IDENTITY columns reject any explicit-value INSERT via the driver adapter rather
- * than surfacing a P2002 duplicate — so this must be caught separately.
+ * than surfacing a P2002 duplicate — so this must be caught separately. Prisma up to 7.8 puts the
+ * driver's error on `cause`; 7.10 wraps it as a P2039 with the driver's error under
+ * `meta.driverAdapterError.cause`, so both places are checked.
  */
 export function isIdentityInsertError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false
-  const cause = (error as Record<string, unknown>).cause
+  const e = error as {
+    cause?: { code?: unknown }
+    meta?: { driverAdapterError?: { cause?: { code?: unknown } } }
+  }
   return (
-    typeof cause === 'object' && cause !== null && (cause as Record<string, unknown>).code === 544
+    e.cause?.code === MSSQL_IDENTITY_INSERT_OFF ||
+    e.meta?.driverAdapterError?.cause?.code === MSSQL_IDENTITY_INSERT_OFF
   )
 }
 

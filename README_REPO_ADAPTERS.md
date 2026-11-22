@@ -264,14 +264,14 @@ const usersResource: ResourceDefinition = {
 `DrizzleAdapter` (CRUD) and `DrizzleSqlExecutor` (stored procedures) have separate database
 coverage — they share the same Drizzle connection but support different databases.
 
-| Database        | CRUD (`DrizzleAdapter`)            | Execute (`DrizzleSqlExecutor`) | Drizzle driver import        |
-| --------------- | ---------------------------------- | ------------------------------ | ---------------------------- |
-| PostgreSQL      | ✅                                 | ✅ `SELECT fn()` + `CALL`      | `drizzle-orm/node-postgres`  |
-| CockroachDB     | ✅ (postgres dialect)              | ⚠️ UDFs on CockroachDB ≥22.2   | `drizzle-orm/node-postgres`  |
-| SQLite / LibSQL | ✅                                 | ❌ no stored routines          | `drizzle-orm/better-sqlite3` |
-| MySQL           | ✅ `dialect: 'mysql'` (see note)   | ✅ `CALL` via text protocol    | `drizzle-orm/mysql2`         |
-| MariaDB         | ✅ `dialect: 'mysql'` (see note)   | ✅ `CALL` via text protocol    | `drizzle-orm/mysql2`         |
-| SQL Server      | ❌ no Drizzle driver               | ❌ no Drizzle driver           | —                            |
+| Database        | CRUD (`DrizzleAdapter`)          | Execute (`DrizzleSqlExecutor`) | Drizzle driver import        |
+| --------------- | -------------------------------- | ------------------------------ | ---------------------------- |
+| PostgreSQL      | ✅                               | ✅ `SELECT fn()` + `CALL`      | `drizzle-orm/node-postgres`  |
+| CockroachDB     | ✅ (postgres dialect)            | ⚠️ UDFs on CockroachDB ≥22.2   | `drizzle-orm/node-postgres`  |
+| SQLite / LibSQL | ✅                               | ❌ no stored routines          | `drizzle-orm/better-sqlite3` |
+| MySQL           | ✅ `dialect: 'mysql'` (see note) | ✅ `CALL` via text protocol    | `drizzle-orm/mysql2`         |
+| MariaDB         | ✅ `dialect: 'mysql'` (see note) | ✅ `CALL` via text protocol    | `drizzle-orm/mysql2`         |
+| SQL Server      | ❌ no Drizzle driver             | ❌ no Drizzle driver           | —                            |
 
 > **MySQL/MariaDB CRUD — two-round-trip writes.** MySQL and MariaDB lack a native `RETURNING`
 > clause, so Drizzle's mysql2 builders omit `.returning()`. Pass `{ dialect: 'mysql' }` to
@@ -453,12 +453,16 @@ import type { SeqModel } from '@edium/halifax/sequelize'
 
 const sequelize = new Sequelize(process.env.DATABASE_URL!, { dialect: 'postgres', logging: false })
 
-const Post = sequelize.define('Post', {
-  id:        { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-  title:     { type: DataTypes.STRING,  allowNull: false, defaultValue: '' },
-  content:   { type: DataTypes.TEXT,    allowNull: true },
-  published: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-}, { tableName: 'posts', timestamps: false })
+const Post = sequelize.define(
+  'Post',
+  {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    title: { type: DataTypes.STRING, allowNull: false, defaultValue: '' },
+    content: { type: DataTypes.TEXT, allowNull: true },
+    published: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }
+  },
+  { tableName: 'posts', timestamps: false }
+)
 
 await sequelize.sync()
 
@@ -471,14 +475,14 @@ const postResource: ResourceDefinition = {
 
 ### Supported databases
 
-| Database    | CRUD | Query Builder | Relations (`?include=`) | Driver package |
-| ----------- | ---- | ------------- | ----------------------- | -------------- |
-| PostgreSQL  | ✅   | ✅            | ✅                      | `pg`           |
-| MySQL       | ✅   | ✅            | ✅                      | `mysql2`       |
-| MariaDB     | ✅   | ✅            | ✅                      | `mysql2`       |
-| SQL Server  | ✅   | ✅            | ✅                      | `tedious`      |
-| SQLite      | ✅   | ✅            | ✅                      | `sqlite3`      |
-| CockroachDB | ❌ ⁽ᵃ⁾ | ❌          | ❌                      | —              |
+| Database    | CRUD   | Query Builder | Relations (`?include=`) | Driver package |
+| ----------- | ------ | ------------- | ----------------------- | -------------- |
+| PostgreSQL  | ✅     | ✅            | ✅                      | `pg`           |
+| MySQL       | ✅     | ✅            | ✅                      | `mysql2`       |
+| MariaDB     | ✅     | ✅            | ✅                      | `mysql2`       |
+| SQL Server  | ✅     | ✅            | ✅                      | `tedious`      |
+| SQLite      | ✅     | ✅            | ✅                      | `sqlite3`      |
+| CockroachDB | ❌ ⁽ᵃ⁾ | ❌            | ❌                      | —              |
 
 > ⁽ᵃ⁾ CockroachDB is not in the tested matrix. Use `PrismaAdapter` for CockroachDB.
 
@@ -488,25 +492,25 @@ const postResource: ResourceDefinition = {
 new SequelizeAdapter(model, config?, scope?)
 ```
 
-| Parameter        | Type                  | Description                                                                            |
-| ---------------- | --------------------- | -------------------------------------------------------------------------------------- |
-| `model`          | `SeqModel`            | Your Sequelize Model class (static side), cast via `as unknown as SeqModel`.           |
-| `config.idField` | `string` (optional)   | Primary key field name. Defaults to auto-detecting the `primaryKey: true` attribute.   |
-| `scope`          | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly.                  |
+| Parameter        | Type                  | Description                                                                          |
+| ---------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| `model`          | `SeqModel`            | Your Sequelize Model class (static side), cast via `as unknown as SeqModel`.         |
+| `config.idField` | `string` (optional)   | Primary key field name. Defaults to auto-detecting the `primaryKey: true` attribute. |
+| `scope`          | `TenantScope \| null` | Tenant scope. Set by `withScope()` internally — do not pass directly.                |
 
 ### Type introspection
 
 `SequelizeAdapter` reads `model.rawAttributes` and maps each attribute's `type.key` to its
 Halifax/OpenAPI equivalent:
 
-| Sequelize type key             | OpenAPI type  | Format      |
-| ------------------------------ | ------------- | ----------- |
-| `STRING`, `TEXT`, `UUID`, …    | `string`      | —           |
-| `INTEGER`, `BIGINT`, …         | `integer`     | —           |
-| `FLOAT`, `DOUBLE`, `DECIMAL`   | `number`      | —           |
-| `BOOLEAN`                      | `boolean`     | —           |
-| `DATE`, `DATEONLY`             | `string`      | `date-time` |
-| `JSON`, `JSONB`                | `object`      | —           |
+| Sequelize type key           | OpenAPI type | Format      |
+| ---------------------------- | ------------ | ----------- |
+| `STRING`, `TEXT`, `UUID`, …  | `string`     | —           |
+| `INTEGER`, `BIGINT`, …       | `integer`    | —           |
+| `FLOAT`, `DOUBLE`, `DECIMAL` | `number`     | —           |
+| `BOOLEAN`                    | `boolean`    | —           |
+| `DATE`, `DATEONLY`           | `string`     | `date-time` |
+| `JSON`, `JSONB`              | `object`     | —           |
 
 ### Relations / `?include=`
 
@@ -578,7 +582,7 @@ const api = registerCrudApi(server, resources, {
         name: 'send_invoice',
         params: [
           { name: 'orderId', type: 'number', required: true },
-          { name: 'email',   type: 'string', required: true }
+          { name: 'email', type: 'string', required: true }
         ]
       }
     ]
@@ -586,11 +590,11 @@ const api = registerCrudApi(server, resources, {
 })
 ```
 
-| Dialect                | Call style                      | Param binding              |
-| ---------------------- | ------------------------------- | -------------------------- |
-| PostgreSQL             | `SELECT * FROM "fn"($1, …)` → `CALL "fn"($1, …)` on 42809 | `bind` (real prepared stmts) |
-| MySQL / MariaDB        | `CALL \`fn\`(?, …)`             | `replacements` (text protocol — no ER_UNSUPPORTED_PS) |
-| SQL Server             | `EXEC [fn] ?, …`                | `replacements`             |
+| Dialect         | Call style                                                | Param binding                                         |
+| --------------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| PostgreSQL      | `SELECT * FROM "fn"($1, …)` → `CALL "fn"($1, …)` on 42809 | `bind` (real prepared stmts)                          |
+| MySQL / MariaDB | `CALL \`fn\`(?, …)`                                       | `replacements` (text protocol — no ER_UNSUPPORTED_PS) |
+| SQL Server      | `EXEC [fn] ?, …`                                          | `replacements`                                        |
 
 The dialect is auto-detected from `sequelize.getDialect()`. Pass `{ dialect: 'postgres' | 'mysql' | 'mssql' }` to override. SQLite throws `NotImplementedError` — it has no stored routines.
 

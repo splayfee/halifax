@@ -3,6 +3,11 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1]
+
+Dependencies updated to their latest releases. From 3.0.0, all three Halifax packages share one changelog: see
+[the root CHANGELOG](../../CHANGELOG.md).
+
 ## [2.3.0]
 
 ### Documentation

@@ -10,8 +10,7 @@ import type { TrackingHttpServer } from './trackingHttpServer.js'
 export interface GqlCtx {
   resource: ResourceDefinition
   hooks:
-    | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
-    | undefined
+    CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>> | undefined
   resolveRepo: ResolveRepo
 }
 

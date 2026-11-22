@@ -39,8 +39,7 @@ export interface GraphQLResourceContext {
   resource: ResourceDefinition
   authStrategy: AuthStrategy
   hooks:
-    | CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>>
-    | undefined
+    CrudHooks<Record<string, unknown>, Record<string, unknown>, Record<string, unknown>> | undefined
   resolveRepo: (req: HttpRequest, auth: AuthContext, action: CrudAction) => Promise<Repository>
 }
 

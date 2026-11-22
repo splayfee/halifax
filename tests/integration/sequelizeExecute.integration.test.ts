@@ -18,18 +18,21 @@ import request from 'supertest'
 import { Sequelize } from 'sequelize'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { integrationDbName } from '../helpers/integrationDb.js'
-import { SequelizeSqlExecutor, type SequelizeSqlDialect } from '@/adapters/orm/sequelize/SequelizeSqlExecutor.js'
+import {
+  SequelizeSqlExecutor,
+  type SequelizeSqlDialect
+} from '@/adapters/orm/sequelize/SequelizeSqlExecutor.js'
 import { ExpressHttpServer, registerCrudApi, type ExecuteOptions } from '@/index.js'
 
 type RunDialect = SequelizeSqlDialect
 
 const DIALECT: Record<string, RunDialect | null> = {
-  postgres:    'postgres',
-  cockroachdb: null,  // CockroachDB quirks outside Sequelize test scope
-  mysql:       'mysql',
-  mariadb:     'mysql',
-  mssql:       'mssql',
-  sqlite:      null,  // no stored routines
+  postgres: 'postgres',
+  cockroachdb: null, // CockroachDB quirks outside Sequelize test scope
+  mysql: 'mysql',
+  mariadb: 'mysql',
+  mssql: 'mssql',
+  sqlite: null // no stored routines
 }
 
 const db = integrationDbName()
@@ -77,9 +80,7 @@ function ddl(d: RunDialect): { setup: string[]; teardown: string[] } {
          SELECT @a + @b AS total;
        END`
     ],
-    teardown: [
-      `IF OBJECT_ID('dbo.${PROC}', 'P') IS NOT NULL DROP PROCEDURE dbo.${PROC}`
-    ]
+    teardown: [`IF OBJECT_ID('dbo.${PROC}', 'P') IS NOT NULL DROP PROCEDURE dbo.${PROC}`]
   }
 }
 
@@ -104,7 +105,9 @@ function makeSequelize(d: RunDialect): Sequelize {
     username: params.get('user') ?? '',
     password: params.get('password') ?? '',
     logging: false,
-    dialectOptions: { options: { trustServerCertificate: params.get('trustservercertificate') === 'true' } }
+    dialectOptions: {
+      options: { trustServerCertificate: params.get('trustservercertificate') === 'true' }
+    }
   })
 }
 

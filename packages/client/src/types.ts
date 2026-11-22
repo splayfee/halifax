@@ -62,8 +62,7 @@ export interface HalifaxClientOptions {
    * These are merged on top of the defaults (`Accept`, `Content-Type`).
    */
   headers?:
-    | Record<string, string>
-    | (() => Record<string, string> | Promise<Record<string, string>>)
+    Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
   /**
    * When your Halifax server uses `envelope` (e.g. `'data'`), the client
    * automatically unwraps `{ data: <body> }` from every response.

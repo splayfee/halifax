@@ -39,8 +39,14 @@ function detectDialect(seq: SeqRawClient, explicit?: SequelizeSqlDialect): Seque
 
 /** Postgres raises SQLSTATE 42809 (`wrong_object_type`) when a procedure is called via `SELECT`. */
 function isWrongObjectType(error: unknown): boolean {
-  const e = error as { code?: string; parent?: { code?: string }; original?: { code?: string }; message?: string }
-  if (e?.code === '42809' || e?.parent?.code === '42809' || e?.original?.code === '42809') return true
+  const e = error as {
+    code?: string
+    parent?: { code?: string }
+    original?: { code?: string }
+    message?: string
+  }
+  if (e?.code === '42809' || e?.parent?.code === '42809' || e?.original?.code === '42809')
+    return true
   const msg = typeof e?.message === 'string' ? e.message.toLowerCase() : ''
   return msg.includes('is a procedure') || msg.includes('use call')
 }

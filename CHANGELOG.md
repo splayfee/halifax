@@ -5,7 +5,7 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [3.0.1]
 
-`@edium/halifax` only.
+`@edium/halifax` and `@edium/halifax-client` are released at `3.0.1`; `@edium/halifax-types` stays at `3.0.0`.
 
 ### Fixed
 
@@ -17,6 +17,18 @@ All notable changes to this project are documented here. This project adheres to
   `verifyToken` callback (for example `jose`'s or `jsonwebtoken`'s "invalid signature") reached the client as
   a 500; it now becomes an `AuthenticationError`. An `HttpError` the verifier throws on purpose (such as a 403
   for a banned user) passes through unchanged. `Auth0JwtStrategy` and `FirebaseJwtStrategy` share the fix.
+- **SQL Server tenant-scoped upsert with Prisma 7.10.** Prisma 7.10 reports the driver's "IDENTITY_INSERT is
+  set to OFF" error (544) as a `P2039` with the driver error under `meta.driverAdapterError.cause`, where 7.8
+  put it on `cause`. `isIdentityInsertError` now checks both, so `upsertOne` again refuses another tenant's row
+  with 409 and stamps the tenant on a new one.
+
+### Changed
+
+- Every dependency is on its latest release (TypeScript stays on 6 until typescript-eslint supports 7),
+  including Prisma 7.10, Vitest 5, HyperExpress 7 (whose uWebSockets.js loads on Node 26), better-sqlite3 13,
+  sqlite3 6 and tedious 20. pnpm is 12.21.0, pinned by hash through Corepack.
+- Removed `packages/client/pnpm-lock.yaml`, a leftover from before the client joined the workspace; the
+  workspace lockfile is the only one.
 
 ## [3.0.0]
 
