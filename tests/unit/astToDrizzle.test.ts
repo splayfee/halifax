@@ -196,6 +196,24 @@ describe('astToDrizzleWhere — comparison operators', () => {
     ])
   })
 
+  it('IContains matches a substring in any case', () => {
+    expect(query({ field: 'name', comparison: SqlComparison.IContains, value1: 'LPH' })).toEqual([
+      'Alpha'
+    ])
+  })
+
+  it('IStartsWith matches a prefix in any case', () => {
+    expect(query({ field: 'name', comparison: SqlComparison.IStartsWith, value1: 'bR' })).toEqual([
+      'Bravo'
+    ])
+  })
+
+  it('IEndsWith matches a suffix in any case', () => {
+    expect(query({ field: 'name', comparison: SqlComparison.IEndsWith, value1: 'LIE' })).toEqual([
+      'Charlie'
+    ])
+  })
+
   it('default (unknown operator) falls back to Equal', () => {
     expect(
       query({

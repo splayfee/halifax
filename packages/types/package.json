@@ -1,6 +1,6 @@
 {
   "name": "@edium/halifax-types",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Shared TypeScript types, enums, and validator adapters for @edium/halifax and @edium/halifax-client.",
   "author": "David LaTour <david@edium.com>",
   "license": "MIT",

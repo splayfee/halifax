@@ -16,7 +16,8 @@ import {
   and,
   or,
   asc,
-  desc
+  desc,
+  sql
 } from 'drizzle-orm'
 import type { AnyColumn, SQL } from 'drizzle-orm'
 import type { IQueryFilter, ISort, QueryScalar } from '@edium/halifax-types'
@@ -28,6 +29,18 @@ export type ColumnMap = Record<string, AnyColumn>
 /** Escapes SQL LIKE metacharacters in a literal value so it is treated as a plain string. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&')
+}
+
+/**
+ * A case-insensitive `LIKE`: both sides go through SQL `lower()`, which every Drizzle dialect
+ * has, so the match ignores case whatever the column's collation. SQLite's `lower()` folds
+ * ASCII letters only.
+ * @param col - The column to match.
+ * @param pattern - The escaped `LIKE` pattern.
+ * @returns The condition `lower(col) LIKE lower(pattern)`.
+ */
+function likeIgnoringCase(col: AnyColumn, pattern: string): SQL {
+  return like(sql`lower(${col})`, sql`lower(${pattern})`)
 }
 
 /**
@@ -54,6 +67,12 @@ const DRIZZLE_COMPARISONS: ComparisonStrategyTable<SQL | undefined, AnyColumn> =
   [SqlComparison.Contains]: (col, { v1 }) => like(col, `%${escapeLike(String(v1 ?? ''))}%`),
   [SqlComparison.StartsWith]: (col, { v1 }) => like(col, `${escapeLike(String(v1 ?? ''))}%`),
   [SqlComparison.EndsWith]: (col, { v1 }) => like(col, `%${escapeLike(String(v1 ?? ''))}`),
+  [SqlComparison.IContains]: (col, { v1 }) =>
+    likeIgnoringCase(col, `%${escapeLike(String(v1 ?? ''))}%`),
+  [SqlComparison.IStartsWith]: (col, { v1 }) =>
+    likeIgnoringCase(col, `${escapeLike(String(v1 ?? ''))}%`),
+  [SqlComparison.IEndsWith]: (col, { v1 }) =>
+    likeIgnoringCase(col, `%${escapeLike(String(v1 ?? ''))}`),
   [SqlComparison.Like]: (col, { v1 }) => like(col, String(v1 ?? '')),
   [SqlComparison.NotLike]: (col, { v1 }) => notLike(col, String(v1 ?? ''))
 }

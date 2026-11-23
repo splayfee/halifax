@@ -3,6 +3,20 @@ import type { CreatePrismaResourcesOptions, PrismaDelegate } from './types.js'
 import { PrismaAdapter } from './PrismaAdapter.js'
 import { toRoutePrefix } from './helpers.js'
 
+/** The Prisma providers that accept `mode: 'insensitive'` on string filters. */
+const INSENSITIVE_MODE_PROVIDERS = new Set(['postgresql', 'cockroachdb', 'mongodb'])
+
+/**
+ * Reports whether a Prisma client's provider accepts `mode: 'insensitive'`, from Prisma's
+ * `_activeProvider`. An unknown provider is assumed to accept it, as PostgreSQL does.
+ * @param client - The Prisma client.
+ * @returns `false` for MySQL, MariaDB, SQL Server and SQLite clients; otherwise `true`.
+ */
+function acceptsInsensitiveMode(client: object): boolean {
+  const provider = (client as { _activeProvider?: string })._activeProvider
+  return provider === undefined || INSENSITIVE_MODE_PROVIDERS.has(provider)
+}
+
 /**
  * Creates resource definitions for Prisma models based on the provided schema and options.
  * @param prismaClient An instance of the Prisma client to be used for database operations.
@@ -16,6 +30,7 @@ export function createPrismaResources(
   options: CreatePrismaResourcesOptions = {}
 ): ResourceDefinition[] {
   const client = prismaClient as Record<string, PrismaDelegate>
+  const insensitiveMode = acceptsInsensitiveMode(prismaClient)
 
   return schema
     .filter((model) => !options.models?.[model.name]?.exclude)
@@ -28,6 +43,7 @@ export function createPrismaResources(
         delegate: client[delegateKey] as PrismaDelegate,
         ...(options.idField !== undefined && { idField: options.idField }),
         ...(options.returnCreated !== undefined && { returnCreated: options.returnCreated }),
+        insensitiveMode,
         model
       })
 

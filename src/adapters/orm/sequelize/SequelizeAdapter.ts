@@ -130,6 +130,11 @@ export class SequelizeAdapter<
     }))
   }
 
+  /** Only Postgres has `ILIKE`, used by the case-insensitive comparisons. */
+  private get supportsILike(): boolean {
+    return this.model.sequelize?.getDialect() === 'postgres'
+  }
+
   /** Only Postgres and MSSQL support `RETURNING` on UPDATE. */
   private get supportsReturning(): boolean {
     const d = this.model.sequelize?.getDialect()
@@ -240,7 +245,7 @@ export class SequelizeAdapter<
   }
 
   async updateMany(query: IQueryOptions, data: TUpdate): Promise<UpdateManyResult<TRecord>> {
-    const filterWhere = astToSequelizeWhere(query.where, this.fieldNames)
+    const filterWhere = astToSequelizeWhere(query.where, this.fieldNames, this.supportsILike)
     const where = this.withScopeWhere(filterWhere as object | undefined)
     const values = this.stripScope(data as Record<string, unknown>)
     const before = await this.model.findAll({ where, attributes: [this.idField] })
@@ -260,7 +265,7 @@ export class SequelizeAdapter<
   }
 
   async deleteMany(query: IQueryOptions): Promise<DeleteManyResult> {
-    const filterWhere = astToSequelizeWhere(query.where, this.fieldNames)
+    const filterWhere = astToSequelizeWhere(query.where, this.fieldNames, this.supportsILike)
     const where = this.withScopeWhere(filterWhere as object | undefined)
     const rows = await this.model.findAll({ where, attributes: [this.idField] })
     const deleted = rows.map((r) => r.toJSON()[this.idField])
@@ -269,7 +274,7 @@ export class SequelizeAdapter<
   }
 
   async executeQuery(query: IQueryOptions): Promise<QueryResult<TRecord>> {
-    const filterWhere = astToSequelizeWhere(query.where, this.fieldNames)
+    const filterWhere = astToSequelizeWhere(query.where, this.fieldNames, this.supportsILike)
     const where = this.withScopeWhere(filterWhere as object | undefined)
     const total = await this.model.count({ where })
     const order = astToSequelizeOrder(query.orderBy)

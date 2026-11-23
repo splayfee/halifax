@@ -82,25 +82,28 @@ All three enums are re-exported from `@edium/halifax-types` through the main `@e
 
 Comparison operators used in `IQueryFilter.comparison`. Accepted by the query-builder endpoint (`POST /:resource/query`) and `QueryBuilder` methods.
 
-| Value                | Operator      | Notes                     |
-| -------------------- | ------------- | ------------------------- |
-| `Equal`              | `=`           |                           |
-| `NotEqual`           | `<>`          |                           |
-| `LessThan`           | `<`           |                           |
-| `LessThanOrEqual`    | `<=`          |                           |
-| `GreaterThan`        | `>`           |                           |
-| `GreaterThanOrEqual` | `>=`          |                           |
-| `In`                 | `IN`          | `value1` must be an array |
-| `NotIn`              | `NOT IN`      | `value1` must be an array |
-| `Between`            | `BETWEEN`     | Use `value1` and `value2` |
-| `NotBetween`         | `NOT BETWEEN` | Use `value1` and `value2` |
-| `Like`               | `LIKE`        | `%` wildcard              |
-| `NotLike`            | `NOT LIKE`    |                           |
-| `Contains`           | `CONTAINS`    | Substring match           |
-| `StartsWith`         | `STARTS WITH` | Prefix match              |
-| `EndsWith`           | `ENDS WITH`   | Suffix match              |
-| `IsNull`             | `IS NULL`     | Omit `value1`             |
-| `IsNotNull`          | `IS NOT NULL` | Omit `value1`             |
+| Value                | Operator       | Notes                     |
+| -------------------- | -------------- | ------------------------- |
+| `Equal`              | `=`            |                           |
+| `NotEqual`           | `<>`           |                           |
+| `LessThan`           | `<`            |                           |
+| `LessThanOrEqual`    | `<=`           |                           |
+| `GreaterThan`        | `>`            |                           |
+| `GreaterThanOrEqual` | `>=`           |                           |
+| `In`                 | `IN`           | `value1` must be an array |
+| `NotIn`              | `NOT IN`       | `value1` must be an array |
+| `Between`            | `BETWEEN`      | Use `value1` and `value2` |
+| `NotBetween`         | `NOT BETWEEN`  | Use `value1` and `value2` |
+| `Like`               | `LIKE`         | `%` wildcard              |
+| `NotLike`            | `NOT LIKE`     |                           |
+| `Contains`           | `CONTAINS`     | Substring match           |
+| `StartsWith`         | `STARTS WITH`  | Prefix match              |
+| `EndsWith`           | `ENDS WITH`    | Suffix match              |
+| `IContains`          | `ICONTAINS`    | Substring match, any case |
+| `IStartsWith`        | `ISTARTS WITH` | Prefix match, any case    |
+| `IEndsWith`          | `IENDS WITH`   | Suffix match, any case    |
+| `IsNull`             | `IS NULL`      | Omit `value1`             |
+| `IsNotNull`          | `IS NOT NULL`  | Omit `value1`             |
 
 ### `SqlOperator`
 

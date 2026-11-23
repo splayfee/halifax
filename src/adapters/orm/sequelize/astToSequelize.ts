@@ -10,12 +10,19 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&')
 }
 
+/** The case-insensitive comparisons, whose operator depends on the dialect. */
+type InsensitiveComparison =
+  SqlComparison.IContains | SqlComparison.IStartsWith | SqlComparison.IEndsWith
+
 /**
- * Per-operator builders for Sequelize `Op` symbol-based where fragments.
- * Mirrors `DRIZZLE_COMPARISONS` and `PRISMA_COMPARISONS` so all three adapters
- * remain behaviourally aligned via the shared `ComparisonStrategy` contract.
+ * Per-operator builders for Sequelize `Op` symbol-based where fragments, for the case-sensitive
+ * comparisons. Mirrors `DRIZZLE_COMPARISONS` and the Prisma tables so all three adapters remain
+ * behaviourally aligned via the shared `ComparisonStrategy` contract.
  */
-const SEQUELIZE_COMPARISONS: ComparisonStrategyTable<SeqWhere, string> = {
+const SENSITIVE_COMPARISONS: Omit<
+  ComparisonStrategyTable<SeqWhere, string>,
+  InsensitiveComparison
+> = {
   [SqlComparison.Equal]: (f, { v1 }) => ({ [f]: { [Op.eq]: v1 } }) as SeqWhere,
   [SqlComparison.NotEqual]: (f, { v1 }) => ({ [f]: { [Op.ne]: v1 } }) as SeqWhere,
   [SqlComparison.GreaterThan]: (f, { v1 }) => ({ [f]: { [Op.gt]: v1 } }) as SeqWhere,
@@ -42,11 +49,42 @@ const SEQUELIZE_COMPARISONS: ComparisonStrategyTable<SeqWhere, string> = {
   [SqlComparison.NotLike]: (f, { v1 }) => ({ [f]: { [Op.notLike]: String(v1 ?? '') } }) as SeqWhere
 }
 
-function nodeToSequelize(filter: IQueryFilter, fields: Set<string>): SeqWhere | undefined {
+/**
+ * Builds the full comparison table. The case-insensitive comparisons use `Op.iLike` on
+ * PostgreSQL and `Op.like` elsewhere, whose matching already ignores case on MySQL, MariaDB and
+ * SQL Server (default collations) and on SQLite (ASCII).
+ * @param iLike - Whether the dialect has `ILIKE` (PostgreSQL).
+ * @returns A comparison table covering every {@link SqlComparison}.
+ */
+function sequelizeComparisons(iLike: boolean): ComparisonStrategyTable<SeqWhere, string> {
+  const op = iLike ? Op.iLike : Op.like
+  return {
+    ...SENSITIVE_COMPARISONS,
+    [SqlComparison.IContains]: (f, { v1 }) =>
+      ({ [f]: { [op]: `%${escapeLike(String(v1 ?? ''))}%` } }) as SeqWhere,
+    [SqlComparison.IStartsWith]: (f, { v1 }) =>
+      ({ [f]: { [op]: `${escapeLike(String(v1 ?? ''))}%` } }) as SeqWhere,
+    [SqlComparison.IEndsWith]: (f, { v1 }) =>
+      ({ [f]: { [op]: `%${escapeLike(String(v1 ?? ''))}` } }) as SeqWhere
+  }
+}
+
+/** The comparison tables, keyed by whether the dialect has `ILIKE`. */
+const SEQUELIZE_COMPARISONS = {
+  withILike: sequelizeComparisons(true),
+  withoutILike: sequelizeComparisons(false)
+}
+
+function nodeToSequelize(
+  filter: IQueryFilter,
+  fields: Set<string>,
+  iLike: boolean
+): SeqWhere | undefined {
   if (!fields.has(filter.field)) return undefined
-  const self = buildComparison(filter, filter.field, SEQUELIZE_COMPARISONS)
+  const table = iLike ? SEQUELIZE_COMPARISONS.withILike : SEQUELIZE_COMPARISONS.withoutILike
+  const self = buildComparison(filter, filter.field, table)
   if (!filter.children?.length) return self
-  const childWhere = astToSequelizeWhere(filter.children, fields)
+  const childWhere = astToSequelizeWhere(filter.children, fields, iLike)
   if (!childWhere) return self
   const op = (filter.operator?.toUpperCase() as SqlOperator) === SqlOperator.Or ? Op.or : Op.and
   return { [op]: [self, childWhere] } as SeqWhere
@@ -60,17 +98,20 @@ function nodeToSequelize(filter: IQueryFilter, fields: Set<string>): SeqWhere | 
  *
  * @param where - The validated filter list from {@link IQueryOptions.where}.
  * @param fields - Set of known field names (filters referencing unknown fields are silently dropped).
+ * @param iLike - Whether the dialect has `ILIKE` (PostgreSQL), used by the case-insensitive
+ *   comparisons.
  * @returns A Sequelize where object, or `undefined` when there are no filters.
  */
 export function astToSequelizeWhere(
   where: IQueryFilter[] | undefined,
-  fields: Set<string>
+  fields: Set<string>,
+  iLike = false
 ): SeqWhere | undefined {
   if (!where?.length) return undefined
 
   const groups: (SeqWhere | undefined)[][] = [[]]
   where.forEach((filter, index) => {
-    groups[groups.length - 1]!.push(nodeToSequelize(filter, fields))
+    groups[groups.length - 1]!.push(nodeToSequelize(filter, fields, iLike))
     const joinsWithOr =
       !filter.children?.length && (filter.operator?.toUpperCase() as SqlOperator) === SqlOperator.Or
     if (joinsWithOr && index < where.length - 1) groups.push([])

@@ -262,6 +262,7 @@ export function addQueryPath(ctx: ResourceSpecCtx): void {
       '| `CONTAINS` | Substring match |',
       '| `STARTS WITH` | Prefix match |',
       '| `ENDS WITH` | Suffix match |',
+      '| `ICONTAINS` / `ISTARTS WITH` / `IENDS WITH` | The same matches, ignoring case |',
       '| `IS NULL` / `IS NOT NULL` | Null check (no value needed) |',
       '',
       '### AND / OR precedence',

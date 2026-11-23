@@ -3,6 +3,29 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0]
+
+`@edium/halifax`, `@edium/halifax-client` and `@edium/halifax-types` are all released at `3.1.0`.
+
+### Added
+
+- **Case-insensitive string comparisons: `ICONTAINS`, `ISTARTS WITH` and `IENDS WITH`** (`SqlComparison.IContains`,
+  `IStartsWith`, `IEndsWith`). They match regardless of case on every database, while `CONTAINS` / `STARTS WITH` /
+  `ENDS WITH` keep following the column's collation. The query endpoint, OpenAPI spec, GraphQL schema and
+  `QueryBuilder` accept them.
+  - **Prisma** adds `mode: 'insensitive'` on PostgreSQL, CockroachDB and MongoDB, and uses the plain operators on MySQL,
+    MariaDB, SQL Server and SQLite, which reject `mode` and already ignore case. `createPrismaResources` reads the
+    client's provider; a hand-built `PrismaAdapter` takes the new `insensitiveMode` option (default `true`; pass
+    `false` on those four).
+  - **Drizzle** compiles them to `lower(col) LIKE lower(pattern)` on every dialect.
+  - **Sequelize** uses `Op.iLike` on PostgreSQL and `Op.like` elsewhere.
+  - SQLite folds ASCII letters only, so `É` and `é` still differ there.
+
+### Fixed
+
+- The query-builder docs said `CONTAINS` / `STARTS WITH` / `ENDS WITH` were dialect-independent. They follow the
+  collation: case-sensitive on PostgreSQL and CockroachDB, case-insensitive on MySQL, MariaDB, SQL Server and SQLite.
+
 ## [3.0.2]
 
 `@edium/halifax` only.

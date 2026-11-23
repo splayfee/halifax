@@ -158,7 +158,8 @@ export function buildSchemaHelpers(gql: GqlModule): SchemaHelpers {
         type: GraphQLString,
         description:
           'Comparison operator: =, <>, <, >, <=, >=, IN, NOT IN, BETWEEN, NOT BETWEEN, ' +
-          'LIKE, NOT LIKE, IS NULL, IS NOT NULL, CONTAINS, STARTS WITH, ENDS WITH.'
+          'LIKE, NOT LIKE, IS NULL, IS NOT NULL, CONTAINS, STARTS WITH, ENDS WITH, ' +
+          'ICONTAINS, ISTARTS WITH, IENDS WITH.'
       },
       value1: {
         type: GraphQLJSON,

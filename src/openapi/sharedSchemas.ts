@@ -90,7 +90,10 @@ export const sharedSchemas: Record<string, JsonSchema> = {
           'IS NOT NULL',
           'CONTAINS',
           'STARTS WITH',
-          'ENDS WITH'
+          'ENDS WITH',
+          'ICONTAINS',
+          'ISTARTS WITH',
+          'IENDS WITH'
         ]
       },
       value: {

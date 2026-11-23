@@ -487,13 +487,14 @@ Import: `@edium/halifax`
 
 Options for the `PrismaAdapter` constructor.
 
-| Property        | Type             | Default  | Description                                                                                                                                                                   |
-| --------------- | ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `delegate`      | `PrismaDelegate` | required | The Prisma model delegate (`prisma.post`, `prisma.user`, …).                                                                                                                  |
-| `idField`       | `string`         | `'id'`   | Primary key field name.                                                                                                                                                       |
-| `returnCreated` | `boolean`        | `false`  | When `true`, `createMany` falls back to serial `createOne` calls and returns the records. Slower but useful when the created data is needed.                                  |
-| `model`         | `ModelSchema`    | —        | Prisma DMMF model. When provided, the adapter exposes a derived `fields` schema for type-safe introspection and OpenAPI generation. Auto-provided by `createPrismaResources`. |
-| `scope`         | `TenantScope`    | —        | Tenant constraint. Set internally via `withScope` — do not pass directly.                                                                                                     |
+| Property          | Type             | Default  | Description                                                                                                                                                                                             |
+| ----------------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delegate`        | `PrismaDelegate` | required | The Prisma model delegate (`prisma.post`, `prisma.user`, …).                                                                                                                                            |
+| `idField`         | `string`         | `'id'`   | Primary key field name.                                                                                                                                                                                 |
+| `returnCreated`   | `boolean`        | `false`  | When `true`, `createMany` falls back to serial `createOne` calls and returns the records. Slower but useful when the created data is needed.                                                            |
+| `insensitiveMode` | `boolean`        | `true`   | Whether `ICONTAINS` / `ISTARTS WITH` / `IENDS WITH` add Prisma's `mode: 'insensitive'`. Set `false` on MySQL, MariaDB, SQL Server and SQLite, which reject `mode`. Auto-set by `createPrismaResources`. |
+| `model`           | `ModelSchema`    | —        | Prisma DMMF model. When provided, the adapter exposes a derived `fields` schema for type-safe introspection and OpenAPI generation. Auto-provided by `createPrismaResources`.                           |
+| `scope`           | `TenantScope`    | —        | Tenant constraint. Set internally via `withScope` — do not pass directly.                                                                                                                               |
 
 ---
 

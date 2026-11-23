@@ -16,7 +16,8 @@
 
 import { connectIntegrationDb } from '../helpers/integrationDb.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PrismaAdapter, SqlComparison, type IQueryOptions } from '@/index.js'
+import { PrismaAdapter, SqlComparison, createPrismaResources, type IQueryOptions } from '@/index.js'
+import type { Repository } from '@/core/types.js'
 
 const hasDb = !!process.env.DATABASE_URL
 
@@ -473,5 +474,59 @@ describe.skipIf(!hasDb)('QueryBuilder integration — logical connectives and ne
       offset: 0
     } satisfies IQueryOptions)
     expect(count).toBe(2)
+  })
+})
+
+describe.skipIf(!hasDb)('QueryBuilder integration — case-insensitive comparisons', () => {
+  let prisma: PrismaClient
+  let repo: Repository
+
+  /** The titles matching one filter on `title`. */
+  async function titles(comparison: SqlComparison, value1: string): Promise<string[]> {
+    const { results } = await repo.executeQuery!({
+      fields: FIELDS,
+      where: [{ field: 'title', comparison, value1 }]
+    })
+    return results.map((r) => (r as Post).title).sort()
+  }
+
+  beforeAll(async () => {
+    prisma = (await connectIntegrationDb()) as PrismaClient
+    await prisma.$connect()
+    // Built through createPrismaResources so the provider decides whether `mode` is sent.
+    const [post] = createPrismaResources(prisma, [
+      {
+        name: 'Post',
+        fields: [
+          { name: 'id', kind: 'scalar', type: 'Int', isId: true, isReadOnly: false },
+          { name: 'title', kind: 'scalar', type: 'String', isId: false, isReadOnly: false }
+        ]
+      }
+    ])
+    repo = post!.repository
+  })
+
+  afterAll(async () => {
+    await prisma.$disconnect()
+  })
+
+  beforeEach(async () => {
+    await prisma.post.deleteMany()
+    await prisma.author.deleteMany()
+    for (const title of ['Alpha', 'Bravo', 'Charlie', 'CHARLES']) {
+      await prisma.post.create({ data: { title, published: true } })
+    }
+  })
+
+  it('ICONTAINS matches a substring in any case', async () => {
+    expect(await titles(SqlComparison.IContains, 'harl')).toEqual(['CHARLES', 'Charlie'])
+  })
+
+  it('ISTARTS WITH matches a prefix in any case', async () => {
+    expect(await titles(SqlComparison.IStartsWith, 'bR')).toEqual(['Bravo'])
+  })
+
+  it('IENDS WITH matches a suffix in any case', async () => {
+    expect(await titles(SqlComparison.IEndsWith, 'LIE')).toEqual(['Charlie'])
   })
 })

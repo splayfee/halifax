@@ -31,6 +31,14 @@ export interface PrismaAdapterOptions {
   returnCreated?: boolean
   model?: ModelSchema
   /**
+   * Whether the database accepts Prisma's `mode: 'insensitive'`, which `ICONTAINS`,
+   * `ISTARTS WITH` and `IENDS WITH` need on PostgreSQL, CockroachDB and MongoDB. Defaults to
+   * `true`. Set it to `false` on MySQL, MariaDB, SQL Server and SQLite, which reject `mode` and
+   * whose plain string operators already ignore case. {@link createPrismaResources} sets it
+   * from the client's provider.
+   */
+  insensitiveMode?: boolean
+  /**
    * Tenant constraint bound to this adapter instance. Set indirectly via
    * {@link PrismaAdapter.withScope}; when present, every operation is confined to
    * `scope.value` on `scope.field`. Leave undefined for unscoped (global) access.

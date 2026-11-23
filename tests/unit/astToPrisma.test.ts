@@ -46,6 +46,43 @@ describe('astToPrismaWhere — comparison mapping', () => {
     })
   })
 
+  it('maps ICONTAINS / ISTARTS WITH / IENDS WITH to the string operators with mode: insensitive', () => {
+    expect(one({ comparison: SqlComparison.IContains, value1: 'ab' })).toEqual({
+      x: { contains: 'ab', mode: 'insensitive' }
+    })
+    expect(one({ comparison: SqlComparison.IStartsWith, value1: 'ab' })).toEqual({
+      x: { startsWith: 'ab', mode: 'insensitive' }
+    })
+    expect(one({ comparison: SqlComparison.IEndsWith, value1: 'ab' })).toEqual({
+      x: { endsWith: 'ab', mode: 'insensitive' }
+    })
+  })
+
+  it('leaves mode out of the case-insensitive operators for providers that reject it', () => {
+    const plain = (comparison: SqlComparison): unknown =>
+      astToPrismaWhere([{ field: 'x', comparison, value1: 'ab' }], false)
+    expect(plain(SqlComparison.IContains)).toEqual({ x: { contains: 'ab' } })
+    expect(plain(SqlComparison.IStartsWith)).toEqual({ x: { startsWith: 'ab' } })
+    expect(plain(SqlComparison.IEndsWith)).toEqual({ x: { endsWith: 'ab' } })
+  })
+
+  it('accepts the case-insensitive operators in lower case and carries the mode into children', () => {
+    expect(
+      astToPrismaWhere(
+        [
+          {
+            field: 'a',
+            comparison: 'icontains',
+            value1: 'x',
+            operator: 'OR',
+            children: [{ field: 'b', comparison: SqlComparison.IContains, value1: 'y' }]
+          }
+        ],
+        false
+      )
+    ).toEqual({ OR: [{ a: { contains: 'x' } }, { b: { contains: 'y' } }] })
+  })
+
   it('translates LIKE wildcards into contains/startsWith/endsWith/equals', () => {
     expect(one({ comparison: 'LIKE', value1: '%ab%' })).toEqual({ x: { contains: 'ab' } })
     expect(one({ comparison: 'LIKE', value1: 'ab%' })).toEqual({ x: { startsWith: 'ab' } })

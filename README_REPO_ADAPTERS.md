@@ -131,11 +131,12 @@ Just the model delegate — CRUD, bulk operations, and the query builder all run
 
 #### Options
 
-| Option          | Type      | Required | Description                                                          |
-| --------------- | --------- | -------- | -------------------------------------------------------------------- |
-| `delegate`      | `any`     | yes      | The Prisma model delegate (`prisma.post`, `prisma.user`, …)          |
-| `idField`       | `string`  | no       | Primary key field name (default: `"id"`)                             |
-| `returnCreated` | `boolean` | no       | When `true`, `createMany` returns created records (default: `false`) |
+| Option            | Type      | Required | Description                                                                                                                                                                                                                 |
+| ----------------- | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delegate`        | `any`     | yes      | The Prisma model delegate (`prisma.post`, `prisma.user`, …)                                                                                                                                                                 |
+| `idField`         | `string`  | no       | Primary key field name (default: `"id"`)                                                                                                                                                                                    |
+| `returnCreated`   | `boolean` | no       | When `true`, `createMany` returns created records (default: `false`)                                                                                                                                                        |
+| `insensitiveMode` | `boolean` | no       | Whether `ICONTAINS` / `ISTARTS WITH` / `IENDS WITH` add Prisma's `mode: 'insensitive'` (default: `true`). Set `false` on MySQL, MariaDB, SQL Server and SQLite. `createPrismaResources` sets it from the client's provider. |
 
 #### `createMany` and returned records
 

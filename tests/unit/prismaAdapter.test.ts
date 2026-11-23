@@ -300,6 +300,22 @@ describe('PrismaAdapter — deleteMany (delegate)', () => {
 })
 
 describe('PrismaAdapter — executeQuery (delegate)', () => {
+  it('adds mode: insensitive to ICONTAINS unless insensitiveMode is false', async () => {
+    const where = [{ field: 'email', comparison: SqlComparison.IContains, value1: 'A@T' }]
+    const withMode = makeDelegate()
+    const withoutMode = makeDelegate()
+    await new PrismaAdapter({ delegate: withMode }).executeQuery({ where })
+    await new PrismaAdapter({ delegate: withoutMode, insensitiveMode: false }).executeQuery({
+      where
+    })
+    expect(withMode.findMany.mock.calls[0]![0]).toMatchObject({
+      where: { email: { contains: 'A@T', mode: 'insensitive' } }
+    })
+    expect(withoutMode.findMany.mock.calls[0]![0]).toEqual(
+      expect.objectContaining({ where: { email: { contains: 'A@T' } } })
+    )
+  })
+
   it('returns count and results via the delegate (no raw SQL, no client needed)', async () => {
     const delegate = makeDelegate({
       count: vi.fn().mockResolvedValue(2),
@@ -572,6 +588,21 @@ describe('createPrismaResources', () => {
       $queryRawUnsafe: vi.fn()
     }
   }
+
+  it('adds mode: insensitive for PostgreSQL clients and leaves it out for MySQL clients', async () => {
+    const where = [{ field: 'email', comparison: SqlComparison.IContains, value1: 'A@T' }]
+    const queried = async (provider: string): Promise<unknown> => {
+      const client = { ...makeClient(), _activeProvider: provider }
+      const [user] = createPrismaResources(client, [userModel])
+      await user!.repository.executeQuery!({ where })
+      return client.user.findMany.mock.calls[0]![0]
+    }
+    expect(await queried('postgresql')).toMatchObject({
+      where: { email: { contains: 'A@T', mode: 'insensitive' } }
+    })
+    expect(await queried('mysql')).toMatchObject({ where: { email: { contains: 'A@T' } } })
+    expect(await queried('mysql')).not.toMatchObject({ where: { email: { mode: 'insensitive' } } })
+  })
 
   it('generates a resource for each model', () => {
     const resources = createPrismaResources(makeClient(), [userModel, blogPostModel])

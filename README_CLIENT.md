@@ -114,6 +114,15 @@ const q = new QueryBuilder()
 const { results, count } = await posts.query(q)
 ```
 
+### Case-insensitive matching
+
+`IContains`, `IStartsWith` and `IEndsWith` match regardless of case on every database:
+
+```ts
+// Finds "Halifax", "HALIFAX" and "halifax tips"
+const q = new QueryBuilder().where('title', SqlComparison.IContains, 'halifax')
+```
+
 ### Boolean groups
 
 ```ts

@@ -44,6 +44,8 @@ export class PrismaAdapter<
   private readonly returnCreated: boolean
   /** The original construction options, used to build request-scoped clones. */
   private readonly options: PrismaAdapterOptions
+  /** Whether case-insensitive comparisons add Prisma's `mode: 'insensitive'`. */
+  private readonly insensitiveMode: boolean
   /** Tenant constraint bound to this instance, or `undefined` for unscoped access. */
   private readonly scope?: TenantScope | undefined
 
@@ -68,6 +70,7 @@ export class PrismaAdapter<
     this.delegate = options.delegate
     this.idField = options.idField ?? 'id'
     this.returnCreated = options.returnCreated ?? false
+    this.insensitiveMode = options.insensitiveMode ?? true
     this.scope = options.scope
 
     this.capabilities = {
@@ -240,7 +243,10 @@ export class PrismaAdapter<
     if (!this.delegate.updateMany) {
       throw new NotImplementedError('This repository does not support updateMany.')
     }
-    const where = astToPrismaWhere(resolveScopedQuery(this.scope, query).where)
+    const where = astToPrismaWhere(
+      resolveScopedQuery(this.scope, query).where,
+      this.insensitiveMode
+    )
     const rows = (await this.delegate.findMany({
       where,
       select: { [this.idField]: true }
@@ -320,7 +326,10 @@ export class PrismaAdapter<
     if (!this.delegate.deleteMany) {
       throw new NotImplementedError('This repository does not support deleteMany.')
     }
-    const where = astToPrismaWhere(resolveScopedQuery(this.scope, query).where)
+    const where = astToPrismaWhere(
+      resolveScopedQuery(this.scope, query).where,
+      this.insensitiveMode
+    )
     const rows = (await this.delegate.findMany({
       where,
       select: { [this.idField]: true }
@@ -346,7 +355,7 @@ export class PrismaAdapter<
    */
   public async executeQuery(query: IQueryOptions): Promise<QueryResult<TRecord>> {
     const resolved = resolveScopedQuery(this.scope, query)
-    const where = astToPrismaWhere(resolved.where)
+    const where = astToPrismaWhere(resolved.where, this.insensitiveMode)
 
     const args: Record<string, unknown> = { where }
     const select = toSelect(resolved.fields)

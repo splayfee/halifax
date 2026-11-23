@@ -58,27 +58,47 @@ Fields are validated against the resource's field definitions. A field with `fil
 
 #### Comparisons
 
-| `comparison`  | Prisma mapping                          | `value1`                   | `value2` |
-| ------------- | --------------------------------------- | -------------------------- | -------- |
-| `=`           | `{ equals }`                            | scalar                     | —        |
-| `<>`          | `{ not }`                               | scalar                     | —        |
-| `>`           | `{ gt }`                                | scalar                     | —        |
-| `>=`          | `{ gte }`                               | scalar                     | —        |
-| `<`           | `{ lt }`                                | scalar                     | —        |
-| `<=`          | `{ lte }`                               | scalar                     | —        |
-| `LIKE`        | `{ contains / startsWith / endsWith }`† | string (use `%` wildcards) | —        |
-| `NOT LIKE`    | `{ NOT: … }`                            | string                     | —        |
-| `CONTAINS`    | `{ contains }`                          | string                     | —        |
-| `STARTS WITH` | `{ startsWith }`                        | string                     | —        |
-| `ENDS WITH`   | `{ endsWith }`                          | string                     | —        |
-| `IN`          | `{ in }`                                | array of scalars           | —        |
-| `NOT IN`      | `{ notIn }`                             | array of scalars           | —        |
-| `BETWEEN`     | `{ gte, lte }`                          | scalar                     | scalar   |
-| `NOT BETWEEN` | `{ OR: [{ lt }, { gt }] }`              | scalar                     | scalar   |
-| `IS NULL`     | `field: null`                           | —                          | —        |
-| `IS NOT NULL` | `{ not: null }`                         | —                          | —        |
+| `comparison`   | Prisma mapping                          | `value1`                   | `value2` |
+| -------------- | --------------------------------------- | -------------------------- | -------- |
+| `=`            | `{ equals }`                            | scalar                     | —        |
+| `<>`           | `{ not }`                               | scalar                     | —        |
+| `>`            | `{ gt }`                                | scalar                     | —        |
+| `>=`           | `{ gte }`                               | scalar                     | —        |
+| `<`            | `{ lt }`                                | scalar                     | —        |
+| `<=`           | `{ lte }`                               | scalar                     | —        |
+| `LIKE`         | `{ contains / startsWith / endsWith }`† | string (use `%` wildcards) | —        |
+| `NOT LIKE`     | `{ NOT: … }`                            | string                     | —        |
+| `CONTAINS`     | `{ contains }`                          | string                     | —        |
+| `STARTS WITH`  | `{ startsWith }`                        | string                     | —        |
+| `ENDS WITH`    | `{ endsWith }`                          | string                     | —        |
+| `ICONTAINS`    | `{ contains, mode: 'insensitive' }`‡    | string                     | —        |
+| `ISTARTS WITH` | `{ startsWith, mode: 'insensitive' }`‡  | string                     | —        |
+| `IENDS WITH`   | `{ endsWith, mode: 'insensitive' }`‡    | string                     | —        |
+| `IN`           | `{ in }`                                | array of scalars           | —        |
+| `NOT IN`       | `{ notIn }`                             | array of scalars           | —        |
+| `BETWEEN`      | `{ gte, lte }`                          | scalar                     | scalar   |
+| `NOT BETWEEN`  | `{ OR: [{ lt }, { gt }] }`              | scalar                     | scalar   |
+| `IS NULL`      | `field: null`                           | —                          | —        |
+| `IS NOT NULL`  | `{ not: null }`                         | —                          | —        |
 
-† `LIKE` parses `%` wildcards: `%x%` → `contains`, `x%` → `startsWith`, `%x` → `endsWith`, and a wildcard-free value collapses to `equals`. The portable `CONTAINS` / `STARTS WITH` / `ENDS WITH` operators (supported by both Prisma and Drizzle) are the recommended, dialect-independent way to do substring matching — unlike SQL `LIKE`, whose case-sensitivity varies by engine collation.
+† `LIKE` parses `%` wildcards: `%x%` → `contains`, `x%` → `startsWith`, `%x` → `endsWith`, and a wildcard-free value collapses to `equals`. Prefer the `CONTAINS` / `STARTS WITH` / `ENDS WITH` operators, which escape `%` and `_` in the value and work on every adapter. Like SQL `LIKE`, they follow the column's collation: case-sensitive on PostgreSQL and CockroachDB, and case-insensitive on MySQL, MariaDB and SQL Server (default collations) and SQLite (ASCII letters). For the same result everywhere, use the `I…` forms below.
+
+‡ The `I…` operators match regardless of case on every database:
+
+| Adapter   | PostgreSQL / CockroachDB             | MySQL, MariaDB, SQL Server, SQLite           |
+| --------- | ------------------------------------ | -------------------------------------------- |
+| Prisma    | `mode: 'insensitive'` (also MongoDB) | plain `contains` / `startsWith` / `endsWith` |
+| Drizzle   | `lower(col) LIKE lower(pattern)`     | `lower(col) LIKE lower(pattern)`             |
+| Sequelize | `Op.iLike`                           | `Op.like`                                    |
+
+MySQL, MariaDB and SQL Server ignore case under their default collations, and SQLite's `LIKE` and `lower()` ignore
+case for ASCII letters only. Prisma rejects `mode` on providers other than PostgreSQL, CockroachDB and MongoDB, so
+`createPrismaResources` reads the client's provider and leaves `mode` out there. When you construct a
+`PrismaAdapter` yourself against MySQL, MariaDB, SQL Server or SQLite, pass `insensitiveMode: false`:
+
+```ts
+new PrismaAdapter({ delegate: prisma.post, insensitiveMode: false })
+```
 
 #### Examples
 

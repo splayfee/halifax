@@ -385,6 +385,33 @@ export function runRepositoryContract(
         expect(count).toBe(1)
       })
 
+      it('IContains: substring match in any case', async () => {
+        const { count, results } = await repo.executeQuery!({
+          fields: FIELDS,
+          where: [{ field: 'title', comparison: SqlComparison.IContains, value1: 'HARL' }]
+        })
+        expect(count).toBe(1)
+        expect((results[0] as AnyPost).title).toBe('Charlie')
+      })
+
+      it('IStartsWith: prefix match in any case', async () => {
+        const { count, results } = await repo.executeQuery!({
+          fields: FIELDS,
+          where: [{ field: 'title', comparison: SqlComparison.IStartsWith, value1: 'bR' }]
+        })
+        expect(count).toBe(1)
+        expect((results[0] as AnyPost).title).toBe('Bravo')
+      })
+
+      it('IEndsWith: suffix match in any case', async () => {
+        const { count, results } = await repo.executeQuery!({
+          fields: FIELDS,
+          where: [{ field: 'title', comparison: SqlComparison.IEndsWith, value1: 'LIE' }]
+        })
+        expect(count).toBe(1)
+        expect((results[0] as AnyPost).title).toBe('Charlie')
+      })
+
       it('IsNull: returns rows where the nullable column is null', async () => {
         // Bravo and Charlie have null content
         const { count } = await repo.executeQuery!({

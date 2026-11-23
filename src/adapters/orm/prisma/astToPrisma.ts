@@ -13,7 +13,8 @@ export type PrismaWhere = Record<string, unknown>
  * **Known limitation:** interior wildcards (`'foo%bar'`) cannot be expressed with Prisma's
  * string operators — they fall through to `equals`, which is an exact match, not a
  * wildcard match. Prisma has no `matches`/`glob` operator without raw SQL. Use `CONTAINS`,
- * `STARTS WITH`, or `ENDS WITH` comparisons instead of `LIKE` when possible.
+ * `STARTS WITH`, or `ENDS WITH` (or their case-insensitive `I…` forms) instead of `LIKE` when
+ * possible.
  *
  * @param value - The raw LIKE pattern.
  * @returns A Prisma string-filter object.
@@ -29,13 +30,22 @@ function likeToPrisma(value: QueryScalar | QueryScalar[] | undefined): Record<st
   return { equals: text }
 }
 
+/** The case-insensitive comparisons, whose Prisma form depends on the provider. */
+type InsensitiveComparison =
+  SqlComparison.IContains | SqlComparison.IStartsWith | SqlComparison.IEndsWith
+
+/** Prisma's `mode` argument, accepted on PostgreSQL, CockroachDB and MongoDB only. */
+const INSENSITIVE_MODE = { mode: 'insensitive' } as const
+
 /**
- * Per-operator builders mapping each {@link SqlComparison} to a Prisma `where` fragment for one
- * field. Most comparisons map to `{ [field]: { <op>: value } }`; `NOT BETWEEN` and `NOT LIKE`
- * expand to `OR` / `NOT` groups. This table is the only place Prisma comparison semantics live,
- * so the delegate query path and the (validated) AST stay in lockstep.
+ * Per-operator builders mapping each case-sensitive {@link SqlComparison} to a Prisma `where`
+ * fragment for one field. Most comparisons map to `{ [field]: { <op>: value } }`; `NOT BETWEEN`
+ * and `NOT LIKE` expand to `OR` / `NOT` groups.
  */
-const PRISMA_COMPARISONS: ComparisonStrategyTable<PrismaWhere, string> = {
+const SENSITIVE_COMPARISONS: Omit<
+  ComparisonStrategyTable<PrismaWhere, string>,
+  InsensitiveComparison
+> = {
   [SqlComparison.Equal]: (field, { v1 }) => ({ [field]: { equals: v1 } }),
   [SqlComparison.NotEqual]: (field, { v1 }) => ({ [field]: { not: v1 } }),
   [SqlComparison.GreaterThan]: (field, { v1 }) => ({ [field]: { gt: v1 } }),
@@ -57,9 +67,43 @@ const PRISMA_COMPARISONS: ComparisonStrategyTable<PrismaWhere, string> = {
   [SqlComparison.NotLike]: (field, { v1 }) => ({ NOT: { [field]: likeToPrisma(v1) } })
 }
 
+/**
+ * Builds the full comparison table. With `insensitiveMode`, `ICONTAINS` / `ISTARTS WITH` /
+ * `IENDS WITH` add Prisma's `mode: 'insensitive'`; without it they use the plain string operators,
+ * which ignore case on MySQL, MariaDB and SQL Server (default collations) and on SQLite (ASCII).
+ * @param insensitiveMode - Whether the provider accepts `mode: 'insensitive'`.
+ * @returns A comparison table covering every {@link SqlComparison}.
+ */
+function prismaComparisons(insensitiveMode: boolean): ComparisonStrategyTable<PrismaWhere, string> {
+  const mode = insensitiveMode ? INSENSITIVE_MODE : {}
+  return {
+    ...SENSITIVE_COMPARISONS,
+    [SqlComparison.IContains]: (field, { v1 }) => ({
+      [field]: { contains: String(v1 ?? ''), ...mode }
+    }),
+    [SqlComparison.IStartsWith]: (field, { v1 }) => ({
+      [field]: { startsWith: String(v1 ?? ''), ...mode }
+    }),
+    [SqlComparison.IEndsWith]: (field, { v1 }) => ({
+      [field]: { endsWith: String(v1 ?? ''), ...mode }
+    })
+  }
+}
+
+/**
+ * The comparison tables, keyed by whether the provider accepts `mode: 'insensitive'`. These are
+ * the only place Prisma comparison semantics live, so the delegate query path and the (validated)
+ * AST stay in lockstep.
+ */
+const PRISMA_COMPARISONS = {
+  withMode: prismaComparisons(true),
+  withoutMode: prismaComparisons(false)
+}
+
 /** Converts a single {@link IQueryFilter} comparison into a Prisma `where` fragment for its field. */
-function comparisonToPrisma(filter: IQueryFilter): PrismaWhere {
-  return buildComparison(filter, filter.field, PRISMA_COMPARISONS)
+function comparisonToPrisma(filter: IQueryFilter, insensitiveMode: boolean): PrismaWhere {
+  const table = insensitiveMode ? PRISMA_COMPARISONS.withMode : PRISMA_COMPARISONS.withoutMode
+  return buildComparison(filter, filter.field, table)
 }
 
 /**
@@ -69,12 +113,13 @@ function comparisonToPrisma(filter: IQueryFilter): PrismaWhere {
  * `operator: 'AND'` (or omitted) becomes `cond AND (children)`, exactly as the original SQL
  * builder rendered it.
  * @param filter - The filter node.
+ * @param insensitiveMode - Whether the provider accepts `mode: 'insensitive'`.
  * @returns The Prisma fragment for this node (and its children, if any).
  */
-function nodeToPrisma(filter: IQueryFilter): PrismaWhere {
-  const self = comparisonToPrisma(filter)
+function nodeToPrisma(filter: IQueryFilter, insensitiveMode: boolean): PrismaWhere {
+  const self = comparisonToPrisma(filter, insensitiveMode)
   if (filter.children?.length) {
-    const childWhere = astToPrismaWhere(filter.children)
+    const childWhere = astToPrismaWhere(filter.children, insensitiveMode)
     return (filter.operator?.toUpperCase() as SqlOperator) === SqlOperator.Or
       ? { OR: [self, childWhere] }
       : { AND: [self, childWhere] }
@@ -95,14 +140,16 @@ function nodeToPrisma(filter: IQueryFilter): PrismaWhere {
  * already been checked — the 4xx errors are raised there, never inside Prisma.
  *
  * @param where - The validated filter list (may be empty/undefined).
+ * @param insensitiveMode - Whether the provider accepts Prisma's `mode: 'insensitive'`
+ *   (PostgreSQL, CockroachDB, MongoDB). Only the case-insensitive comparisons use it.
  * @returns A Prisma `where` object (empty `{}` when there are no filters).
  */
-export function astToPrismaWhere(where?: IQueryFilter[]): PrismaWhere {
+export function astToPrismaWhere(where?: IQueryFilter[], insensitiveMode = true): PrismaWhere {
   if (!where?.length) return {}
 
   const groups: PrismaWhere[][] = [[]]
   where.forEach((filter, index) => {
-    groups[groups.length - 1]!.push(nodeToPrisma(filter))
+    groups[groups.length - 1]!.push(nodeToPrisma(filter, insensitiveMode))
     // A node with children has consumed its operator to join self↔children, so it does not
     // also split sibling groups; only a childless node's `OR` starts a new OR-group.
     const joinsWithOr =

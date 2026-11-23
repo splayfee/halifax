@@ -308,6 +308,9 @@ The query builder endpoint accepts a `QueryOptions` body for full-featured filte
 | `CONTAINS`        | Substring match           | string              |
 | `STARTS WITH`     | Prefix match              | string              |
 | `ENDS WITH`       | Suffix match              | string              |
+| `ICONTAINS`       | Substring match, any case | string              |
+| `ISTARTS WITH`    | Prefix match, any case    | string              |
+| `IENDS WITH`      | Suffix match, any case    | string              |
 | `IS NULL`         | Null check                | _(omit value)_      |
 | `IS NOT NULL`     | Not null check            | _(omit value)_      |
 
