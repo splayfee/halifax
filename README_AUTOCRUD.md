@@ -99,12 +99,12 @@ GET /api/v1/posts/507f1f77bcf86cd799439011
 
 Each entry in `fields` accepts four optional boolean flags. All default to `true` — only set them explicitly to `false` to restrict access. The lone exception: the **primary key** is non-writable by default (it comes from the URL / database); set `writable: true` on it if you really want clients to supply it.
 
-| Flag         | Effect when `false`                                                   |
-| ------------ | --------------------------------------------------------------------- |
-| `filterable` | Rejects the field as a query-string filter (`?fieldName=value`) → 422 |
-| `sortable`   | Rejects the field in `?order=` and query-builder `orderBy` → 422      |
-| `selectable` | Rejects the field in `?fields=` and query-builder `fields` → 422      |
-| `writable`   | Silently strips the field from POST / PATCH / PUT request bodies      |
+| Flag         | Effect when `false`                                                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| `filterable` | Rejects the field as a query-string filter (`?fieldName=value`) and in a query-builder `where` → 422 |
+| `sortable`   | Rejects the field in `?order=` and query-builder `orderBy` → 422                                     |
+| `selectable` | Rejects the field in `?fields=` and query-builder `fields` → 422                                     |
+| `writable`   | Silently strips the field from POST / PATCH / PUT request bodies                                     |
 
 Example — `role` is fully locked down; `createdAt` can be read and sorted but never written or filtered:
 

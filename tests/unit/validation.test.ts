@@ -138,6 +138,28 @@ describe('validateWhere', () => {
     ).toThrow(UnprocessableEntityError)
   })
 
+  it('throws for a field marked filterable: false', () => {
+    expect(() =>
+      validateWhere(resource, [
+        { field: 'secret', comparison: SqlComparison.StartsWith, value1: 'a' }
+      ])
+    ).toThrow('Field(s) not filterable: secret.')
+  })
+
+  it('throws for a non-filterable field nested in children', () => {
+    expect(() =>
+      validateWhere(resource, [
+        {
+          field: 'title',
+          comparison: SqlComparison.Equal,
+          value1: 'x',
+          operator: 'OR',
+          children: [{ field: 'secret', comparison: SqlComparison.IContains, value1: 'a' }]
+        }
+      ])
+    ).toThrow(UnprocessableEntityError)
+  })
+
   it('throws for an invalid comparison', () => {
     expect(() => validateWhere(resource, [{ field: 'id', comparison: 'BADOP' }])).toThrow(
       'Invalid comparison'

@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1]
+
+`@edium/halifax` only.
+
+### Fixed
+
+- **The query builder rejects filters on `filterable: false` fields with 422**, at any nesting depth, as the docs
+  said. Its `where` checked only that a field existed, so `POST /:resource/query`, `PATCH`/`DELETE` bulk queries
+  and their GraphQL forms could filter on hidden fields, for example probing a password hash with `STARTS WITH`.
+  Query-string filters already refused them.
+
 ## [3.1.0]
 
 `@edium/halifax`, `@edium/halifax-client` and `@edium/halifax-types` are all released at `3.1.0`.

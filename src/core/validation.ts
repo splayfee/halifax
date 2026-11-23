@@ -101,6 +101,19 @@ export function validateSelectableFields(resource: ResourceDefinition, fields: s
 }
 
 /**
+ * Throws {@link UnprocessableEntityError} when any of `fields` have `filterable: false`.
+ * @param resource - The resource definition to validate against.
+ * @param fields - Field names to check for filterability.
+ */
+export function validateFilterableFields(resource: ResourceDefinition, fields: string[]): void {
+  const fieldMap = new Map((resource.fields ?? []).map((f) => [f.name, f]))
+  const nonFilterable = fields.filter((name) => fieldMap.get(name)?.filterable === false)
+  if (nonFilterable.length) {
+    throw new UnprocessableEntityError(`Field(s) not filterable: ${nonFilterable.join(', ')}.`)
+  }
+}
+
+/**
  * Throws {@link UnprocessableEntityError} when any of `fields` have `sortable: false`.
  * @param resource - The resource definition to validate against.
  * @param fields - Field names to check for sortability.
@@ -182,7 +195,8 @@ export function validateQueryString(
 
 /**
  * Validates a WHERE clause filter tree against the resource's field definitions.
- * Throws {@link UnprocessableEntityError} on invalid fields, comparisons, operators, or exceeded nesting depth.
+ * Throws {@link UnprocessableEntityError} on unknown or non-filterable fields, invalid comparisons or operators, or
+ * exceeded nesting depth.
  * @param resource - The resource definition whose fields and depth limit are used.
  * @param where - Array of filter conditions to validate.
  * @param depth - Current recursion depth (used for nesting-limit enforcement; start at `0`).
@@ -208,6 +222,7 @@ export function validateWhere(
     }
 
     validateFields(resource, [filter.field])
+    validateFilterableFields(resource, [filter.field])
 
     const comparison = filter.comparison?.toUpperCase() as SqlComparison
     if (!comparison || !validComparisons.has(comparison)) {

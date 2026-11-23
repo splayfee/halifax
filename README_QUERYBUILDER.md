@@ -54,7 +54,7 @@ interface QueryFilter {
 type scalar = string | number | boolean | null
 ```
 
-Fields are validated against the resource's field definitions. A field with `filterable: false` returns 400.
+Fields are validated against the resource's field definitions. Filtering on a field with `filterable: false`, at any nesting depth, returns 422.
 
 #### Comparisons
 
